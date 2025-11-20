@@ -74,6 +74,16 @@ export default function TestPage() {
     }
   }, [testCompleted, shouldShowConfetti])
 
+  // Función para mezclar array usando Fisher-Yates (sin repeticiones)
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const shuffled = [...array]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    return shuffled
+  }
+
   const loadTestData = async () => {
     try {
       setLoading(true)
@@ -102,10 +112,10 @@ export default function TestPage() {
       }
       
       setTest(foundTest)
-      // Mezclar preguntas y sus opciones para hacer el test aleatorio
-      const shuffled = [...foundTest.questions].sort(() => Math.random() - 0.5).map((question: any) => ({
+      // Mezclar preguntas y sus opciones usando Fisher-Yates (garantiza no repetición)
+      const shuffled = shuffleArray(foundTest.questions).map((question: any) => ({
         ...question,
-        options: [...question.options].sort(() => Math.random() - 0.5)
+        options: shuffleArray(question.options)
       }))
       setShuffledQuestions(shuffled)
       setLoading(false)
