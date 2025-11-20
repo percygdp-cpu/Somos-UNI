@@ -88,6 +88,12 @@ export default function UserManagementPage() {
   } | null>(null)
   const [pendingTests, setPendingTests] = useState<any[]>([])
   const [showTestPreviewModal, setShowTestPreviewModal] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   // Leer tab desde URL al cargar
   useEffect(() => {
@@ -443,9 +449,9 @@ export default function UserManagementPage() {
       
       const count = modifiedUserIds.length
       setModifiedUserIds([])
-      alert(`${count} cambio(s) guardado(s) exitosamente`)
+      showToast(`${count} cambio(s) guardado(s) exitosamente`, 'success')
     } catch (error) {
-      alert('Error al guardar los cambios')
+      showToast('Error al guardar los cambios', 'error')
       console.error(error)
     }
   }
@@ -3273,6 +3279,32 @@ export default function UserManagementPage() {
                 Confirmar y Crear Tests
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-slide-in-right">
+          <div className={`flex items-center gap-3 px-6 py-4 rounded-lg shadow-2xl border-l-4 ${
+            toast.type === 'success' 
+              ? 'bg-white border-green-500' 
+              : 'bg-white border-red-500'
+          }`}>
+            {toast.type === 'success' ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-green-500" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+              </svg>
+            )}
+            <p className={`text-sm font-medium ${
+              toast.type === 'success' ? 'text-green-800' : 'text-red-800'
+            }`}>
+              {toast.message}
+            </p>
           </div>
         </div>
       )}

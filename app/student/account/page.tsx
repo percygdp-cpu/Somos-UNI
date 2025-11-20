@@ -87,8 +87,18 @@ export default function StudentAccountPage() {
           }
         })
         
-        const avgScore = results.length > 0
-          ? Math.round(results.reduce((acc: number, r: any) => acc + r.percentage, 0) / results.length)
+        // Calcular promedio solo de tests realizados (último intento de cada test)
+        const testScores = new Map()
+        results.forEach((result: any) => {
+          const existing = testScores.get(result.testId)
+          if (!existing || new Date(result.completedAt) > new Date(existing.completedAt)) {
+            testScores.set(result.testId, result)
+          }
+        })
+        
+        const latestResults = Array.from(testScores.values())
+        const avgScore = latestResults.length > 0
+          ? Math.round(latestResults.reduce((acc: number, r: any) => acc + r.percentage, 0) / latestResults.length)
           : 0
         
         // Contar cursos completados (todos los tests aprobados)
