@@ -83,7 +83,8 @@ export default function ModuleDetailPage() {
   }, [loading, module])
 
   const handlePdfDownload = (pdfUrl: string) => {
-    window.open(pdfUrl, '_blank')
+    // Optimización: abrir en nueva pestaña con rel="noopener noreferrer" para seguridad y rendimiento
+    window.open(pdfUrl, '_blank', 'noopener,noreferrer')
   }
 
   const handleTestClick = (testId: number) => {
@@ -130,48 +131,51 @@ export default function ModuleDetailPage() {
           {/* PDF Download Section */}
           {module.pdfFiles && module.pdfFiles.length > 0 && (
             <div className="module-content card mb-8">
-              <h3 className="text-xl font-semibold text-secondary-900 mb-4 flex items-center gap-2">
-                <span className="text-red-600 text-2xl">📄</span>
+              <h3 className="text-lg sm:text-xl font-semibold text-secondary-900 mb-4 flex items-center gap-2">
+                <span className="text-red-600 text-xl sm:text-2xl">📄</span>
                 Material de Estudio
               </h3>
               <div className="space-y-3">
                 {module.pdfFiles.map((pdf: any, index: number) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                      <div className="w-10 h-10 flex-shrink-0 bg-red-100 rounded-lg flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
                         </svg>
                       </div>
-                      <div>
-                        <p className="font-medium text-secondary-900">{pdf.name || `Documento ${index + 1}`}</p>
-                        <p className="text-sm text-secondary-600">PDF</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-secondary-900 truncate">{pdf.name || `Documento ${index + 1}`}</p>
+                        <p className="text-xs sm:text-sm text-secondary-600">PDF</p>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 sm:flex-shrink-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          window.open(pdf.url, '_blank')
+                          window.open(pdf.url, '_blank', 'noopener,noreferrer')
                         }}
-                        className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                        className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
                         </svg>
-                        Visualizar
+                        <span className="hidden sm:inline">Visualizar</span>
+                        <span className="sm:hidden">Ver</span>
                       </button>
                       <a
                         href={pdf.url}
-                        download
+                        download={pdf.name || `documento-${index + 1}.pdf`}
                         onClick={(e) => e.stopPropagation()}
-                        className="px-4 py-2 bg-secondary-600 hover:bg-secondary-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                        className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-secondary-600 hover:bg-secondary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
                         </svg>
-                        Descargar
+                        <span className="hidden sm:inline">Descargar</span>
+                        <span className="sm:hidden">Guardar</span>
+                      </a>
                       </a>
                     </div>
                   </div>
