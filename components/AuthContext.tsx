@@ -38,6 +38,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
+      // Normalizar username a minúsculas para comparación case-insensitive
+      const normalizedUsername = username.toLowerCase().trim()
+      
       // Obtener usuarios de la base de datos
       const response = await fetch('/api/users')
       if (!response.ok) {
@@ -47,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const users = await response.json()
       const user = users.find((u: any) => 
-        u.username === username && 
+        u.username.toLowerCase() === normalizedUsername && 
         u.password === password && 
         u.status === 'active'
       )
