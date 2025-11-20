@@ -46,7 +46,7 @@ export default function LoginPage() {
   // Removemos el bloqueo de loading para evitar pantallas en blanco infinitas
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#f6f7f8] dark:bg-[#111921]">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#f6f7f8] dark:bg-[#0f1419]">
       <div className="w-full max-w-md">
         {/* Logo and Header */}
         <div className="mb-8 text-center">
@@ -58,7 +58,7 @@ export default function LoginPage() {
         </div>
 
         {/* Login Form */}
-        <div className="w-full rounded-xl bg-white dark:bg-background-dark p-6 shadow-sm sm:p-8">
+        <div className="w-full rounded-xl bg-white dark:bg-[#1a1f2e] border border-gray-100 dark:border-gray-800 p-6 shadow-lg dark:shadow-2xl sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Username Input */}
             <div>
