@@ -21,6 +21,7 @@ export default function AnalyticsPage() {
   const [students, setStudents] = useState<any[]>([])
   const [courses, setCourses] = useState<any[]>([])
   const [modules, setModules] = useState<any[]>([])
+  const [tests, setTests] = useState<any[]>([])
   const [testResults, setTestResults] = useState<any[]>([])
   const [studentProgress, setStudentProgress] = useState<StudentProgress[]>([])
   
@@ -57,6 +58,11 @@ export default function AnalyticsPage() {
       const modulesRes = await fetch('/api/modules')
       const modulesList = await modulesRes.json()
       setModules(modulesList)
+      
+      // Cargar tests
+      const testsRes = await fetch('/api/tests')
+      const testsList = await testsRes.json()
+      setTests(testsList)
       
       // Cargar resultados de tests
       const resultsRes = await fetch('/api/test-results')
@@ -302,11 +308,16 @@ export default function AnalyticsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {courses.map((course) => {
-                  // Filtrar resultados solo de este curso
-                  const courseResults = testResults.filter((r: any) => {
-                    // Encontrar el test para obtener su courseId
-                    return r.courseId === course.id
-                  })
+                  // Obtener tests de este curso
+                  const courseTests = tests.filter((t: any) => t.courseId === course.id)
+                  
+                  // Obtener IDs de tests del curso
+                  const courseTestIds = courseTests.map((t: any) => t.id)
+                  
+                  // Filtrar resultados solo de tests de este curso
+                  const courseResults = testResults.filter((r: any) => 
+                    courseTestIds.includes(r.testId)
+                  )
                   
                   const passedInCourse = courseResults.filter((r: any) => r.percentage >= 70).length
                   const avgInCourse = courseResults.length > 0
@@ -317,6 +328,10 @@ export default function AnalyticsPage() {
                     <div key={course.id} className="border border-secondary-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white">
                       <h3 className="font-semibold text-secondary-900 mb-3">{course.title}</h3>
                       <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-secondary-600">Tests disponibles:</span>
+                          <span className="font-medium text-secondary-900">{courseTests.length}</span>
+                        </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-secondary-600">Tests realizados:</span>
                           <span className="font-medium text-secondary-900">{courseResults.length}</span>
