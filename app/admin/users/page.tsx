@@ -41,6 +41,7 @@ export default function UserManagementPage() {
   })
   const [showTestFilters, setShowTestFilters] = useState(false)
   const [selectedUsers, setSelectedUsers] = useState<string[]>([])
+  const [selectedTests, setSelectedTests] = useState<string[]>([])
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [openStatusDropdown, setOpenStatusDropdown] = useState<string | null>(null)
   const [modifiedUserIds, setModifiedUserIds] = useState<string[]>([])
@@ -1084,8 +1085,52 @@ export default function UserManagementPage() {
         console.error('Error:', error)
         alert('Error al eliminar usuarios')
       }
+    } else if (deleteItem?.id === 'bulk-tests') {
+      try {
+        // Eliminar todos los tests seleccionados
+        await Promise.all(
+          selectedTests.map(testId =>
+            fetch(`/api/tests?id=${testId}`, { method: 'DELETE' })
+          )
+        )
+
+        await loadData()
+        setSelectedTests([])
+        setShowDeleteModal(false)
+        setDeleteItem(null)
+      } catch (error) {
+        console.error('Error:', error)
+        alert('Error al eliminar tests')
+      }
     } else {
       confirmDelete()
+    }
+  }
+
+  const handleBulkDeleteTests = () => {
+    if (selectedTests.length === 0) return
+    const count = selectedTests.length
+    setDeleteItem({ 
+      id: 'bulk-tests', 
+      type: 'test', 
+      name: `${count} test${count > 1 ? 's' : ''}` 
+    })
+    setShowDeleteModal(true)
+  }
+
+  const toggleTestSelection = (testId: string) => {
+    setSelectedTests(prev =>
+      prev.includes(testId)
+        ? prev.filter(id => id !== testId)
+        : [...prev, testId]
+    )
+  }
+
+  const toggleAllTests = () => {
+    if (selectedTests.length === sortedTests.length) {
+      setSelectedTests([])
+    } else {
+      setSelectedTests(sortedTests.map(t => t.id))
     }
   }
 
@@ -2111,12 +2156,59 @@ export default function UserManagementPage() {
                 </button>
               </div>
 
+              {/* Barra de selección múltiple Tests */}
+              {selectedTests.length > 0 && (
+                <div className="mb-4 bg-primary-50 border border-primary-200 rounded-lg p-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-primary-900">{selectedTests.length} test{selectedTests.length > 1 ? 's' : ''} seleccionado{selectedTests.length > 1 ? 's' : ''}</p>
+                        <p className="text-xs text-primary-700">Acciones disponibles para los tests seleccionados</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={handleBulkDeleteTests}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                        </svg>
+                        Eliminar
+                      </button>
+                      <button
+                        onClick={() => setSelectedTests([])}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-secondary-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Tabla de Tests */}
               <div className="rounded-lg border border-gray-200 overflow-visible">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
+                        <th className="px-3 py-3.5 text-left" scope="col">
+                          <input
+                            type="checkbox"
+                            checked={selectedTests.length === sortedTests.length && sortedTests.length > 0}
+                            onChange={toggleAllTests}
+                            className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                          />
+                        </th>
                         <th onClick={() => handleSort('title')} className="px-3 py-3.5 text-left text-sm font-semibold text-secondary-900 cursor-pointer hover:bg-gray-100 select-none" scope="col">
                           <div className="flex items-center gap-1">
                             Título
@@ -2168,6 +2260,14 @@ export default function UserManagementPage() {
                         const testCourse = courses.find(c => c.id === testModule?.courseId)
                         return (
                         <tr key={test.id} className="hover:bg-gray-50">
+                          <td className="px-3 py-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedTests.includes(test.id)}
+                              onChange={() => toggleTestSelection(test.id)}
+                              className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                            />
+                          </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-secondary-900">
                             {test.title}
                           </td>
