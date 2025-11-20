@@ -82,9 +82,29 @@ export default function ModuleDetailPage() {
     }
   }, [loading, module])
 
-  const handlePdfDownload = (pdfUrl: string) => {
-    // Optimización: abrir en nueva pestaña con rel="noopener noreferrer" para seguridad y rendimiento
+  const handlePdfView = (pdfUrl: string) => {
+    // Abrir PDF para visualizar en el navegador
     window.open(pdfUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  const handlePdfDownload = async (pdfUrl: string, fileName: string) => {
+    try {
+      // Forzar descarga del PDF
+      const response = await fetch(pdfUrl)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error descargando PDF:', error)
+      // Fallback: abrir en nueva pestaña
+      window.open(pdfUrl, '_blank', 'noopener,noreferrer')
+    }
   }
 
   const handleTestClick = (testId: number) => {
@@ -159,7 +179,7 @@ export default function ModuleDetailPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            window.open(pdf.url, '_blank', 'noopener,noreferrer')
+                            handlePdfView(pdf.url)
                           }}
                           className="flex-1 px-3 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                         >
@@ -168,15 +188,19 @@ export default function ModuleDetailPage() {
                           </svg>
                           <span className="whitespace-nowrap">Visualizar</span>
                         </button>
-                        <a
-                          href={pdf.url}
-                          download={pdf.name || `documento-${index + 1}.pdf`}
-                          onClick={(e) => e.stopPropagation()}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handlePdfDownload(pdf.url, pdf.name || `documento-${index + 1}.pdf`)
+                          }}
                           className="flex-1 px-3 py-2.5 bg-secondary-600 hover:bg-secondary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
                           </svg>
+                          <span className="whitespace-nowrap">Descargar</span>
+                        </button>
+                      </div>
                           <span className="whitespace-nowrap">Descargar</span>
                         </a>
                       </div>
