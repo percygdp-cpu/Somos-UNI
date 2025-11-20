@@ -102,10 +102,21 @@ export default function AnalyticsPage() {
         const uniqueTests = new Set(studentResults.map((r: any) => r.testId))
         const testsCompleted = uniqueTests.size
         
-        // Calcular promedio solo de tests aprobados
-        const passedResults = studentResults.filter((r: any) => r.percentage >= 70)
-        const avgScore = passedResults.length > 0
-          ? Math.round(passedResults.reduce((acc: number, r: any) => acc + r.percentage, 0) / passedResults.length)
+        // Calcular promedio del último test de cada test único
+        const lastTestScores: number[] = []
+        uniqueTests.forEach((testId) => {
+          const testAttempts = studentResults.filter((r: any) => r.testId === testId)
+          if (testAttempts.length > 0) {
+            // Obtener el último intento ordenado por fecha
+            const lastAttempt = testAttempts.sort((a: any, b: any) => 
+              new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+            )[0]
+            lastTestScores.push(lastAttempt.percentage)
+          }
+        })
+        
+        const avgScore = lastTestScores.length > 0
+          ? Math.round(lastTestScores.reduce((acc: number, score: number) => acc + score, 0) / lastTestScores.length)
           : 0
         
         // Última actividad
