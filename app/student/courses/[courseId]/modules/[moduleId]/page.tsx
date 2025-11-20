@@ -128,29 +128,38 @@ export default function ModuleDetailPage() {
           </div>
 
           {/* PDF Download Section */}
-          {module.pdfUrl && (
+          {module.pdfFiles && module.pdfFiles.length > 0 && (
             <div className="module-content card mb-8">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-red-100 rounded-lg flex items-center justify-center">
-                    <span className="text-red-600 text-2xl">📄</span>
+              <h3 className="text-xl font-semibold text-secondary-900 mb-4 flex items-center gap-2">
+                <span className="text-red-600 text-2xl">📄</span>
+                Material de Estudio
+              </h3>
+              <div className="space-y-3">
+                {module.pdfFiles.map((pdf: any, index: number) => (
+                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-medium text-secondary-900">{pdf.name || `Documento ${index + 1}`}</p>
+                        <p className="text-sm text-secondary-600">PDF</p>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handlePdfDownload(pdf.url)
+                      }}
+                      className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
+                    >
+                      Ver PDF
+                    </button>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-secondary-900 mb-1">
-                      Material de Estudio
-                    </h3>
-                    <p className="text-secondary-600">
-                      Documento PDF del módulo
-                    </p>
-                  </div>
-                </div>
-                
-                <button
-                  onClick={() => handlePdfDownload(module.pdfUrl)}
-                  className="btn-primary"
-                >
-                  Ver PDF
-                </button>
+                ))}
               </div>
             </div>
           )}
