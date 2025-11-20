@@ -91,24 +91,16 @@ export default function ModuleDetailPage() {
     console.log('Tipo de URL:', typeof pdfUrl)
     
     if (!pdfUrl || pdfUrl === 'undefined' || pdfUrl === 'null') {
-      alert('❌ Error: URL del PDF no disponible')
       console.error('URL inválida:', pdfUrl)
       return
     }
     
     try {
-      console.log('Intentando abrir:', pdfUrl)
-      const newWindow = window.open(pdfUrl, '_blank', 'noopener,noreferrer')
-      
-      if (!newWindow) {
-        alert('⚠️ El navegador bloqueó la ventana emergente. Por favor, permite las ventanas emergentes para este sitio.')
-        console.error('Popup bloqueado por el navegador')
-      } else {
-        console.log('✅ PDF abierto exitosamente')
-      }
+      console.log('Abriendo PDF:', pdfUrl)
+      window.open(pdfUrl, '_blank', 'noopener,noreferrer')
+      console.log('✅ Comando ejecutado')
     } catch (error) {
       console.error('Error al abrir PDF:', error)
-      alert('❌ Error al abrir el PDF: ' + error)
     }
   }
 
@@ -118,13 +110,11 @@ export default function ModuleDetailPage() {
     console.log('Nombre:', fileName)
     
     if (!pdfUrl || pdfUrl === 'undefined' || pdfUrl === 'null') {
-      alert('❌ Error: URL del PDF no disponible')
       console.error('URL inválida:', pdfUrl)
       return
     }
     
     try {
-      // Crear un enlace temporal para forzar descarga
       const link = document.createElement('a')
       link.href = pdfUrl
       link.download = fileName
@@ -132,14 +122,13 @@ export default function ModuleDetailPage() {
       link.rel = 'noopener noreferrer'
       document.body.appendChild(link)
       
-      console.log('Haciendo click en el enlace de descarga...')
+      console.log('Iniciando descarga...')
       link.click()
       
       document.body.removeChild(link)
       console.log('✅ Descarga iniciada')
     } catch (error) {
       console.error('Error al descargar PDF:', error)
-      alert('❌ Error al descargar el PDF: ' + error)
     }
   }
 
