@@ -44,14 +44,32 @@ export default function TestPage() {
 
   // Efecto para lanzar confetti cuando se aprueba
   useEffect(() => {
-    if (testCompleted && shouldShowConfetti && confettiRef.current) {
+    if (testCompleted && shouldShowConfetti) {
+      console.log('🎉 Test aprobado! Intentando lanzar confetti...')
+      console.log('confettiRef.current:', confettiRef.current)
+      
+      // Esperar más tiempo para asegurar que el componente y el script estén listos
       const timer = setTimeout(() => {
-        confettiRef.current?.fire({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 }
-        })
-      }, 300)
+        if (confettiRef.current) {
+          console.log('✅ Lanzando confetti!')
+          confettiRef.current.fire({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+          })
+          
+          // Lanzar más confetti para que sea más visible
+          setTimeout(() => {
+            confettiRef.current?.fire({
+              particleCount: 50,
+              spread: 100,
+              origin: { y: 0.7 }
+            })
+          }, 250)
+        } else {
+          console.log('❌ confettiRef.current es null')
+        }
+      }, 800)
       return () => clearTimeout(timer)
     }
   }, [testCompleted, shouldShowConfetti])
