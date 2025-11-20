@@ -1689,21 +1689,7 @@ export default function UserManagementPage() {
                     </svg>
                     <span className="truncate">Agregar Curso</span>
                   </button>
-                  <label className="flex h-10 min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-gray-300 bg-white px-4 text-sm font-bold text-secondary-800 transition-colors hover:bg-gray-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
-                    </svg>
-                    <span className="truncate">Subir Lista (.xlsx)</span>
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls"
-                      className="hidden"
-                    />
-                  </label>
                 </div>
-                <button onClick={downloadCourseTemplate} className="text-sm font-normal text-primary-600 underline hover:no-underline cursor-pointer">
-                  Descargar plantilla Excel de cursos
-                </button>
               </div>
 
               {/* Tabla de Cursos */}
@@ -1874,21 +1860,7 @@ export default function UserManagementPage() {
                     </svg>
                     <span className="truncate">Agregar Módulo</span>
                   </button>
-                  <label className="flex h-10 min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-gray-300 bg-white px-4 text-sm font-bold text-secondary-800 transition-colors hover:bg-gray-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
-                    </svg>
-                    <span className="truncate">Subir Lista (.xlsx)</span>
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls"
-                      className="hidden"
-                    />
-                  </label>
                 </div>
-                <button onClick={downloadModuleTemplate} className="text-sm font-normal text-primary-600 underline hover:no-underline cursor-pointer">
-                  Descargar plantilla Excel de módulos
-                </button>
               </div>
 
               {/* Tabla de Módulos */}
@@ -3368,7 +3340,7 @@ export default function UserManagementPage() {
       {/* Modal de Módulos Faltantes */}
       {showMissingModulesModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Header */}
             <div className="bg-gradient-to-r from-purple-500 to-indigo-500 px-6 py-4">
               <h3 className="text-xl font-bold text-white">Módulos No Encontrados</h3>
@@ -3378,62 +3350,72 @@ export default function UserManagementPage() {
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {missingModules.map((module, idx) => (
-                <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-secondary-700 mb-1">
-                        Nombre del Módulo
-                      </label>
-                      <input
-                        type="text"
-                        value={module.name}
-                        onChange={(e) => {
-                          const newModules = [...missingModules]
-                          newModules[idx].name = e.target.value
-                          setMissingModules(newModules)
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        placeholder="Nombre del módulo"
-                      />
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-secondary-600">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-purple-500" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                      </svg>
-                      <span>Curso: <strong>{module.courseName}</strong></span>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-secondary-700 mb-1">
-                        Orden
-                      </label>
-                      <input
-                        type="number"
-                        value={module.order}
-                        onChange={(e) => {
-                          const newModules = [...missingModules]
-                          newModules[idx].order = parseInt(e.target.value) || 1
-                          setMissingModules(newModules)
-                        }}
-                        className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        min="1"
-                      />
-                    </div>
-                    <button
-                      onClick={() => {
-                        setMissingModules(missingModules.filter((_, i) => i !== idx))
-                      }}
-                      className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                      </svg>
-                      No agregar este módulo
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b-2 border-gray-300">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-secondary-900">Nombre del Módulo</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-secondary-900">Curso</th>
+                      <th className="text-center py-3 px-4 text-sm font-semibold text-secondary-900 w-24">Orden</th>
+                      <th className="text-center py-3 px-4 text-sm font-semibold text-secondary-900 w-20">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missingModules.map((module, idx) => (
+                      <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <input
+                            type="text"
+                            value={module.name}
+                            onChange={(e) => {
+                              const newModules = [...missingModules]
+                              newModules[idx].name = e.target.value
+                              setMissingModules(newModules)
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            placeholder="Nombre del módulo"
+                          />
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-purple-500 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                            </svg>
+                            <span className="text-sm text-secondary-700 font-medium">{module.courseName}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <input
+                            type="number"
+                            value={module.order}
+                            onChange={(e) => {
+                              const newModules = [...missingModules]
+                              newModules[idx].order = parseInt(e.target.value) || 1
+                              setMissingModules(newModules)
+                            }}
+                            className="w-16 px-2 py-2 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            min="1"
+                          />
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => {
+                              setMissingModules(missingModules.filter((_, i) => i !== idx))
+                            }}
+                            className="text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                            title="No agregar este módulo"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* Footer */}
