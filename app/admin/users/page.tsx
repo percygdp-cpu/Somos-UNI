@@ -833,11 +833,27 @@ export default function UserManagementPage() {
         questionsArray = []
       }
       
+      // Normalizar las opciones: convertir de {text, isCorrect} a string array
+      const normalizedQuestions = questionsArray.map((q: any) => {
+        // Si options es un array de objetos con text e isCorrect
+        if (Array.isArray(q.options) && q.options.length > 0 && typeof q.options[0] === 'object' && q.options[0].text) {
+          const optionsArray = q.options.map((opt: any) => opt.text || opt)
+          const correctIndex = q.options.findIndex((opt: any) => opt.isCorrect)
+          return {
+            ...q,
+            options: optionsArray,
+            correctAnswer: correctIndex >= 0 ? correctIndex : 0
+          }
+        }
+        // Si ya es un array de strings
+        return q
+      })
+      
       setEditingItem({ 
         ...testToEdit, 
         type: 'test',
         courseId: courseId,
-        questions: questionsArray
+        questions: normalizedQuestions
       })
       setShowEditModal(true)
     }
