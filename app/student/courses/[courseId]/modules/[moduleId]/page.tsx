@@ -91,14 +91,8 @@ export default function ModuleDetailPage() {
       alert('URL del PDF no disponible')
       return
     }
-    // Abrir PDF directamente para visualizar en el navegador
-    const link = document.createElement('a')
-    link.href = pdfUrl
-    link.target = '_blank'
-    link.rel = 'noopener noreferrer'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    // Abrir PDF directamente en nueva pestaña
+    window.open(pdfUrl, '_blank')
   }
 
   const handlePdfDownload = async (pdfUrl: string, fileName: string) => {
@@ -108,43 +102,14 @@ export default function ModuleDetailPage() {
       return
     }
     
-    try {
-      // Para Vercel Blob, usar descarga directa con fetch
-      const response = await fetch(pdfUrl, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/pdf',
-        },
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      
-      // Limpiar después de un breve delay
-      setTimeout(() => window.URL.revokeObjectURL(url), 100)
-    } catch (error) {
-      console.error('Error descargando PDF:', error)
-      alert('Error al descargar el PDF. Abriendo en nueva pestaña...')
-      // Fallback: usar el método simple
-      const link = document.createElement('a')
-      link.href = pdfUrl
-      link.download = fileName
-      link.target = '_blank'
-      link.rel = 'noopener noreferrer'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    }
+    // Crear un enlace temporal para forzar descarga
+    const link = document.createElement('a')
+    link.href = pdfUrl
+    link.download = fileName
+    link.target = '_blank'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const handleTestClick = (testId: number) => {
