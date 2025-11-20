@@ -86,16 +86,41 @@ export default function ModuleDetailPage() {
   }, [loading, module])
 
   const handlePdfView = (pdfUrl: string) => {
-    console.log('Abriendo PDF:', pdfUrl)
-    // Abrir PDF para visualizar en el navegador
-    window.open(pdfUrl, '_blank', 'noopener,noreferrer')
+    console.log('Visualizando PDF:', pdfUrl)
+    if (!pdfUrl) {
+      alert('URL del PDF no disponible')
+      return
+    }
+    // Abrir PDF directamente para visualizar en el navegador
+    const link = document.createElement('a')
+    link.href = pdfUrl
+    link.target = '_blank'
+    link.rel = 'noopener noreferrer'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const handlePdfDownload = async (pdfUrl: string, fileName: string) => {
+    console.log('Descargando PDF:', pdfUrl, fileName)
+    if (!pdfUrl) {
+      alert('URL del PDF no disponible')
+      return
+    }
+    
     try {
-      console.log('Descargando PDF:', pdfUrl, fileName)
-      // Forzar descarga del PDF
-      const response = await fetch(pdfUrl)
+      // Para Vercel Blob, usar descarga directa con fetch
+      const response = await fetch(pdfUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/pdf',
+        },
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -104,12 +129,21 @@ export default function ModuleDetailPage() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      
+      // Limpiar después de un breve delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 100)
     } catch (error) {
       console.error('Error descargando PDF:', error)
-      alert('Error al descargar el PDF. Intentando abrir en nueva pestaña...')
-      // Fallback: abrir en nueva pestaña
-      window.open(pdfUrl, '_blank', 'noopener,noreferrer')
+      alert('Error al descargar el PDF. Abriendo en nueva pestaña...')
+      // Fallback: usar el método simple
+      const link = document.createElement('a')
+      link.href = pdfUrl
+      link.download = fileName
+      link.target = '_blank'
+      link.rel = 'noopener noreferrer'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
     }
   }
 
