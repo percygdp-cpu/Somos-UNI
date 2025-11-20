@@ -69,8 +69,11 @@ export default function TestPage() {
       }
       
       setTest(foundTest)
-      // Mezclar preguntas para hacer el test aleatorio
-      const shuffled = [...foundTest.questions].sort(() => Math.random() - 0.5)
+      // Mezclar preguntas y sus opciones para hacer el test aleatorio
+      const shuffled = [...foundTest.questions].sort(() => Math.random() - 0.5).map((question: any) => ({
+        ...question,
+        options: [...question.options].sort(() => Math.random() - 0.5)
+      }))
       setShuffledQuestions(shuffled)
       setLoading(false)
     } catch (error) {
