@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import AdminHeader from '@/components/AdminHeader'
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import AdminHeader from '@/components/AdminHeader'
 import anime from 'animejs'
+import { useEffect, useState } from 'react'
 
 interface StudentProgress {
   id: number
@@ -107,7 +107,7 @@ export default function AnalyticsPage() {
         }
       })
       
-      setStudentProgress(progress.sort((a, b) => b.averageScore - a.averageScore))
+      setStudentProgress(progress.sort((a: StudentProgress, b: StudentProgress) => b.averageScore - a.averageScore))
       
     } catch (error) {
       console.error('Error cargando analytics:', error)
