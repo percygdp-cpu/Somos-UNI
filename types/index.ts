@@ -5,6 +5,8 @@ export interface User {
   password: string
   role: 'student' | 'admin'
   status: 'active' | 'inactive'
+  email?: string
+  fullName?: string
   createdAt: Date
   updatedAt: Date
 }

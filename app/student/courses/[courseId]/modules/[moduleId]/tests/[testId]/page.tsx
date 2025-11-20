@@ -219,7 +219,7 @@ export default function TestPage() {
           progress: newProgress,
           duration: 1500,
           easing: 'easeOutQuart',
-          update: function(anim) {
+          update: function(anim: any) {
             const value = Math.round(anim.animations[0].currentValue)
             setCourseProgress(value)
           }

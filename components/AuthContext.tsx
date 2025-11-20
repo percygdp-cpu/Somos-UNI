@@ -56,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Convertir el usuario de la DB al formato User
         const userData: User = {
           id: user.id.toString(),
+          name: user.name || user.fullName || '',
           username: user.username,
           password: user.password,
           role: user.role,
