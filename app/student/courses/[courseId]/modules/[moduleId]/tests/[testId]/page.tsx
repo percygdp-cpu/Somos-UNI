@@ -55,8 +55,6 @@ export default function TestPage() {
       return () => clearTimeout(timer)
     }
   }, [testCompleted, shouldShowConfetti])
-    loadTestData()
-  }, [params.testId])
 
   const loadTestData = async () => {
     try {
