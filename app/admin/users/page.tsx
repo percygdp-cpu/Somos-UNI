@@ -96,6 +96,9 @@ export default function UserManagementPage() {
   const [showMissingCoursesModal, setShowMissingCoursesModal] = useState(false)
   const [showMissingModulesModal, setShowMissingModulesModal] = useState(false)
   const [tempExcelData, setTempExcelData] = useState<any>(null)
+  const [isCreatingCourses, setIsCreatingCourses] = useState(false)
+  const [isCreatingModules, setIsCreatingModules] = useState(false)
+  const [isCreatingTests, setIsCreatingTests] = useState(false)
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
@@ -785,74 +788,81 @@ export default function UserManagementPage() {
   }
 
   const handleConfirmTests = async () => {
-    let created = 0
-    let errors = 0
-
-    for (const test of pendingTests) {
-      try {
-        // Validar que el test tenga datos válidos
-        if (!test.moduleId || !test.title || !test.questions || test.questions.length === 0) {
-          console.error('Test inválido:', test)
-          errors++
-          continue
-        }
-
-        // Obtener courseId del módulo
-        const module = modules.find(m => m.id === test.moduleId)
-        if (!module) {
-          console.error('Módulo no encontrado:', test.moduleId)
-          errors++
-          continue
-        }
-
-        // Validar que todas las preguntas tengan opciones válidas
-        const validQuestions = test.questions.filter((q: any) => 
-          q.question && 
-          q.options && 
-          q.options.length > 0 && 
-          q.correctAnswer !== undefined &&
-          q.correctAnswer >= 0 &&
-          q.correctAnswer < q.options.length
-        )
-
-        if (validQuestions.length === 0) {
-          console.error('No hay preguntas válidas en el test:', test.title)
-          errors++
-          continue
-        }
-
-        const response = await fetch('/api/tests', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            courseId: module.courseId,
-            moduleId: test.moduleId,
-            title: test.title,
-            questions: validQuestions
-          })
-        })
-
-        if (response.ok) {
-          created++
-        } else {
-          const errorData = await response.json()
-          console.error(`Error creando test ${test.title}:`, errorData)
-          errors++
-        }
-      } catch (error) {
-        console.error('Error:', error)
-        errors++
-      }
-    }
-
-    await loadData()
-    setShowTestPreviewModal(false)
-    setPendingTests([])
+    if (isCreatingTests) return
+    setIsCreatingTests(true)
     
-    if (created > 0) {
-      alert(`✅ ${created} test${created !== 1 ? 's' : ''} creado${created !== 1 ? 's' : ''}${errors > 0 ? `\n❌ ${errors} error${errors !== 1 ? 'es' : ''}` : ''}`)
-    } else {
-      alert(`❌ No se pudo crear ningún test. Revisa la consola para más detalles.`)
+    try {
+      let created = 0
+      let errors = 0
+
+      for (const test of pendingTests) {
+        try {
+          // Validar que el test tenga datos válidos
+          if (!test.moduleId || !test.title || !test.questions || test.questions.length === 0) {
+            console.error('Test inválido:', test)
+            errors++
+            continue
+          }
+
+          // Obtener courseId del módulo
+          const module = modules.find(m => m.id === test.moduleId)
+          if (!module) {
+            console.error('Módulo no encontrado:', test.moduleId)
+            errors++
+            continue
+          }
+
+          // Validar que todas las preguntas tengan opciones válidas
+          const validQuestions = test.questions.filter((q: any) => 
+            q.question && 
+            q.options && 
+            q.options.length > 0 && 
+            q.correctAnswer !== undefined &&
+            q.correctAnswer >= 0 &&
+            q.correctAnswer < q.options.length
+          )
+
+          if (validQuestions.length === 0) {
+            console.error('No hay preguntas válidas en el test:', test.title)
+            errors++
+            continue
+          }
+
+          const response = await fetch('/api/tests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              courseId: module.courseId,
+              moduleId: test.moduleId,
+              title: test.title,
+              questions: validQuestions
+            })
+          })
+
+          if (response.ok) {
+            created++
+          } else {
+            const errorData = await response.json()
+            console.error(`Error creando test ${test.title}:`, errorData)
+            errors++
+          }
+        } catch (error) {
+          console.error('Error:', error)
+          errors++
+        }
+      }
+
+      await loadData()
+      setShowTestPreviewModal(false)
+      setPendingTests([])
+      
+      if (created > 0) {
+        alert(`✅ ${created} test${created !== 1 ? 's' : ''} creado${created !== 1 ? 's' : ''}${errors > 0 ? `\n❌ ${errors} error${errors !== 1 ? 'es' : ''}` : ''}`)
+      } else {
+        alert(`❌ No se pudo crear ningún test. Revisa la consola para más detalles.`)
+      }
+    } finally {
+      setIsCreatingTests(false)
     }
   }
 
@@ -3302,45 +3312,65 @@ export default function UserManagementPage() {
               </button>
               <button
                 onClick={async () => {
-                  // Crear los cursos
-                  for (const course of missingCourses) {
-                    try {
-                      await fetch('/api/courses', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          title: course.name,
-                          description: course.description || `Curso de ${course.name}`,
-                          image: ''
+                  if (isCreatingCourses) return
+                  setIsCreatingCourses(true)
+                  
+                  try {
+                    // Crear los cursos
+                    for (const course of missingCourses) {
+                      try {
+                        await fetch('/api/courses', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            title: course.name,
+                            description: course.description || `Curso de ${course.name}`,
+                            image: ''
+                          })
                         })
-                      })
-                    } catch (error) {
-                      console.error('Error creando curso:', error)
+                      } catch (error) {
+                        console.error('Error creando curso:', error)
+                      }
                     }
-                  }
-                  
-                  // Recargar datos
-                  await loadData()
-                  
-                  // Cerrar modal de cursos
-                  setShowMissingCoursesModal(false)
-                  setMissingCourses([])
-                  
-                  // Si hay módulos faltantes, mostrar ese modal
-                  if (tempExcelData && tempExcelData.missingModules.length > 0) {
-                    setMissingModules(tempExcelData.missingModules)
-                    setShowMissingModulesModal(true)
-                  } else if (tempExcelData) {
-                    // Si no hay módulos faltantes, procesar el Excel
-                    processExcelData(tempExcelData.jsonData)
+                    
+                    // Recargar datos
+                    await loadData()
+                    
+                    // Cerrar modal de cursos
+                    setShowMissingCoursesModal(false)
+                    setMissingCourses([])
+                    
+                    // Si hay módulos faltantes, mostrar ese modal
+                    if (tempExcelData && tempExcelData.missingModules.length > 0) {
+                      setMissingModules(tempExcelData.missingModules)
+                      setShowMissingModulesModal(true)
+                    } else if (tempExcelData) {
+                      // Si no hay módulos faltantes, procesar el Excel
+                      processExcelData(tempExcelData.jsonData)
+                    }
+                  } finally {
+                    setIsCreatingCourses(false)
                   }
                 }}
-                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 rounded-lg transition-all hover:scale-105 shadow-lg"
+                disabled={isCreatingCourses}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 rounded-lg transition-all hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                </svg>
-                Sí, Agregar Cursos
+                {isCreatingCourses ? (
+                  <>
+                    <svg className="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Creando...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    </svg>
+                    Sí, Agregar Cursos
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -3442,47 +3472,67 @@ export default function UserManagementPage() {
               </button>
               <button
                 onClick={async () => {
-                  // Crear los módulos
-                  for (const module of missingModules) {
-                    try {
-                      // Buscar el courseId
-                      const course = courses.find(c => c.title.toLowerCase().trim() === module.courseName.toLowerCase().trim())
-                      if (course) {
-                        await fetch('/api/modules', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            title: module.name,
-                            description: `Módulo ${module.name}`,
-                            courseId: course.id,
-                            order: module.order,
-                            pdfFiles: []
+                  if (isCreatingModules) return
+                  setIsCreatingModules(true)
+                  
+                  try {
+                    // Crear los módulos
+                    for (const module of missingModules) {
+                      try {
+                        // Buscar el courseId
+                        const course = courses.find(c => c.title.toLowerCase().trim() === module.courseName.toLowerCase().trim())
+                        if (course) {
+                          await fetch('/api/modules', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: module.name,
+                              description: `Módulo ${module.name}`,
+                              courseId: course.id,
+                              order: module.order,
+                              pdfFiles: []
+                            })
                           })
-                        })
+                        }
+                      } catch (error) {
+                        console.error('Error creando módulo:', error)
                       }
-                    } catch (error) {
-                      console.error('Error creando módulo:', error)
                     }
-                  }
-                  
-                  // Recargar datos
-                  await loadData()
-                  
-                  // Cerrar modal de módulos
-                  setShowMissingModulesModal(false)
-                  setMissingModules([])
-                  
-                  // Procesar el Excel
-                  if (tempExcelData) {
-                    processExcelData(tempExcelData.jsonData)
+                    
+                    // Recargar datos
+                    await loadData()
+                    
+                    // Cerrar modal de módulos
+                    setShowMissingModulesModal(false)
+                    setMissingModules([])
+                    
+                    // Procesar el Excel
+                    if (tempExcelData) {
+                      processExcelData(tempExcelData.jsonData)
+                    }
+                  } finally {
+                    setIsCreatingModules(false)
                   }
                 }}
-                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 rounded-lg transition-all hover:scale-105 shadow-lg"
+                disabled={isCreatingModules}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 rounded-lg transition-all hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                </svg>
-                Sí, Agregar Módulos
+                {isCreatingModules ? (
+                  <>
+                    <svg className="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Creando...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    </svg>
+                    Sí, Agregar Módulos
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -3670,12 +3720,25 @@ export default function UserManagementPage() {
               </button>
               <button
                 onClick={handleConfirmTests}
-                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 rounded-lg transition-all hover:scale-105 shadow-lg hover:shadow-xl"
+                disabled={isCreatingTests}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 rounded-lg transition-all hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                </svg>
-                Confirmar y Crear Tests
+                {isCreatingTests ? (
+                  <>
+                    <svg className="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Creando Tests...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                    </svg>
+                    Confirmar y Crear Tests
+                  </>
+                )}
               </button>
             </div>
           </div>
