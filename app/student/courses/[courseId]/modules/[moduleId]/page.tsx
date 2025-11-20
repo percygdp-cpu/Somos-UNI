@@ -137,47 +137,51 @@ export default function ModuleDetailPage() {
               </h3>
               <div className="space-y-3">
                 {module.pdfFiles.map((pdf: any, index: number) => (
-                  <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 flex-shrink-0 bg-red-100 rounded-lg flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
-                        </svg>
+                  <div key={index} className="bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors overflow-hidden">
+                    <div className="flex flex-col gap-3 p-3 sm:p-4">
+                      {/* Header con info del PDF */}
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 flex-shrink-0 bg-red-100 rounded-lg flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
+                          </svg>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-secondary-900 line-clamp-2 sm:line-clamp-1">
+                            {pdf.name || `Documento ${index + 1}`}
+                          </p>
+                          <p className="text-xs sm:text-sm text-secondary-600">PDF</p>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-secondary-900 truncate">{pdf.name || `Documento ${index + 1}`}</p>
-                        <p className="text-xs sm:text-sm text-secondary-600">PDF</p>
+                      
+                      {/* Botones de acción */}
+                      <div className="flex gap-2 w-full">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            window.open(pdf.url, '_blank', 'noopener,noreferrer')
+                          }}
+                          className="flex-1 px-3 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                          </svg>
+                          <span className="whitespace-nowrap">Visualizar</span>
+                        </button>
+                        <a
+                          href={pdf.url}
+                          download={pdf.name || `documento-${index + 1}.pdf`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex-1 px-3 py-2.5 bg-secondary-600 hover:bg-secondary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
+                          </svg>
+                          <span className="whitespace-nowrap">Descargar</span>
+                        </a>
                       </div>
                     </div>
-                    
-                    <div className="flex items-center gap-2 sm:flex-shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          window.open(pdf.url, '_blank', 'noopener,noreferrer')
-                        }}
-                        className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-                        </svg>
-                        <span className="hidden sm:inline">Visualizar</span>
-                        <span className="sm:hidden">Ver</span>
-                      </button>
-                      <a
-                        href={pdf.url}
-                        download={pdf.name || `documento-${index + 1}.pdf`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-secondary-600 hover:bg-secondary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
-                        </svg>
-                        <span className="hidden sm:inline">Descargar</span>
-                        <span className="sm:hidden">Guardar</span>
-                      </a>
-                      </a>
-                    </div>
+                  </div>
                   </div>
                 ))}
               </div>
