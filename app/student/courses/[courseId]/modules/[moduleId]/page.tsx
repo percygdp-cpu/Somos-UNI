@@ -314,6 +314,7 @@ export default function ModuleDetailPage() {
             )}
           </div>
         </div>
+        </div>
       </div>
     </ProtectedRoute>
   )
