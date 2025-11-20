@@ -257,10 +257,12 @@ export default function TestPage() {
   return (
     <ProtectedRoute allowedRoles={['student']}>
       <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary-50 to-secondary-50 relative">
-        <Confetti
-          ref={confettiRef}
-          className="absolute top-0 left-0 z-50 size-full pointer-events-none"
-        />
+        {testCompleted && Math.round((score / shuffledQuestions.length) * 100) >= 70 && (
+          <Confetti
+            ref={confettiRef}
+            className="absolute inset-0 z-50 size-full pointer-events-none"
+          />
+        )}
         <StudentHeader />
         <div className="flex-grow p-6">
         <div className="max-w-4xl mx-auto">
