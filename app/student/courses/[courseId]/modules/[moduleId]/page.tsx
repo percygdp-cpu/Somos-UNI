@@ -154,7 +154,7 @@ export default function ModuleDetailPage() {
           </div>
 
           {/* PDF Download Section */}
-          {module.pdfFiles && Array.isArray(module.pdfFiles) && module.pdfFiles.length > 0 ? (
+          {module.pdfFiles && Array.isArray(module.pdfFiles) && module.pdfFiles.length > 0 && (
             <div className="module-content card mb-8">
               <h3 className="text-lg sm:text-xl font-semibold text-secondary-900 mb-4 flex items-center gap-2">
                 <span className="text-red-600 text-xl sm:text-2xl">📄</span>
@@ -209,18 +209,6 @@ export default function ModuleDetailPage() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          ) : (
-            <div className="module-content card mb-8 bg-gray-50">
-              <div className="text-center py-8">
-                <div className="text-4xl mb-3">📄</div>
-                <h3 className="text-lg font-semibold text-secondary-900 mb-2">
-                  No hay material de estudio disponible
-                </h3>
-                <p className="text-secondary-600 text-sm">
-                  Este módulo aún no tiene PDFs cargados.
-                </p>
               </div>
             </div>
           )}
