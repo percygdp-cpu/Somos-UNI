@@ -36,8 +36,25 @@ export default function TestPage() {
   const [loading, setLoading] = useState(true)
   const [courseProgress, setCourseProgress] = useState(0)
   const [prevProgress, setPrevProgress] = useState(0)
+  const [shouldShowConfetti, setShouldShowConfetti] = useState(false)
 
   useEffect(() => {
+    loadTestData()
+  }, [params.testId])
+
+  // Efecto para lanzar confetti cuando se aprueba
+  useEffect(() => {
+    if (testCompleted && shouldShowConfetti && confettiRef.current) {
+      const timer = setTimeout(() => {
+        confettiRef.current?.fire({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 }
+        })
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [testCompleted, shouldShowConfetti])
     loadTestData()
   }, [params.testId])
 
@@ -137,15 +154,9 @@ export default function TestPage() {
     setScore(correctAnswers)
     setTestCompleted(true)
     
-    // Lanzar confetti si aprobó (>= 70%)
+    // Activar confetti si aprobó (>= 70%)
     if (percentage >= 70) {
-      setTimeout(() => {
-        confettiRef.current?.fire({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 }
-        })
-      }, 500)
+      setShouldShowConfetti(true)
     }
     
     // Guardar resultado en la base de datos
