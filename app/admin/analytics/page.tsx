@@ -20,6 +20,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [students, setStudents] = useState<any[]>([])
   const [courses, setCourses] = useState<any[]>([])
+  const [modules, setModules] = useState<any[]>([])
   const [testResults, setTestResults] = useState<any[]>([])
   const [studentProgress, setStudentProgress] = useState<StudentProgress[]>([])
   
@@ -30,7 +31,7 @@ export default function AnalyticsPage() {
     totalTests: 0,
     averageScore: 0,
     passRate: 0,
-    avgTestsPerStudent: 0
+    avgModulesPerStudent: 0
   })
 
   useEffect(() => {
@@ -52,6 +53,11 @@ export default function AnalyticsPage() {
       const coursesList = await coursesRes.json()
       setCourses(coursesList)
       
+      // Cargar módulos
+      const modulesRes = await fetch('/api/modules')
+      const modulesList = await modulesRes.json()
+      setModules(modulesList)
+      
       // Cargar resultados de tests
       const resultsRes = await fetch('/api/test-results')
       const resultsList = await resultsRes.json()
@@ -66,9 +72,16 @@ export default function AnalyticsPage() {
         : 0
       const passRate = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0
       
-      // Calcular promedio de tests por alumno
-      const avgTestsPerStudent = studentsList.length > 0
-        ? Math.round(totalTests / studentsList.length)
+      // Calcular promedio de módulos completados por alumno
+      let totalModulesCompleted = 0
+      studentsList.forEach((student: any) => {
+        const studentResults = resultsList.filter((r: any) => r.userId === student.id && r.percentage >= 70)
+        // Obtener módulos únicos completados por este estudiante
+        const uniqueModules = new Set(studentResults.map((r: any) => r.moduleId))
+        totalModulesCompleted += uniqueModules.size
+      })
+      const avgModulesPerStudent = studentsList.length > 0
+        ? Math.round(totalModulesCompleted / studentsList.length)
         : 0
       
       setStats({
@@ -78,7 +91,7 @@ export default function AnalyticsPage() {
         totalTests: totalTests,
         averageScore,
         passRate,
-        avgTestsPerStudent
+        avgModulesPerStudent
       })
       
       // Calcular progreso por estudiante
@@ -178,8 +191,8 @@ export default function AnalyticsPage() {
 
               <div className="analytics-card card bg-white border border-gray-200">
                 <div className="text-center py-6">
-                  <p className="text-secondary-600 text-sm font-medium mb-2">Promedio Tests por Alumno</p>
-                  <p className="text-5xl font-bold text-secondary-900">{stats.avgTestsPerStudent}</p>
+                  <p className="text-secondary-600 text-sm font-medium mb-2">Módulos Completados por Alumno</p>
+                  <p className="text-5xl font-bold text-secondary-900">{stats.avgModulesPerStudent}</p>
                 </div>
               </div>
             </div>
