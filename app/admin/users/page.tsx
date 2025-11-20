@@ -819,10 +819,25 @@ export default function UserManagementPage() {
       const moduleOfTest = modules.find(m => m.id === testToEdit.moduleId)
       const courseId = moduleOfTest?.courseId || ''
       
+      // Asegurarse de que questions sea un array
+      let questionsArray = testToEdit.questions
+      if (typeof questionsArray === 'string') {
+        try {
+          questionsArray = JSON.parse(questionsArray)
+        } catch (e) {
+          console.error('Error parsing questions:', e)
+          questionsArray = []
+        }
+      }
+      if (!Array.isArray(questionsArray)) {
+        questionsArray = []
+      }
+      
       setEditingItem({ 
         ...testToEdit, 
         type: 'test',
-        courseId: courseId
+        courseId: courseId,
+        questions: questionsArray
       })
       setShowEditModal(true)
     }
