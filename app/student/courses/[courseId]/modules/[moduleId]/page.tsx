@@ -253,22 +253,28 @@ export default function ModuleDetailPage() {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                          <div className={`w-12 h-12 flex-shrink-0 rounded-lg flex items-center justify-center ${
                             hasResult 
                               ? result.percentage >= 70 
                                 ? 'bg-green-100' 
                                 : 'bg-orange-100'
                               : 'bg-primary-100'
                           }`}>
-                            <span className={`text-xl ${
-                              hasResult 
-                                ? result.percentage >= 70 
-                                  ? 'text-green-600' 
-                                  : 'text-orange-600'
-                                : 'text-primary-600'
-                            }`}>
-                              {hasResult ? (result.percentage >= 70 ? '✓' : '📝') : '📝'}
-                            </span>
+                            {hasResult ? (
+                              result.percentage >= 70 ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-orange-600" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
+                                </svg>
+                              )
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-primary-600" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
+                              </svg>
+                            )}
                           </div>
                           
                           <div>
