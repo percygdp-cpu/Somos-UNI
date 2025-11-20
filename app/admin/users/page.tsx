@@ -715,9 +715,19 @@ export default function UserManagementPage() {
 
         // Verificar módulos faltantes
         const missingModulesList: Array<{name: string, courseName: string, order: number}> = []
-        let orderCounter = 1
         for (const [courseName, moduleNames] of modulesByCourse.entries()) {
           const course = courses.find(c => c.title.toLowerCase().trim() === courseName.toLowerCase())
+          
+          // Calcular el orden base para este curso
+          let orderCounter = 1
+          if (course) {
+            // Si el curso existe, obtener el último orden de sus módulos
+            const courseModules = modules.filter(m => m.courseId === course.id)
+            if (courseModules.length > 0) {
+              const maxOrder = Math.max(...courseModules.map(m => m.order || 0))
+              orderCounter = maxOrder + 1
+            }
+          }
           
           for (const moduleName of moduleNames) {
             // Si el curso existe, verificar si el módulo existe
