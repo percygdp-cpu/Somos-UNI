@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { Course, Module, Test, Question, User, TestResult } from '@/types'
+import { Course, Module, Question, Test, TestResult, User } from '@/types'
 
 export const mockUsers: User[] = [
   {
