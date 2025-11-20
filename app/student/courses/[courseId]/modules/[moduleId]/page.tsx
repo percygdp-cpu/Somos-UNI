@@ -36,6 +36,9 @@ export default function ModuleDetailPage() {
           return
         }
         
+        console.log('Módulo cargado:', foundModule)
+        console.log('PDFs del módulo:', foundModule.pdfFiles)
+        
         setModule(foundModule)
         
         // Cargar tests del módulo
@@ -83,12 +86,14 @@ export default function ModuleDetailPage() {
   }, [loading, module])
 
   const handlePdfView = (pdfUrl: string) => {
+    console.log('Abriendo PDF:', pdfUrl)
     // Abrir PDF para visualizar en el navegador
     window.open(pdfUrl, '_blank', 'noopener,noreferrer')
   }
 
   const handlePdfDownload = async (pdfUrl: string, fileName: string) => {
     try {
+      console.log('Descargando PDF:', pdfUrl, fileName)
       // Forzar descarga del PDF
       const response = await fetch(pdfUrl)
       const blob = await response.blob()
@@ -102,6 +107,7 @@ export default function ModuleDetailPage() {
       window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Error descargando PDF:', error)
+      alert('Error al descargar el PDF. Intentando abrir en nueva pestaña...')
       // Fallback: abrir en nueva pestaña
       window.open(pdfUrl, '_blank', 'noopener,noreferrer')
     }
@@ -149,7 +155,7 @@ export default function ModuleDetailPage() {
           </div>
 
           {/* PDF Download Section */}
-          {module.pdfFiles && module.pdfFiles.length > 0 && (
+          {module.pdfFiles && Array.isArray(module.pdfFiles) && module.pdfFiles.length > 0 ? (
             <div className="module-content card mb-8">
               <h3 className="text-lg sm:text-xl font-semibold text-secondary-900 mb-4 flex items-center gap-2">
                 <span className="text-red-600 text-xl sm:text-2xl">📄</span>
@@ -201,13 +207,21 @@ export default function ModuleDetailPage() {
                           <span className="whitespace-nowrap">Descargar</span>
                         </button>
                       </div>
-                          <span className="whitespace-nowrap">Descargar</span>
-                        </a>
-                      </div>
                     </div>
                   </div>
-                  </div>
                 ))}
+              </div>
+            </div>
+          ) : (
+            <div className="module-content card mb-8 bg-gray-50">
+              <div className="text-center py-8">
+                <div className="text-4xl mb-3">📄</div>
+                <h3 className="text-lg font-semibold text-secondary-900 mb-2">
+                  No hay material de estudio disponible
+                </h3>
+                <p className="text-secondary-600 text-sm">
+                  Este módulo aún no tiene PDFs cargados.
+                </p>
               </div>
             </div>
           )}
@@ -300,7 +314,6 @@ export default function ModuleDetailPage() {
               </div>
             )}
           </div>
-        </div>
         </div>
       </div>
     </ProtectedRoute>
