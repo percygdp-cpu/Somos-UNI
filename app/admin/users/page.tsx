@@ -433,7 +433,10 @@ export default function UserManagementPage() {
       
       // Agregar IDs modificados
       const modifiedIds = Array.from(pendingChanges.keys())
-      setModifiedUserIds(prev => [...new Set([...prev, ...modifiedIds])])
+      setModifiedUserIds(prev => {
+        const combined = [...prev, ...modifiedIds]
+        return Array.from(new Set(combined))
+      })
       
       // Simulación de guardado
       await new Promise(resolve => setTimeout(resolve, 500))
