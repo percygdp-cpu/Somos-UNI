@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Administrator Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#3B82F6",
+              "background-light": "#F3F4F6",
+              "background-dark": "#0B1117",
+              "success": "#22C55E",
+              "warning": "#F59E0B",
+              "danger": "#EF4444",
+              "text-light-heading": "#111827",
+              "text-light-body": "#4B5563",
+              "text-dark-heading": "#F9FAFB",
+              "text-dark-body": "#A1A1AA",
+              "card-light": "#FFFFFF",
+              "card-dark": "#151C24",
+              "border-light": "#E5E7EB",
+              "border-dark": "#27303A",
+            },
+            fontFamily: {
+              "display": ["Lexend", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "0.75rem", "xl": "1rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            font-size: 24px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col">
+<header class="flex items-center bg-card-light dark:bg-card-dark p-4 justify-between border-b border-border-light dark:border-border-dark sticky top-0 z-10">
+<h1 class="text-text-light-heading dark:text-dark-heading text-lg font-bold leading-tight tracking-[-0.015em]">Student Performance Overview</h1>
+<div class="flex items-center gap-4">
+<button class="hidden sm:flex h-10 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg bg-primary px-4 text-white text-sm font-bold leading-normal tracking-[0.015em]">
+<span class="material-symbols-outlined !text-xl">ios_share</span>
+<span>Export Report</span>
+</button>
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 w-10 bg-gray-200 dark:bg-gray-800 text-text-light-body dark:text-dark-body">
+<span class="material-symbols-outlined">person</span>
+</button>
+</div>
+</header>
+<main class="flex-1 p-4 md:p-6 lg:p-8">
+<div class="flex flex-col gap-6">
+<div class="flex flex-wrap gap-3">
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-card-light dark:bg-card-dark pl-4 pr-3 border border-border-light dark:border-border-dark hover:bg-gray-50 dark:hover:bg-opacity-80 transition-colors">
+<p class="text-text-light-body dark:text-dark-heading text-sm font-medium leading-normal">All Courses</p>
+<span class="material-symbols-outlined !text-xl text-text-light-body dark:text-dark-body">arrow_drop_down</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-card-light dark:bg-card-dark pl-4 pr-3 border border-border-light dark:border-border-dark hover:bg-gray-50 dark:hover:bg-opacity-80 transition-colors">
+<p class="text-text-light-body dark:text-dark-heading text-sm font-medium leading-normal">All Cohorts</p>
+<span class="material-symbols-outlined !text-xl text-text-light-body dark:text-dark-body">arrow_drop_down</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-card-light dark:bg-card-dark pl-4 pr-3 border border-border-light dark:border-border-dark hover:bg-gray-50 dark:hover:bg-opacity-80 transition-colors">
+<p class="text-text-light-body dark:text-dark-heading text-sm font-medium leading-normal">Last 30 Days</p>
+<span class="material-symbols-outlined !text-xl text-text-light-body dark:text-dark-body">arrow_drop_down</span>
+</button>
+</div>
+<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+<div class="flex min-w-[158px] flex-1 flex-col gap-2 rounded-lg bg-card-light dark:bg-card-dark p-6 border border-border-light dark:border-border-dark">
+<p class="text-text-light-body dark:text-dark-body text-base font-medium leading-normal">Total Active Students</p>
+<p class="text-text-light-heading dark:text-dark-heading tracking-light text-2xl font-bold leading-tight">1,204</p>
+<p class="text-success text-base font-medium leading-normal flex items-center gap-1">
+<span class="material-symbols-outlined !text-base">arrow_upward</span>
+<span>5.2%</span>
+</p>
+</div>
+<div class="flex min-w-[158px] flex-1 flex-col gap-2 rounded-lg bg-card-light dark:bg-card-dark p-6 border border-border-light dark:border-border-dark">
+<p class="text-text-light-body dark:text-dark-body text-base font-medium leading-normal">Average Completion Rate</p>
+<p class="text-text-light-heading dark:text-dark-heading tracking-light text-2xl font-bold leading-tight">78%</p>
+<p class="text-danger text-base font-medium leading-normal flex items-center gap-1">
+<span class="material-symbols-outlined !text-base">arrow_downward</span>
+<span>1.5%</span>
+</p>
+</div>
+<div class="flex min-w-[158px] flex-1 flex-col gap-2 rounded-lg bg-card-light dark:bg-card-dark p-6 border border-border-light dark:border-border-dark">
+<p class="text-text-light-body dark:text-dark-body text-base font-medium leading-normal">Students At-Risk</p>
+<p class="text-text-light-heading dark:text-dark-heading tracking-light text-2xl font-bold leading-tight">42</p>
+<p class="text-warning text-base font-medium leading-normal flex items-center gap-1">
+<span class="material-symbols-outlined !text-base">arrow_upward</span>
+<span>3%</span>
+</p>
+</div>
+</div>
+<div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+<div class="flex min-w-72 flex-col gap-2 rounded-lg bg-card-light dark:bg-card-dark p-6 border border-border-light dark:border-border-dark lg:col-span-2">
+<p class="text-text-light-heading dark:text-dark-heading text-base font-medium leading-normal">Student Engagement Over Time</p>
+<p class="text-text-light-heading dark:text-dark-heading tracking-light text-3xl font-bold leading-tight truncate">1.2k Logins</p>
+<div class="flex gap-1 items-center">
+<p class="text-text-light-body dark:text-dark-body text-base font-normal leading-normal">Last 30 Days</p>
+<p class="text-danger text-base font-medium leading-normal flex items-center gap-1">
+<span class="material-symbols-outlined !text-base">arrow_downward</span>
+<span>2.1%</span>
+</p>
+</div>
+<div class="flex min-h-[180px] flex-1 flex-col gap-8 py-4">
+<svg fill="none" height="148" preserveAspectRatio="none" viewBox="-3 0 478 150" width="100%" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_1" x1="236" x2="236" y1="1" y2="149">
+<stop stop-color="#3B82F6" stop-opacity="0.2"></stop>
+<stop offset="1" stop-color="#3B82F6" stop-opacity="0"></stop>
+</linearGradient>
+</defs>
+<path d="M0 109C18.1538 109 18.1538 21 36.3077 21C54.4615 21 54.4615 41 72.6154 41C90.7692 41 90.7692 93 108.923 93C127.077 93 127.077 33 145.231 33C163.385 33 163.385 101 181.538 101C199.692 101 199.692 61 217.846 61C236 61 236 45 254.154 45C272.308 45 272.308 121 290.462 121C308.615 121 308.615 149 326.769 149C344.923 149 344.923 1 363.077 1C381.231 1 381.231 81 399.385 81C417.538 81 417.538 129 435.692 129C453.846 129 453.846 25 472 25V149H326.769H0V109Z" fill="url(#paint0_linear_1)"></path>
+<path d="M0 109C18.1538 109 18.1538 21 36.3077 21C54.4615 21 54.4615 41 72.6154 41C90.7692 41 90.7692 93 108.923 93C127.077 93 127.077 33 145.231 33C163.385 33 163.385 101 181.538 101C199.692 101 199.692 61 217.846 61C236 61 236 45 254.154 45C272.308 45 272.308 121 290.462 121C308.615 121 308.615 149 326.769 149C344.923 149 344.923 1 363.077 1C381.231 1 381.231 81 399.385 81C417.538 81 417.538 129 435.692 129C453.846 129 453.846 25 472 25" stroke="#3B82F6" stroke-linecap="round" stroke-width="3"></path>
+</svg>
+<div class="flex justify-around">
+<p class="text-text-light-body dark:text-dark-body text-xs font-bold leading-normal tracking-[0.015em]">Week 1</p>
+<p class="text-text-light-body dark:text-dark-body text-xs font-bold leading-normal tracking-[0.015em]">Week 2</p>
+<p class="text-text-light-body dark:text-dark-body text-xs font-bold leading-normal tracking-[0.015em]">Week 3</p>
+<p class="text-text-light-body dark:text-dark-body text-xs font-bold leading-normal tracking-[0.015em]">Week 4</p>
+</div>
+</div>
+</div>
+<div class="flex min-w-72 flex-1 flex-col gap-4 rounded-lg bg-card-light dark:bg-card-dark p-6 border border-border-light dark:border-border-dark">
+<p class="text-text-light-heading dark:text-dark-heading text-base font-medium leading-normal">Pass/Fail Rate</p>
+<div class="flex justify-center items-center flex-1 my-4">
+<div class="relative w-40 h-40">
+<svg class="w-full h-full" viewBox="0 0 36 36">
+<path class="stroke-current text-gray-200 dark:text-gray-700" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-width="3"></path>
+<path class="stroke-current text-success" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-dasharray="85, 100" stroke-linecap="round" stroke-width="3"></path>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-3xl font-bold text-text-light-heading dark:text-dark-heading">85%</span>
+<span class="text-sm text-text-light-body dark:text-dark-body">Pass</span>
+</div>
+</div>
+</div>
+<div class="flex justify-center gap-6">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-success"></div>
+<span class="text-sm text-text-light-body dark:text-dark-body">Pass (85%)</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-danger"></div>
+<span class="text-sm text-text-light-body dark:text-dark-body">Fail (15%)</span>
+</div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+<div class="flex flex-col gap-4 rounded-lg bg-card-light dark:bg-card-dark p-6 border border-border-light dark:border-border-dark lg:col-span-1">
+<h2 class="text-text-light-heading dark:text-dark-heading text-lg font-bold leading-tight tracking-[-0.015em]">Students At-Risk</h2>
+<ul class="space-y-4">
+<li class="flex items-center gap-4">
+<img class="h-10 w-10 rounded-full object-cover" data-alt="Profile picture of Olivia Martin" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDg0iJyIrf3otfJs3JSibV7Tt59xwisKMLkimRZAuosVrjBgKtmVQuH8nV0GdzprKZB0mkQ94Qnnyhc14l2RVHHabH_AXAbbDjnaE8xf5JCO7lEmBpTWOJzvKZa6YPyu3YqVokOXbjQMEC_DFQCnjriKTG5jVNkjG0tU-biuHEeswgTjHpAkgU5OQttGYIqK5eGyLuPUBri4FILxO8VmvSCVkMayroywKPRF7Hk54Yb_EA1fgBsjBPkg_-bj71HeVfHdqMOL4zEZT8"/>
+<div class="flex-1">
+<p class="font-semibold text-sm text-text-light-heading dark:text-dark-heading">Olivia Martin</p>
+<p class="text-xs text-danger">3 Missed Deadlines</p>
+</div>
+<a class="text-primary text-sm font-semibold" href="#">View</a>
+</li>
+<li class="flex items-center gap-4">
+<img class="h-10 w-10 rounded-full object-cover" data-alt="Profile picture of Liam Carter" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWXXIX8sn-TGlld88UomSB__mqP_uSXi3P7vPzMAzq2X8GvBKXzt3IJs1tUgo5m1YE6pBCcBMp0tVj0KJXChTqtbGu1rWZ7-E-wQrcnepnF5ZioGAf3fWuwRdRoGOl8et7EUhgMblLk5Ox11sqddBsM5mwshnIqYbyr0xsc6ZtykNnv8BJtrZisI9OZ6IiJoPEezl6o0QnunA8yKocGVWyOI6gnfZodA9Sq24IBb80eqYkJAHQDAcgjm_OXzAeOor8z3zpOB2QwDE"/>
+<div class="flex-1">
+<p class="font-semibold text-sm text-text-light-heading dark:text-dark-heading">Liam Carter</p>
+<p class="text-xs text-danger">Low Score: 45%</p>
+</div>
+<a class="text-primary text-sm font-semibold" href="#">View</a>
+</li>
+<li class="flex items-center gap-4">
+<img class="h-10 w-10 rounded-full object-cover" data-alt="Profile picture of Ava Chen" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6gAs9VE0oTjlrxdY-n_uwY-JsP7jEfUnkjp7tN3LaaBxaHqeMp7s08oMpatYO3YRBzWfVT-48FMzv8iJU_J8jautRs_vBu14VsW5U1be9LqwMLm4gn6JeJpoY13LvsCEBHZSTIxemygBrvjwTBRIlPaanr_r1jJs5azIg8YVRRN__pFIHEOLLM9qfmoKyb2nyVpdP94QE_PyU_39yUxWsqpcUjiH8M4vu_aWpCPIxZPaxWJZBltZi2YCYLfRlclaDqxiC5vEF8t8"/>
+<div class="flex-1">
+<p class="font-semibold text-sm text-text-light-heading dark:text-dark-heading">Ava Chen</p>
+<p class="text-xs text-danger">Low Engagement</p>
+</div>
+<a class="text-primary text-sm font-semibold" href="#">View</a>
+</li>
+<li class="flex items-center gap-4">
+<img class="h-10 w-10 rounded-full object-cover" data-alt="Profile picture of Noah Taylor" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXY67aR_QED7VSHrPAUi6IxMNuq90PC2wdvXMmR7SGeCtwWHYS8z52KYt5Lgjri_hjT3VmOXUzUaldDiYX5H4MXXQ0s1vkGL4DpKwPqz_ISqoNa0hKueAVcyUq5IVkxcxDGNoWdVELQP5LrOO0K6OLNSkTSbjGpRB3s8DKCugKuMSOwA-0MUzNkA7emfPf6wUug7Wkqj2IDL1P7ifMmCS2qaUVOVTewU35PlS8RrC9YaqPxMDaokxek8CsztfNF8jF69bUjwKnqno"/>
+<div class="flex-1">
+<p class="font-semibold text-sm text-text-light-heading dark:text-dark-heading">Noah Taylor</p>
+<p class="text-xs text-danger">2 Missed Deadlines</p>
+</div>
+<a class="text-primary text-sm font-semibold" href="#">View</a>
+</li>
+</ul>
+</div>
+<div class="rounded-lg bg-card-light dark:bg-card-dark p-4 sm:p-6 border border-border-light dark:border-border-dark lg:col-span-2">
+<h2 class="text-text-light-heading dark:text-dark-heading text-lg font-bold leading-tight tracking-[-0.015em] mb-4">Course Performance</h2>
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm">
+<thead class="border-b border-border-light dark:border-border-dark">
+<tr class="text-text-light-body dark:text-dark-body">
+<th class="py-3 px-4 font-semibold">Course Name</th>
+<th class="py-3 px-4 font-semibold text-center">Enrolled</th>
+<th class="py-3 px-4 font-semibold text-center">Avg. Score</th>
+<th class="py-3 px-4 font-semibold text-center">Completion</th>
+<th class="py-3 px-4 font-semibold"></th>
+</tr>
+</thead>
+<tbody class="text-text-light-body dark:text-dark-heading divide-y divide-border-light dark:divide-border-dark">
+<tr>
+<td class="py-3 px-4 font-medium">Introduction to UX Design</td>
+<td class="py-3 px-4 text-center">120</td>
+<td class="py-3 px-4 text-center">88%</td>
+<td class="py-3 px-4 text-center">92%</td>
+<td class="py-3 px-4 text-right"><a class="text-primary font-semibold" href="#">Details</a></td>
+</tr>
+<tr>
+<td class="py-3 px-4 font-medium">Advanced JavaScript</td>
+<td class="py-3 px-4 text-center">75</td>
+<td class="py-3 px-4 text-center">81%</td>
+<td class="py-3 px-4 text-center">76%</td>
+<td class="py-3 px-4 text-right"><a class="text-primary font-semibold" href="#">Details</a></td>
+</tr>
+<tr>
+<td class="py-3 px-4 font-medium">Data Science Fundamentals</td>
+<td class="py-3 px-4 text-center">98</td>
+<td class="py-3 px-4 text-center">85%</td>
+<td class="py-3 px-4 text-center">80%</td>
+<td class="py-3 px-4 text-right"><a class="text-primary font-semibold" href="#">Details</a></td>
+</tr>
+<tr>
+<td class="py-3 px-4 font-medium">Digital Marketing 101</td>
+<td class="py-3 px-4 text-center">210</td>
+<td class="py-3 px-4 text-center">91%</td>
+<td class="py-3 px-4 text-center">95%</td>
+<td class="py-3 px-4 text-right"><a class="text-primary font-semibold" href="#">Details</a></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+
+</body></html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login - Course Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#0A4D68", // Deep blue
+              "secondary": "#088395", // Teal/Green
+              "background-light": "#F8F9FA", // Off-white
+              "background-dark": "#111921", // Dark background (custom dark mode)
+              "text-light": "#343A40", // Dark gray for light mode
+              "text-dark": "#F8F9FA", // Light text for dark mode
+              "border-light": "#CED4DA", // Light gray border
+              "border-dark": "#344d65", // Dark mode border
+              "input-bg-light": "#FFFFFF",
+              "input-bg-dark": "#1a2632",
+              "placeholder-light": "#6c757d",
+              "placeholder-dark": "#93adc8",
+              "error": "#DC3545"
+            },
+            fontFamily: {
+              "display": ["Lexend", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            font-size: 24px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark">
+<div class="flex min-h-screen flex-col items-center justify-center p-4">
+<div class="w-full max-w-md">
+<!-- Logo and Header -->
+<div class="mb-8 text-center">
+<div class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-primary/20 text-primary">
+<span class="material-symbols-outlined !text-4xl">school</span>
+</div>
+<h1 class="text-3xl font-bold text-text-light dark:text-text-dark">Sign in to your account</h1>
+</div>
+<!-- Login Form -->
+<div class="w-full rounded-xl bg-white p-6 shadow-sm dark:bg-background-dark dark:border dark:border-border-dark sm:p-8">
+<form class="space-y-6">
+<!-- Username Input -->
+<div>
+<label class="flex flex-col">
+<p class="pb-2 text-base font-medium text-text-light dark:text-text-dark">Username</p>
+<div class="relative flex w-full flex-1 items-stretch">
+<span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+<span class="material-symbols-outlined text-placeholder-light dark:text-placeholder-dark">person</span>
+</span>
+<input class="form-input h-12 w-full flex-1 resize-none overflow-hidden rounded-lg border border-border-light bg-input-bg-light p-[15px] pl-11 text-base font-normal leading-normal text-text-light placeholder:text-placeholder-light focus:border-primary focus:outline-0 focus:ring-2 focus:ring-primary/30 dark:border-border-dark dark:bg-input-bg-dark dark:text-text-dark dark:placeholder:text-placeholder-dark dark:focus:border-primary" placeholder="Enter your username" type="text" value=""/>
+</div>
+</label>
+</div>
+<!-- Password Input -->
+<div>
+<label class="flex flex-col">
+<p class="pb-2 text-base font-medium text-text-light dark:text-text-dark">Password</p>
+<div class="relative flex w-full flex-1 items-stretch">
+<span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+<span class="material-symbols-outlined text-placeholder-light dark:text-placeholder-dark">lock</span>
+</span>
+<input class="form-input h-12 w-full flex-1 resize-none overflow-hidden rounded-lg border border-border-light bg-input-bg-light p-[15px] pl-11 text-base font-normal leading-normal text-text-light placeholder:text-placeholder-light focus:border-primary focus:outline-0 focus:ring-2 focus:ring-primary/30 dark:border-border-dark dark:bg-input-bg-dark dark:text-text-dark dark:placeholder:text-placeholder-dark dark:focus:border-primary" placeholder="Enter your password" type="password" value=""/>
+<button class="absolute inset-y-0 right-0 flex items-center pr-3 text-placeholder-light dark:text-placeholder-dark" type="button">
+<span class="material-symbols-outlined">visibility_off</span>
+</button>
+</div>
+</label>
+</div>
+<!-- Error Message Area -->
+<div class="flex items-start gap-2 text-error hidden">
+<span class="material-symbols-outlined !text-base mt-0.5">error</span>
+<p class="text-sm font-medium">Invalid username or password. Please try again.</p>
+</div>
+<!-- Forgot Password Link -->
+<div class="text-right">
+<a class="text-sm font-medium text-secondary hover:underline" href="#">Forgot Password?</a>
+</div>
+<!-- Login Button -->
+<div>
+<button class="flex h-12 w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-primary px-5 text-base font-bold leading-normal tracking-[0.015em] text-white transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-background-dark">
+<span class="truncate">Log In</span>
+</button>
+</div>
+</form>
+</div>
+<!-- Footer -->
+<div class="mt-8 text-center">
+<p class="text-sm text-placeholder-light dark:text-placeholder-dark">Need help? <a class="font-medium text-secondary hover:underline" href="#">Contact your administrator</a>.</p>
+</div>
+</div>
+</div>
+</body></html>

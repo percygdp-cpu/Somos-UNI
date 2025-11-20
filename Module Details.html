@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Module Details</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#197fe6",
+            "background-light": "#f6f7f8",
+            "background-dark": "#111921",
+          },
+          fontFamily: {
+            "display": ["Lexend", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="flex min-h-screen flex-col">
+<!-- TopAppBar -->
+<header class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between sticky top-0 z-10 border-b border-gray-200 dark:border-gray-700">
+<div class="flex size-12 shrink-0 items-center -ml-3">
+<span class="material-symbols-outlined text-gray-800 dark:text-gray-200 text-2xl">arrow_back</span>
+</div>
+<h2 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center">Módulo 3: UI</h2>
+<div class="flex size-12 shrink-0 items-center justify-end">
+<!-- Placeholder for potential actions -->
+</div>
+</header>
+<main class="flex-1 px-4">
+<!-- HeadlineText -->
+<h1 class="text-gray-900 dark:text-white tracking-tight text-[32px] font-bold leading-tight text-left pb-3 pt-6">Módulo 3: Introducción a la Interfaz de Usuario</h1>
+<!-- BodyText -->
+<p class="text-gray-600 dark:text-gray-300 text-base font-normal leading-normal pb-6 pt-1">Una breve descripción del contenido y los objetivos de aprendizaje de este módulo.</p>
+<!-- SingleButton -->
+<div class="flex py-3">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 flex-1 bg-primary text-white gap-2 text-base font-bold leading-normal tracking-[0.015em]">
+<span class="material-symbols-outlined text-white text-2xl">download</span>
+<span class="truncate">Descargar Repaso Completo (PDF)</span>
+</button>
+</div>
+<!-- SectionHeader -->
+<h3 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] pb-2 pt-8">Tests Asociados</h3>
+<!-- Test List -->
+<div class="flex flex-col gap-3 py-2">
+<!-- Test List Item Card: Completed -->
+<div class="flex items-center bg-white dark:bg-gray-800/50 rounded-lg p-4 shadow-sm">
+<div class="flex-1">
+<p class="font-bold text-base text-gray-900 dark:text-white">Prueba de Conocimiento 1</p>
+<div class="flex items-center gap-1.5 mt-1">
+<span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+<p class="text-sm text-green-500">Completado - Calificación: 9/10</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-gray-400 dark:text-gray-500">chevron_right</span>
+</div>
+<!-- Test List Item Card: Pending -->
+<div class="flex items-center bg-white dark:bg-gray-800/50 rounded-lg p-4 shadow-sm">
+<div class="flex-1">
+<p class="font-bold text-base text-gray-900 dark:text-white">Test de Diseño de Componentes</p>
+<div class="flex items-center gap-1.5 mt-1">
+<span class="material-symbols-outlined text-yellow-500 text-sm">hourglass_top</span>
+<p class="text-sm text-yellow-500">Pendiente</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-gray-400 dark:text-gray-500">chevron_right</span>
+</div>
+<!-- Test List Item Card: In Progress -->
+<div class="flex items-center bg-white dark:bg-gray-800/50 rounded-lg p-4 shadow-sm">
+<div class="flex-1">
+<p class="font-bold text-base text-gray-900 dark:text-white">Evaluación Final del Módulo</p>
+<div class="flex items-center gap-1.5 mt-1">
+<span class="material-symbols-outlined text-blue-500 text-sm">timelapse</span>
+<p class="text-sm text-blue-500">En Progreso</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-gray-400 dark:text-gray-500">chevron_right</span>
+</div>
+<!-- Test List Item Card: Locked -->
+<div class="flex items-center bg-gray-100 dark:bg-gray-800/30 rounded-lg p-4 opacity-60">
+<div class="flex-1">
+<p class="font-bold text-base text-gray-500 dark:text-gray-400">Proyecto Práctico de UI</p>
+<div class="flex items-center gap-1.5 mt-1">
+<span class="material-symbols-outlined text-gray-400 dark:text-gray-500 text-sm">lock</span>
+<p class="text-sm text-gray-500 dark:text-gray-400">Bloqueado</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-gray-400 dark:text-gray-500">chevron_right</span>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>

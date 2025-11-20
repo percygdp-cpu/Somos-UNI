@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Admin Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#197fe6",
+              "background-light": "#f6f7f8",
+              "background-dark": "#111921",
+            },
+            fontFamily: {
+              "display": ["Lexend", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            font-family: 'Lexend', sans-serif;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display">
+<div class="relative flex min-h-screen w-full flex-col bg-background-light dark:bg-background-dark">
+<header class="sticky top-0 z-10 border-b border-zinc-200/50 bg-background-light/80 dark:border-zinc-800/50 dark:bg-background-dark/80 backdrop-blur-sm">
+<div class="flex items-center p-4">
+<div class="flex size-10 shrink-0 items-center justify-center text-zinc-500 dark:text-zinc-400">
+<span class="material-symbols-outlined text-2xl">menu</span>
+</div>
+<h1 class="flex-1 text-lg font-bold tracking-tight text-zinc-900 dark:text-white">Admin Management</h1>
+<div class="flex w-10 items-center justify-end">
+<button class="flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-transparent text-zinc-500 dark:text-zinc-400">
+<span class="material-symbols-outlined text-2xl">person</span>
+</button>
+</div>
+</div>
+</header>
+<main class="flex-1">
+<div class="border-b border-zinc-200 dark:border-zinc-800">
+<div class="flex gap-8 px-4">
+<a class="flex flex-col items-center justify-center border-b-[3px] border-primary pb-3 pt-4 text-primary" href="#">
+<p class="text-sm font-bold leading-normal">Students</p>
+</a>
+<a class="flex flex-col items-center justify-center border-b-[3px] border-transparent pb-3 pt-4 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200" href="#">
+<p class="text-sm font-bold leading-normal">Modules</p>
+</a>
+<a class="flex flex-col items-center justify-center border-b-[3px] border-transparent pb-3 pt-4 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200" href="#">
+<p class="text-sm font-bold leading-normal">Tests</p>
+</a>
+</div>
+</div>
+<div class="p-4 sm:p-6">
+<div class="pb-4">
+<label class="flex h-12 w-full flex-col">
+<div class="flex h-full w-full flex-1 items-stretch rounded-lg">
+<div class="flex items-center justify-center rounded-l-lg border border-zinc-300 bg-zinc-100 pl-4 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+<span class="material-symbols-outlined text-2xl">search</span>
+</div>
+<input class="form-input h-full w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg border border-l-0 border-zinc-300 bg-white px-4 text-base font-normal leading-normal text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-primary" placeholder="Search for a student..." value=""/>
+</div>
+</label>
+</div>
+<div class="flex flex-col gap-4 pb-6 sm:flex-row sm:items-center sm:justify-between">
+<div class="flex flex-wrap items-center gap-3">
+<button class="flex h-10 min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg bg-primary px-4 text-sm font-bold text-white transition-colors hover:bg-primary/90">
+<span class="material-symbols-outlined text-xl">add</span>
+<span class="truncate">Add Student</span>
+</button>
+<button class="flex h-10 min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-zinc-300 bg-white px-4 text-sm font-bold text-zinc-800 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700">
+<span class="material-symbols-outlined text-xl">upload</span>
+<span class="truncate">Upload List (.xlsx)</span>
+</button>
+</div>
+<a class="text-sm font-normal text-primary underline hover:no-underline dark:text-primary/90" href="#">Download student Excel template</a>
+</div>
+<div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+<div class="overflow-x-auto">
+<table class="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
+<thead class="bg-zinc-50 dark:bg-zinc-900/50">
+<tr>
+<th class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-zinc-900 dark:text-white sm:pl-6" scope="col"><input class="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary dark:border-zinc-600 dark:bg-zinc-800" type="checkbox"/></th>
+<th class="px-3 py-3.5 text-left text-sm font-semibold text-zinc-900 dark:text-white" scope="col">Name</th>
+<th class="hidden px-3 py-3.5 text-left text-sm font-semibold text-zinc-900 dark:text-white sm:table-cell" scope="col">Student ID</th>
+<th class="hidden px-3 py-3.5 text-left text-sm font-semibold text-zinc-900 dark:text-white lg:table-cell" scope="col">Email</th>
+<th class="px-3 py-3.5 text-left text-sm font-semibold text-zinc-900 dark:text-white" scope="col">Status</th>
+<th class="relative py-3.5 pl-3 pr-4 sm:pr-6" scope="col"><span class="sr-only">Actions</span></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-background-dark">
+<tr>
+<td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm sm:pl-6"><input class="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary dark:border-zinc-600 dark:bg-zinc-800" type="checkbox"/></td>
+<td class="whitespace-nowrap px-3 py-4 text-sm font-medium text-zinc-900 dark:text-white">Jordan Lee</td>
+<td class="hidden whitespace-nowrap px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400 sm:table-cell">ST12345</td>
+<td class="hidden whitespace-nowrap px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400 lg:table-cell">jordan.lee@example.com</td>
+<td class="whitespace-nowrap px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400">
+<div class="group relative">
+<button class="flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-green-700 ring-1 ring-inset ring-green-600/20 transition-colors group-hover:bg-green-50 dark:text-green-400 dark:ring-green-500/30 dark:group-hover:bg-green-500/10">
+<span>Activo</span>
+<span class="material-symbols-outlined !text-base transition-transform group-hover:rotate-180">expand_more</span>
+</button>
+<div class="absolute left-0 top-full z-10 mt-1 hidden w-full min-w-max origin-top-left rounded-md bg-white py-1 shadow-lg ring-1 ring-zinc-200 group-hover:block dark:bg-zinc-800 dark:ring-zinc-700">
+<a class="block w-full cursor-pointer px-3 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700" href="#">Cesado</a>
+</div>
+</div>
+</td>
+<td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+<div class="flex items-center justify-end gap-2">
+<button class="p-2 text-zinc-500 hover:text-primary dark:text-zinc-400 dark:hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+<button class="p-2 text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-500"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</td>
+</tr>
+<tr>
+<td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm sm:pl-6"><input class="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary dark:border-zinc-600 dark:bg-zinc-800" type="checkbox"/></td>
+<td class="whitespace-nowrap px-3 py-4 text-sm font-medium text-zinc-900 dark:text-white">Alex Chen</td>
+<td class="hidden whitespace-nowrap px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400 sm:table-cell">ST12346</td>
+<td class="hidden whitespace-nowrap px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400 lg:table-cell">alex.chen@example.com</td>
+<td class="whitespace-nowrap px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400">
+<div class="group relative">
+<button class="flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-green-700 ring-1 ring-inset ring-green-600/20 transition-colors group-hover:bg-green-50 dark:text-green-400 dark:ring-green-500/30 dark:group-hover:bg-green-500/10">
+<span>Activo</span>
+<span class="material-symbols-outlined !text-base transition-transform group-hover:rotate-180">expand_more</span>
+</button>
+<div class="absolute left-0 top-full z-10 mt-1 hidden w-full min-w-max origin-top-left rounded-md bg-white py-1 shadow-lg ring-1 ring-zinc-200 group-hover:block dark:bg-zinc-800 dark:ring-zinc-700">
+<a class="block w-full cursor-pointer px-3 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700" href="#">Cesado</a>
+</div>
+</div>
+</td>
+<td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+<div class="flex items-center justify-end gap-2">
+<button class="p-2 text-zinc-500 hover:text-primary dark:text-zinc-400 dark:hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+<button class="p-2 text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-500"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</td>
+</tr>
+<tr>
+<td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm sm:pl-6"><input class="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary dark:border-zinc-600 dark:bg-zinc-800" type="checkbox"/></td>
+<td class="whitespace-nowrap px-3 py-4 text-sm font-medium text-zinc-900 dark:text-white">Samira Khan</td>
+<td class="hidden whitespace-nowrap px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400 sm:table-cell">ST12347</td>
+<td class="hidden whitespace-nowrap px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400 lg:table-cell">samira.khan@example.com</td>
+<td class="whitespace-nowrap px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400">
+<div class="group relative">
+<button class="flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-zinc-600 ring-1 ring-inset ring-zinc-500/20 transition-colors group-hover:bg-zinc-100 dark:text-zinc-400 dark:ring-zinc-500/30 dark:group-hover:bg-zinc-700/20">
+<span>Cesado</span>
+<span class="material-symbols-outlined !text-base transition-transform group-hover:rotate-180">expand_more</span>
+</button>
+<div class="absolute left-0 top-full z-10 mt-1 hidden w-full min-w-max origin-top-left rounded-md bg-white py-1 shadow-lg ring-1 ring-zinc-200 group-hover:block dark:bg-zinc-800 dark:ring-zinc-700">
+<a class="block w-full cursor-pointer px-3 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700" href="#">Activo</a>
+</div>
+</div>
+</td>
+<td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+<div class="flex items-center justify-end gap-2">
+<button class="p-2 text-zinc-500 hover:text-primary dark:text-zinc-400 dark:hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+<button class="p-2 text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-500"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
