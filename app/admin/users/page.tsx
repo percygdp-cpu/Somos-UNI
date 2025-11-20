@@ -2789,16 +2789,44 @@ export default function UserManagementPage() {
                           accept=".pdf"
                           multiple
                           className="hidden"
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const files = Array.from(e.target.files || [])
-                            const newPdfs = files.map(file => ({
-                              name: file.name,
-                              url: URL.createObjectURL(file)
-                            }))
-                            setEditingItem({
-                              ...editingItem,
-                              pdfFiles: [...(editingItem.pdfFiles || []), ...newPdfs]
-                            })
+                            if (files.length === 0) return
+                            
+                            try {
+                              // Subir cada archivo a Vercel Blob
+                              const uploadPromises = files.map(async (file) => {
+                                const formData = new FormData()
+                                formData.append('file', file)
+                                
+                                const response = await fetch('/api/upload', {
+                                  method: 'POST',
+                                  body: formData
+                                })
+                                
+                                if (!response.ok) {
+                                  throw new Error(`Error al subir ${file.name}`)
+                                }
+                                
+                                const data = await response.json()
+                                return { name: data.name, url: data.url }
+                              })
+                              
+                              const uploadedPdfs = await Promise.all(uploadPromises)
+                              
+                              setEditingItem({
+                                ...editingItem,
+                                pdfFiles: [...(editingItem.pdfFiles || []), ...uploadedPdfs]
+                              })
+                              
+                              showToast('PDFs subidos correctamente', 'success')
+                            } catch (error) {
+                              console.error('Error subiendo archivos:', error)
+                              showToast('Error al subir los archivos', 'error')
+                            }
+                            
+                            // Reset input
+                            e.target.value = ''
                           }}
                         />
                       </label>
