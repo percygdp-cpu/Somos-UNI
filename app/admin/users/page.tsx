@@ -89,6 +89,13 @@ export default function UserManagementPage() {
   const [pendingTests, setPendingTests] = useState<any[]>([])
   const [showTestPreviewModal, setShowTestPreviewModal] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  
+  // Estados para cursos y módulos faltantes
+  const [missingCourses, setMissingCourses] = useState<Array<{name: string, description: string}>>([])
+  const [missingModules, setMissingModules] = useState<Array<{name: string, courseName: string, order: number}>>([])
+  const [showMissingCoursesModal, setShowMissingCoursesModal] = useState(false)
+  const [showMissingModulesModal, setShowMissingModulesModal] = useState(false)
+  const [tempExcelData, setTempExcelData] = useState<any>(null)
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
@@ -557,6 +564,96 @@ export default function UserManagementPage() {
     }
   }
 
+  const processExcelData = (jsonData: any[]) => {
+    const testsByModule = new Map()
+    const errors: string[] = []
+
+    // Agrupar preguntas por test
+    for (const row of jsonData) {
+      const rowData = row as any
+      const courseName = String(rowData['Curso'] || rowData['curso'] || '')
+      const moduleName = String(rowData['Módulo'] || rowData['modulo'] || rowData['Modulo'] || '')
+      const testTitle = String(rowData['Test'] || rowData['test'] || '')
+      const questionNumber = rowData['N° Pregunta'] || rowData['Pregunta'] || rowData['pregunta']
+      const questionText = String(rowData['Pregunta'] || '')
+      const option = String(rowData['Opción'] || rowData['opcion'] || rowData['Opcion'] || '')
+      const correctaValue = String(rowData['Correcta'] || rowData['correcta'] || '').toLowerCase()
+      const isCorrect = correctaValue === 'sí' || correctaValue === 'si'
+
+      // Validar que no estén vacíos
+      if (!courseName.trim() || !moduleName.trim() || !testTitle.trim() || !questionText.trim() || !option.trim()) continue
+
+      // Buscar el curso
+      const course = courses.find(c => c.title.toLowerCase().trim() === courseName.toLowerCase().trim())
+      if (!course) {
+        if (!errors.includes(`Curso no encontrado: ${courseName}`)) {
+          errors.push(`Curso no encontrado: ${courseName}`)
+        }
+        continue
+      }
+
+      const module = modules.find(m => 
+        m.title.toLowerCase().trim() === moduleName.toLowerCase().trim() && 
+        m.courseId === course.id
+      )
+      if (!module) {
+        if (!errors.includes(`Módulo no encontrado: ${moduleName} en ${courseName}`)) {
+          errors.push(`Módulo no encontrado: ${moduleName} en ${courseName}`)
+        }
+        continue
+      }
+
+      const key = `${module.id}_${testTitle}`
+      if (!testsByModule.has(key)) {
+        testsByModule.set(key, {
+          moduleId: module.id,
+          moduleName: module.title,
+          courseName: course.title,
+          title: testTitle,
+          questions: new Map()
+        })
+      }
+
+      const testData = testsByModule.get(key)
+      if (!testData.questions.has(questionNumber)) {
+        testData.questions.set(questionNumber, {
+          question: questionText,
+          options: [],
+          correctAnswer: -1
+        })
+      }
+
+      const questionData = testData.questions.get(questionNumber)
+      const optionIndex = questionData.options.length
+      questionData.options.push(option)
+      if (isCorrect) {
+        questionData.correctAnswer = optionIndex
+      }
+    }
+
+    // Convertir a array para mostrar
+    const testsArray = Array.from(testsByModule.values()).map(testData => ({
+      moduleId: testData.moduleId,
+      moduleName: testData.moduleName,
+      courseName: testData.courseName,
+      title: testData.title,
+      questions: Array.from(testData.questions.values()).map((q: any) => ({
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer
+      }))
+    }))
+
+    if (testsArray.length === 0 && errors.length > 0) {
+      alert('No se pudieron procesar tests del archivo.\n\nErrores:\n' + errors.join('\n'))
+      return
+    }
+
+    setPendingTests(testsArray)
+    setShowTestPreviewModal(true)
+    setTempExcelData(null)
+  }
+
   const handleTestExcelUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -585,93 +682,88 @@ export default function UserManagementPage() {
           return
         }
 
-        const testsByModule = new Map()
-        const errors: string[] = []
+        // Detectar cursos y módulos faltantes
+        const courseNamesInExcel = new Set<string>()
+        const modulesByCourse = new Map<string, Set<string>>()
 
-        // Agrupar preguntas por test
         for (const row of jsonData) {
           const rowData = row as any
-          const courseName = String(rowData['Curso'] || rowData['curso'] || '')
-          const moduleName = String(rowData['Módulo'] || rowData['modulo'] || rowData['Modulo'] || '')
-          const testTitle = String(rowData['Test'] || rowData['test'] || '')
-          const questionNumber = rowData['N° Pregunta'] || rowData['Pregunta'] || rowData['pregunta']
-          const questionText = String(rowData['Pregunta'] || '')
-          const option = String(rowData['Opción'] || rowData['opcion'] || rowData['Opcion'] || '')
-          const correctaValue = String(rowData['Correcta'] || rowData['correcta'] || '').toLowerCase()
-          const isCorrect = correctaValue === 'sí' || correctaValue === 'si'
-
-          // Validar que no estén vacíos
-          if (!courseName.trim() || !moduleName.trim() || !testTitle.trim() || !questionText.trim() || !option.trim()) continue
-
-          // Buscar el curso
-          const course = courses.find(c => c.title.toLowerCase().trim() === courseName.toLowerCase().trim())
-          if (!course) {
-            if (!errors.includes(`Curso no encontrado: ${courseName}`)) {
-              errors.push(`Curso no encontrado: ${courseName}`)
+          const courseName = String(rowData['Curso'] || rowData['curso'] || '').trim()
+          const moduleName = String(rowData['Módulo'] || rowData['modulo'] || rowData['Modulo'] || '').trim()
+          
+          if (courseName && moduleName) {
+            courseNamesInExcel.add(courseName)
+            
+            if (!modulesByCourse.has(courseName)) {
+              modulesByCourse.set(courseName, new Set())
             }
-            continue
-          }
-
-          const module = modules.find(m => 
-            m.title.toLowerCase().trim() === moduleName.toLowerCase().trim() && 
-            m.courseId === course.id
-          )
-          if (!module) {
-            if (!errors.includes(`Módulo no encontrado: ${moduleName} en ${courseName}`)) {
-              errors.push(`Módulo no encontrado: ${moduleName} en ${courseName}`)
-            }
-            continue
-          }
-
-          const key = `${module.id}_${testTitle}`
-          if (!testsByModule.has(key)) {
-            testsByModule.set(key, {
-              moduleId: module.id,
-              moduleName: module.title,
-              courseName: course.title,
-              title: testTitle,
-              questions: new Map()
-            })
-          }
-
-          const testData = testsByModule.get(key)
-          if (!testData.questions.has(questionNumber)) {
-            testData.questions.set(questionNumber, {
-              question: questionText,
-              options: [],
-              correctAnswer: -1
-            })
-          }
-
-          const questionData = testData.questions.get(questionNumber)
-          const optionIndex = questionData.options.length
-          questionData.options.push(option)
-          if (isCorrect) {
-            questionData.correctAnswer = optionIndex
+            modulesByCourse.get(courseName)!.add(moduleName)
           }
         }
 
-        // Convertir a array para mostrar
-        const testsArray = Array.from(testsByModule.values()).map(testData => ({
-          moduleId: testData.moduleId,
-          moduleName: testData.moduleName,
-          courseName: testData.courseName,
-          title: testData.title,
-          questions: Array.from(testData.questions.values()).map((q: any) => ({
-            question: q.question,
-            options: q.options,
-            correctAnswer: q.correctAnswer
-          }))
-        }))
+        // Verificar cursos faltantes
+        const missingCoursesList: Array<{name: string, description: string}> = []
+        for (const courseName of courseNamesInExcel) {
+          const exists = courses.some(c => c.title.toLowerCase().trim() === courseName.toLowerCase())
+          if (!exists) {
+            missingCoursesList.push({
+              name: courseName,
+              description: ''
+            })
+          }
+        }
 
-        if (testsArray.length === 0) {
-          alert('No se pudieron procesar tests del archivo.\n\nErrores:\n' + errors.join('\n'))
+        // Verificar módulos faltantes
+        const missingModulesList: Array<{name: string, courseName: string, order: number}> = []
+        let orderCounter = 1
+        for (const [courseName, moduleNames] of modulesByCourse.entries()) {
+          const course = courses.find(c => c.title.toLowerCase().trim() === courseName.toLowerCase())
+          
+          for (const moduleName of moduleNames) {
+            // Si el curso existe, verificar si el módulo existe
+            if (course) {
+              const moduleExists = modules.some(m => 
+                m.title.toLowerCase().trim() === moduleName.toLowerCase() && 
+                m.courseId === course.id
+              )
+              if (!moduleExists) {
+                missingModulesList.push({
+                  name: moduleName,
+                  courseName: courseName,
+                  order: orderCounter++
+                })
+              }
+            } else {
+              // Si el curso no existe (pero se va a crear), agregar el módulo a la lista
+              missingModulesList.push({
+                name: moduleName,
+                courseName: courseName,
+                order: orderCounter++
+              })
+            }
+          }
+        }
+
+        // Si hay cursos faltantes, mostrar modal
+        if (missingCoursesList.length > 0) {
+          setMissingCourses(missingCoursesList)
+          setTempExcelData({ jsonData, missingModules: missingModulesList })
+          setShowMissingCoursesModal(true)
+          event.target.value = ''
           return
         }
 
-        setPendingTests(testsArray)
-        setShowTestPreviewModal(true)
-        
+        // Si no hay cursos faltantes pero hay módulos faltantes, mostrar modal
+        if (missingModulesList.length > 0) {
+          setMissingModules(missingModulesList)
+          setTempExcelData({ jsonData, missingModules: [] })
+          setShowMissingModulesModal(true)
+          event.target.value = ''
+          return
+        }
+
+        // Si no hay nada faltante, procesar directamente
+        processExcelData(jsonData)
         event.target.value = ''
       }
 
@@ -3143,6 +3235,262 @@ export default function UserManagementPage() {
                   <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                 </svg>
                 Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cursos Faltantes */}
+      {showMissingCoursesModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-4">
+              <h3 className="text-xl font-bold text-white">Cursos No Encontrados</h3>
+              <p className="text-orange-50 text-sm mt-1">
+                Los siguientes cursos no existen. ¿Deseas agregarlos?
+              </p>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {missingCourses.map((course, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700 mb-1">
+                        Nombre del Curso
+                      </label>
+                      <input
+                        type="text"
+                        value={course.name}
+                        onChange={(e) => {
+                          const newCourses = [...missingCourses]
+                          newCourses[idx].name = e.target.value
+                          setMissingCourses(newCourses)
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        placeholder="Nombre del curso"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700 mb-1">
+                        Descripción
+                      </label>
+                      <textarea
+                        value={course.description}
+                        onChange={(e) => {
+                          const newCourses = [...missingCourses]
+                          newCourses[idx].description = e.target.value
+                          setMissingCourses(newCourses)
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        placeholder="Descripción del curso (opcional)"
+                        rows={3}
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        setMissingCourses(missingCourses.filter((_, i) => i !== idx))
+                      }}
+                      className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                      </svg>
+                      No agregar este curso
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t">
+              <button
+                onClick={() => {
+                  setShowMissingCoursesModal(false)
+                  setMissingCourses([])
+                  setTempExcelData(null)
+                }}
+                className="px-5 py-2.5 text-sm font-medium text-secondary-700 bg-white border border-gray-300 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  // Crear los cursos
+                  for (const course of missingCourses) {
+                    try {
+                      await fetch('/api/courses', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          title: course.name,
+                          description: course.description || `Curso de ${course.name}`,
+                          image: ''
+                        })
+                      })
+                    } catch (error) {
+                      console.error('Error creando curso:', error)
+                    }
+                  }
+                  
+                  // Recargar datos
+                  await loadData()
+                  
+                  // Cerrar modal de cursos
+                  setShowMissingCoursesModal(false)
+                  setMissingCourses([])
+                  
+                  // Si hay módulos faltantes, mostrar ese modal
+                  if (tempExcelData && tempExcelData.missingModules.length > 0) {
+                    setMissingModules(tempExcelData.missingModules)
+                    setShowMissingModulesModal(true)
+                  } else if (tempExcelData) {
+                    // Si no hay módulos faltantes, procesar el Excel
+                    processExcelData(tempExcelData.jsonData)
+                  }
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 rounded-lg transition-all hover:scale-105 shadow-lg"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                </svg>
+                Sí, Agregar Cursos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Módulos Faltantes */}
+      {showMissingModulesModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-purple-500 to-indigo-500 px-6 py-4">
+              <h3 className="text-xl font-bold text-white">Módulos No Encontrados</h3>
+              <p className="text-purple-50 text-sm mt-1">
+                Los siguientes módulos no existen. ¿Deseas agregarlos?
+              </p>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {missingModules.map((module, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700 mb-1">
+                        Nombre del Módulo
+                      </label>
+                      <input
+                        type="text"
+                        value={module.name}
+                        onChange={(e) => {
+                          const newModules = [...missingModules]
+                          newModules[idx].name = e.target.value
+                          setMissingModules(newModules)
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        placeholder="Nombre del módulo"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-secondary-600">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-purple-500" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                      </svg>
+                      <span>Curso: <strong>{module.courseName}</strong></span>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700 mb-1">
+                        Orden
+                      </label>
+                      <input
+                        type="number"
+                        value={module.order}
+                        onChange={(e) => {
+                          const newModules = [...missingModules]
+                          newModules[idx].order = parseInt(e.target.value) || 1
+                          setMissingModules(newModules)
+                        }}
+                        className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        min="1"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        setMissingModules(missingModules.filter((_, i) => i !== idx))
+                      }}
+                      className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                      </svg>
+                      No agregar este módulo
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t">
+              <button
+                onClick={() => {
+                  setShowMissingModulesModal(false)
+                  setMissingModules([])
+                  setTempExcelData(null)
+                }}
+                className="px-5 py-2.5 text-sm font-medium text-secondary-700 bg-white border border-gray-300 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  // Crear los módulos
+                  for (const module of missingModules) {
+                    try {
+                      // Buscar el courseId
+                      const course = courses.find(c => c.title.toLowerCase().trim() === module.courseName.toLowerCase().trim())
+                      if (course) {
+                        await fetch('/api/modules', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            title: module.name,
+                            description: `Módulo ${module.name}`,
+                            courseId: course.id,
+                            order: module.order,
+                            pdfFiles: []
+                          })
+                        })
+                      }
+                    } catch (error) {
+                      console.error('Error creando módulo:', error)
+                    }
+                  }
+                  
+                  // Recargar datos
+                  await loadData()
+                  
+                  // Cerrar modal de módulos
+                  setShowMissingModulesModal(false)
+                  setMissingModules([])
+                  
+                  // Procesar el Excel
+                  if (tempExcelData) {
+                    processExcelData(tempExcelData.jsonData)
+                  }
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 rounded-lg transition-all hover:scale-105 shadow-lg"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                </svg>
+                Sí, Agregar Módulos
               </button>
             </div>
           </div>

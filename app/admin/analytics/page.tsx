@@ -4,137 +4,137 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import AdminHeader from '@/components/AdminHeader'
-import { mockUsers, mockCourses, mockTestResults } from '@/data/mockData'
-import { Bar, Doughnut, Line } from 'react-chartjs-2'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-  PointElement,
-  LineElement,
-} from 'chart.js'
 import anime from 'animejs'
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-  PointElement,
-  LineElement
-)
+interface StudentProgress {
+  id: number
+  name: string
+  coursesEnrolled: number
+  testsCompleted: number
+  averageScore: number
+  lastActivity: string
+}
 
 export default function AnalyticsPage() {
   const { user } = useAuth()
+  const [loading, setLoading] = useState(true)
+  const [students, setStudents] = useState<any[]>([])
+  const [courses, setCourses] = useState<any[]>([])
+  const [testResults, setTestResults] = useState<any[]>([])
+  const [studentProgress, setStudentProgress] = useState<StudentProgress[]>([])
+  
   const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeUsers: 0,
+    totalStudents: 0,
+    activeStudents: 0,
     totalCourses: 0,
     totalTests: 0,
-    averageScore: 0
+    averageScore: 0,
+    passRate: 0
   })
 
   useEffect(() => {
-    // Calcular estadísticas
-    const activeUsers = mockUsers.filter(u => u.status === 'active').length
-    const totalTests = mockTestResults.length
-    const averageScore = totalTests > 0 
-      ? mockTestResults.reduce((acc, result) => acc + result.percentage, 0) / totalTests 
-      : 0
-
-    setStats({
-      totalUsers: mockUsers.length,
-      activeUsers,
-      totalCourses: mockCourses.length,
-      totalTests,
-      averageScore: Math.round(averageScore)
-    })
+    loadAnalyticsData()
   }, [])
+
+  const loadAnalyticsData = async () => {
+    try {
+      setLoading(true)
+      
+      // Cargar usuarios (solo estudiantes)
+      const usersRes = await fetch('/api/users')
+      const allUsers = await usersRes.json()
+      const studentsList = allUsers.filter((u: any) => u.role === 'student')
+      setStudents(studentsList)
+      
+      // Cargar cursos
+      const coursesRes = await fetch('/api/courses')
+      const coursesList = await coursesRes.json()
+      setCourses(coursesList)
+      
+      // Cargar resultados de tests
+      const resultsRes = await fetch('/api/test-results')
+      const resultsList = await resultsRes.json()
+      setTestResults(resultsList)
+      
+      // Calcular estadísticas generales
+      const activeStudents = studentsList.filter((s: any) => s.status === 'active').length
+      const totalTests = resultsList.length
+      const passedTests = resultsList.filter((r: any) => r.percentage >= 70).length
+      const averageScore = totalTests > 0 
+        ? Math.round(resultsList.reduce((acc: number, r: any) => acc + r.percentage, 0) / totalTests)
+        : 0
+      const passRate = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0
+      
+      setStats({
+        totalStudents: studentsList.length,
+        activeStudents,
+        totalCourses: coursesList.length,
+        totalTests: totalTests,
+        averageScore,
+        passRate
+      })
+      
+      // Calcular progreso por estudiante
+      const progress = studentsList.map((student: any) => {
+        const studentResults = resultsList.filter((r: any) => r.userId === student.id)
+        
+        // Obtener tests únicos completados
+        const uniqueTests = new Set(studentResults.map((r: any) => r.testId))
+        const testsCompleted = uniqueTests.size
+        
+        // Calcular promedio solo de tests aprobados
+        const passedResults = studentResults.filter((r: any) => r.percentage >= 70)
+        const avgScore = passedResults.length > 0
+          ? Math.round(passedResults.reduce((acc: number, r: any) => acc + r.percentage, 0) / passedResults.length)
+          : 0
+        
+        // Última actividad
+        const lastResult = studentResults.sort((a: any, b: any) => 
+          new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+        )[0]
+        
+        const lastActivity = lastResult 
+          ? new Date(lastResult.completedAt).toLocaleDateString('es-ES')
+          : 'Sin actividad'
+        
+        return {
+          id: student.id,
+          name: student.name || student.username,
+          coursesEnrolled: coursesList.length,
+          testsCompleted,
+          averageScore: avgScore,
+          lastActivity
+        }
+      })
+      
+      setStudentProgress(progress.sort((a, b) => b.averageScore - a.averageScore))
+      
+    } catch (error) {
+      console.error('Error cargando analytics:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    // Animar gráficos
-    anime({
-      targets: '.chart-container',
-      translateY: [30, 0],
-      opacity: [0, 1],
-      delay: anime.stagger(200),
-      duration: 800,
-      easing: 'easeOutQuart'
-    })
-  }, [])
+    if (!loading) {
+      anime({
+        targets: '.analytics-card',
+        translateY: [30, 0],
+        opacity: [0, 1],
+        delay: anime.stagger(100),
+        duration: 600,
+        easing: 'easeOutQuart'
+      })
+    }
+  }, [loading])
 
-  // Datos para gráfico de barras - Rendimiento por curso
-  const coursePerformanceData = {
-    labels: mockCourses.map(course => course.title),
-    datasets: [
-      {
-        label: 'Estudiantes Inscritos',
-        data: mockCourses.map(() => Math.floor(Math.random() * 50) + 10),
-        backgroundColor: 'rgba(59, 130, 246, 0.8)',
-        borderColor: 'rgba(59, 130, 246, 1)',
-        borderWidth: 1,
-      },
-      {
-        label: 'Tests Completados',
-        data: mockCourses.map(() => Math.floor(Math.random() * 30) + 5),
-        backgroundColor: 'rgba(34, 197, 94, 0.8)',
-        borderColor: 'rgba(34, 197, 94, 1)',
-        borderWidth: 1,
-      },
-    ],
-  }
-
-  // Datos para gráfico de dona - Distribución de usuarios por rol
-  const userRoleData = {
-    labels: ['Estudiantes', 'Administradores'],
-    datasets: [
-      {
-        data: [
-          mockUsers.filter(u => u.role === 'student').length,
-          mockUsers.filter(u => u.role === 'admin').length
-        ],
-        backgroundColor: ['rgba(59, 130, 246, 0.8)', 'rgba(239, 68, 68, 0.8)'],
-        borderColor: ['rgba(59, 130, 246, 1)', 'rgba(239, 68, 68, 1)'],
-        borderWidth: 2,
-      },
-    ],
-  }
-
-  // Datos para gráfico de línea - Rendimiento en el tiempo
-  const performanceTimelineData = {
-    labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'],
-    datasets: [
-      {
-        label: 'Promedio de Notas (%)',
-        data: [75, 82, 78, 85, 88, 92],
-        borderColor: 'rgba(59, 130, 246, 1)',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        tension: 0.4,
-        fill: true,
-      },
-    ],
-  }
-
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: 'top' as const,
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-      },
-    },
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
+      </div>
+    )
   }
 
   return (
@@ -142,199 +142,190 @@ export default function AnalyticsPage() {
       <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary-50 to-secondary-50">
         <AdminHeader />
         <div className="flex-grow p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-secondary-900 mb-2">
-              Análisis y Reportes
-            </h1>
-            <p className="text-secondary-600 text-lg">
-              Estadísticas detalladas del rendimiento y uso del sistema
-            </p>
-          </div>
+          <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-secondary-900 mb-2">
+                Analytics Dashboard
+              </h1>
+              <p className="text-secondary-600">
+                Métricas y rendimiento de los estudiantes
+              </p>
+            </div>
 
-          {/* Stats Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-secondary-600">Total Usuarios</p>
-                  <p className="text-3xl font-bold text-secondary-900">{stats.totalUsers}</p>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              <div className="analytics-card card bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-100 text-sm font-medium mb-1">Total Estudiantes</p>
+                    <p className="text-4xl font-bold">{stats.totalStudents}</p>
+                    <p className="text-blue-100 text-xs mt-2">{stats.activeStudents} activos</p>
+                  </div>
+                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                    </svg>
+                  </div>
                 </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <span className="text-blue-600 text-2xl">👥</span>
+              </div>
+
+              <div className="analytics-card card bg-gradient-to-br from-green-500 to-green-600 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-100 text-sm font-medium mb-1">Promedio General</p>
+                    <p className="text-4xl font-bold">{stats.averageScore}%</p>
+                    <p className="text-green-100 text-xs mt-2">{stats.passRate}% aprobados</p>
+                  </div>
+                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div className="analytics-card card bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-100 text-sm font-medium mb-1">Tests Completados</p>
+                    <p className="text-4xl font-bold">{stats.totalTests}</p>
+                    <p className="text-purple-100 text-xs mt-2">{stats.totalCourses} cursos activos</p>
+                  </div>
+                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-secondary-600">Usuarios Activos</p>
-                  <p className="text-3xl font-bold text-secondary-900">{stats.activeUsers}</p>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <span className="text-green-600 text-2xl">✅</span>
-                </div>
+            {/* Tabla de Progreso de Estudiantes */}
+            <div className="analytics-card card">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-secondary-900 mb-2">
+                  Progreso por Estudiante
+                </h2>
+                <p className="text-secondary-600 text-sm">
+                  Rendimiento y actividad de cada estudiante
+                </p>
               </div>
-            </div>
 
-            <div className="card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-secondary-600">Tests Completados</p>
-                  <p className="text-3xl font-bold text-secondary-900">{stats.totalTests}</p>
-                </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <span className="text-purple-600 text-2xl">📝</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-secondary-600">Promedio General</p>
-                  <p className="text-3xl font-bold text-secondary-900">{stats.averageScore}%</p>
-                </div>
-                <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                  <span className="text-yellow-600 text-2xl">📊</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Rendimiento por Curso */}
-            <div className="chart-container card">
-              <h3 className="text-xl font-semibold text-secondary-900 mb-4">
-                Rendimiento por Curso
-              </h3>
-              <Bar 
-                data={coursePerformanceData} 
-                options={{
-                  ...chartOptions,
-                  plugins: {
-                    ...chartOptions.plugins,
-                    title: {
-                      display: true,
-                      text: 'Estudiantes inscritos vs Tests completados'
-                    }
-                  }
-                }} 
-              />
-            </div>
-
-            {/* Distribución de Usuarios */}
-            <div className="chart-container card">
-              <h3 className="text-xl font-semibold text-secondary-900 mb-4">
-                Distribución de Usuarios
-              </h3>
-              <Doughnut 
-                data={userRoleData} 
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: 'bottom' as const,
-                    },
-                    title: {
-                      display: true,
-                      text: 'Usuarios por Rol'
-                    }
-                  },
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Rendimiento en el Tiempo */}
-          <div className="chart-container card mb-8">
-            <h3 className="text-xl font-semibold text-secondary-900 mb-4">
-              Rendimiento en el Tiempo
-            </h3>
-            <Line 
-              data={performanceTimelineData} 
-              options={{
-                ...chartOptions,
-                plugins: {
-                  ...chartOptions.plugins,
-                  title: {
-                    display: true,
-                    text: 'Evolución del promedio de notas'
-                  }
-                }
-              }} 
-            />
-          </div>
-
-          {/* Tabla de Estudiantes Destacados */}
-          <div className="card">
-            <h3 className="text-xl font-semibold text-secondary-900 mb-4">
-              Estudiantes Destacados
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-secondary-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
-                      Estudiante
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
-                      Tests Completados
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
-                      Promedio
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-700 uppercase tracking-wider">
-                      Último Acceso
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-secondary-200">
-                  {mockUsers
-                    .filter(user => user.role === 'student' && user.status === 'active')
-                    .slice(0, 5)
-                    .map((student) => {
-                      const studentResults = mockTestResults.filter(r => r.userId === student.id)
-                      const averageScore = studentResults.length > 0 
-                        ? Math.round(studentResults.reduce((acc, r) => acc + r.percentage, 0) / studentResults.length)
-                        : 0
-                      
-                      return (
-                        <tr key={student.id}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-secondary-900">
-                              {student.username}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-secondary-200">
+                      <th className="text-left py-3 px-4 text-secondary-700 font-semibold text-sm">Estudiante</th>
+                      <th className="text-center py-3 px-4 text-secondary-700 font-semibold text-sm">Tests Completados</th>
+                      <th className="text-center py-3 px-4 text-secondary-700 font-semibold text-sm">Promedio</th>
+                      <th className="text-center py-3 px-4 text-secondary-700 font-semibold text-sm">Última Actividad</th>
+                      <th className="text-center py-3 px-4 text-secondary-700 font-semibold text-sm">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {studentProgress.length > 0 ? (
+                      studentProgress.map((student) => (
+                        <tr key={student.id} className="border-b border-secondary-100 hover:bg-secondary-50 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                                <span className="text-primary-600 font-semibold text-sm">
+                                  {student.name.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-medium text-secondary-900">{student.name}</p>
+                                <p className="text-xs text-secondary-500">ID: {student.id}</p>
+                              </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-600">
-                            {studentResults.length}
+                          <td className="text-center py-3 px-4">
+                            <span className="text-secondary-900 font-medium">{student.testsCompleted}</span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              averageScore >= 80 
+                          <td className="text-center py-3 px-4">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
+                              student.averageScore >= 70 
                                 ? 'bg-green-100 text-green-800' 
-                                : averageScore >= 60
+                                : student.averageScore >= 50
                                 ? 'bg-yellow-100 text-yellow-800'
                                 : 'bg-red-100 text-red-800'
                             }`}>
-                              {averageScore}%
+                              {student.averageScore}%
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-600">
-                            {student.updatedAt.toLocaleDateString()}
+                          <td className="text-center py-3 px-4 text-secondary-600 text-sm">
+                            {student.lastActivity}
+                          </td>
+                          <td className="text-center py-3 px-4">
+                            {student.testsCompleted > 0 ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Activo
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                Sin actividad
+                              </span>
+                            )}
                           </td>
                         </tr>
-                      )
-                    })
-                  }
-                </tbody>
-              </table>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="text-center py-12 text-secondary-500">
+                          No hay datos de estudiantes disponibles
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Avance por Curso */}
+            <div className="analytics-card card mt-6">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-secondary-900 mb-2">
+                  Rendimiento por Curso
+                </h2>
+                <p className="text-secondary-600 text-sm">
+                  Estadísticas de cada curso disponible
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {courses.map((course) => {
+                  const courseResults = testResults
+                  const passedInCourse = courseResults.filter((r: any) => r.percentage >= 70).length
+                  const avgInCourse = courseResults.length > 0
+                    ? Math.round(courseResults.reduce((acc: number, r: any) => acc + r.percentage, 0) / courseResults.length)
+                    : 0
+
+                  return (
+                    <div key={course.id} className="border border-secondary-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <h3 className="font-semibold text-secondary-900 mb-3">{course.title}</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-secondary-600">Tests realizados:</span>
+                          <span className="font-medium text-secondary-900">{courseResults.length}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-secondary-600">Promedio:</span>
+                          <span className={`font-medium ${avgInCourse >= 70 ? 'text-green-600' : 'text-orange-600'}`}>
+                            {avgInCourse}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-secondary-600">Aprobados:</span>
+                          <span className="font-medium text-secondary-900">{passedInCourse}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
-        </div>
         </div>
       </div>
     </ProtectedRoute>
