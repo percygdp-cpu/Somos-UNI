@@ -1659,8 +1659,8 @@ export default function UserManagementPage() {
               {/* Paginación Cursos */}
               <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-white border border-gray-200 rounded-lg">
                 <div className="text-sm text-secondary-700">
-                  Mostrando <span className="font-medium">1</span> a <span className="font-medium">{mockCourses.length}</span> de{' '}
-                  <span className="font-medium">{mockCourses.length}</span> resultados
+                  Mostrando <span className="font-medium">1</span> a <span className="font-medium">{courses.length}</span> de{' '}
+                  <span className="font-medium">{courses.length}</span> resultados
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -2087,8 +2087,8 @@ export default function UserManagementPage() {
               {/* Paginación Tests */}
               <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-white border border-gray-200 rounded-lg">
                 <div className="text-sm text-secondary-700">
-                  Mostrando <span className="font-medium">1</span> a <span className="font-medium">{mockTests.length}</span> de{' '}
-                  <span className="font-medium">{mockTests.length}</span> resultados
+                  Mostrando <span className="font-medium">1</span> a <span className="font-medium">{tests.length}</span> de{' '}
+                  <span className="font-medium">{tests.length}</span> resultados
                 </div>
                 <div className="flex items-center gap-2">
                   <button
