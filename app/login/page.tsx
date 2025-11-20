@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
   const { login, user, loading } = useAuth()
   const router = useRouter()
 
@@ -129,8 +130,37 @@ export default function LoginPage() {
 
             {/* Forgot Password Link */}
             <div className="text-right">
-              <a className="text-sm font-medium text-primary hover:underline" href="#">¿Olvidaste tu contraseña?</a>
+              <button 
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
             </div>
+
+            {/* Forgot Password Message */}
+            {showForgotPassword && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mt-0.5 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                    Contáctate con tu tutor para recuperar tu contraseña
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(false)}
+                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                  </svg>
+                </button>
+              </div>
+            )}
 
             {/* Login Button */}
             <div>

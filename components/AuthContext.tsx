@@ -19,6 +19,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
+  // Verificar el status del usuario periódicamente
+  useEffect(() => {
+    if (!user) return
+
+    const checkUserStatus = async () => {
+      try {
+        const response = await fetch('/api/users')
+        if (!response.ok) return
+
+        const users = await response.json()
+        const currentUser = users.find((u: any) => u.id.toString() === user.id)
+
+        // Si el usuario fue cesado o eliminado, cerrar sesión
+        if (!currentUser || currentUser.status !== 'active') {
+          logout()
+        }
+      } catch (error) {
+        console.error('Error checking user status:', error)
+      }
+    }
+
+    // Verificar cada 30 segundos
+    const interval = setInterval(checkUserStatus, 30000)
+    
+    return () => clearInterval(interval)
+  }, [user])
+
   useEffect(() => {
     const token = localStorage.getItem('auth-token')
     const userData = localStorage.getItem('user-data')
