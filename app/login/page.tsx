@@ -54,8 +54,6 @@ export default function LoginPage() {
           <div className="mb-4 inline-flex items-center justify-center">
             <Image src="/logo.jpg" alt="Somos UNI" width={120} height={120} className="object-contain" />
           </div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-1">Somos UNI</h1>
-          <p className="text-base text-zinc-600 dark:text-zinc-400">Iniciar Sesión</p>
         </div>
 
         {/* Login Form */}
