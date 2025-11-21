@@ -52,7 +52,7 @@ export default function LoginPage() {
         {/* Logo and Header */}
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex items-center justify-center">
-            <Image src="/logo.jpg" alt="Somos UNI" width={120} height={120} className="object-contain" />
+            <Image src="/logo.jpg" alt="Somos UNI" width={150} height={150} className="object-contain" />
           </div>
         </div>
 
