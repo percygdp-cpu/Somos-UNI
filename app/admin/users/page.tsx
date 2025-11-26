@@ -786,6 +786,7 @@ export default function UserManagementPage() {
       const option = String(rowData['Opción'] || rowData['opcion'] || rowData['Opcion'] || '')
       const correctaValue = String(rowData['Correcta'] || rowData['correcta'] || '').toLowerCase()
       const isCorrect = correctaValue === 'sí' || correctaValue === 'si' || correctaValue === 'x' || correctaValue === '1' || correctaValue === 'true'
+      const explanation = String(rowData['Explicación'] || rowData['Explicacion'] || rowData['explicacion'] || '')
 
       // Validar que no estén vacíos
       if (!courseName.trim() || !moduleName.trim() || !testTitle.trim() || !questionText.trim() || !option.trim()) continue
@@ -829,7 +830,8 @@ export default function UserManagementPage() {
         testData.questions.set(questionKey, {
           question: questionText,
           options: [],
-          correctAnswer: -1
+          correctAnswer: -1,
+          explanation: explanation.trim()
         })
       }
 
@@ -850,7 +852,8 @@ export default function UserManagementPage() {
       questions: Array.from(testData.questions.values()).map((q: any) => ({
         question: q.question,
         options: q.options,
-        correctAnswer: q.correctAnswer
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation || ''
       }))
     }))
 
@@ -887,8 +890,44 @@ export default function UserManagementPage() {
 
         // Validar columnas requeridas
         const firstRow: any = jsonData[0]
-        if (!firstRow['Curso'] && !firstRow['Módulo'] && !firstRow['Test']) {
-          alert('El archivo debe tener las columnas: Curso, Módulo, Test, N° Pregunta, Pregunta, Opción, Correcta')
+        const requiredColumns = ['Curso', 'Módulo', 'Test', 'Pregunta', 'Opción', 'Correcta']
+        const optionalColumns = ['N° Pregunta', 'Explicación']
+        
+        // Verificar que existan las columnas básicas (permitir variaciones)
+        const hasCurso = firstRow['Curso'] !== undefined || firstRow['curso'] !== undefined
+        const hasModulo = firstRow['Módulo'] !== undefined || firstRow['modulo'] !== undefined || firstRow['Modulo'] !== undefined
+        const hasTest = firstRow['Test'] !== undefined || firstRow['test'] !== undefined
+        const hasPregunta = firstRow['Pregunta'] !== undefined || firstRow['pregunta'] !== undefined || firstRow['Texto Pregunta'] !== undefined
+        const hasOpcion = firstRow['Opción'] !== undefined || firstRow['opcion'] !== undefined || firstRow['Opcion'] !== undefined
+        const hasCorrecta = firstRow['Correcta'] !== undefined || firstRow['correcta'] !== undefined
+        
+        const missingColumns: string[] = []
+        if (!hasCurso) missingColumns.push('Curso')
+        if (!hasModulo) missingColumns.push('Módulo')
+        if (!hasTest) missingColumns.push('Test')
+        if (!hasPregunta) missingColumns.push('Pregunta')
+        if (!hasOpcion) missingColumns.push('Opción')
+        if (!hasCorrecta) missingColumns.push('Correcta')
+        
+        if (missingColumns.length > 0) {
+          const availableColumns = Object.keys(firstRow).join(', ')
+          alert(
+            `❌ Error: Columnas requeridas faltantes\n\n` +
+            `Falta(n): ${missingColumns.join(', ')}\n\n` +
+            `Columnas requeridas:\n` +
+            `• Curso\n` +
+            `• Módulo\n` +
+            `• Test\n` +
+            `• Pregunta\n` +
+            `• Opción\n` +
+            `• Correcta\n\n` +
+            `Columnas opcionales:\n` +
+            `• N° Pregunta (o variantes: N Pregunta, Numero Pregunta)\n` +
+            `• Explicación\n\n` +
+            `Columnas encontradas en tu archivo:\n${availableColumns || 'Ninguna'}\n\n` +
+            `Revisa que las columnas estén escritas correctamente.`
+          )
+          event.target.value = ''
           return
         }
 
@@ -1498,17 +1537,17 @@ export default function UserManagementPage() {
 
     // Hoja "Ejemplo" - Datos completos organizados por curso > módulo > test
     const exampleData = [
-      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 1, 'Pregunta': '¿Cuál es el tipo de dato para decimales?', 'Opción': 'int', 'Correcta': 'No' },
-      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 1, 'Pregunta': '¿Cuál es el tipo de dato para decimales?', 'Opción': 'float', 'Correcta': 'Sí' },
-      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 1, 'Pregunta': '¿Cuál es el tipo de dato para decimales?', 'Opción': 'str', 'Correcta': 'No' },
-      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 2, 'Pregunta': '¿Qué palabra clave define una función?', 'Opción': 'function', 'Correcta': 'No' },
-      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 2, 'Pregunta': '¿Qué palabra clave define una función?', 'Opción': 'def', 'Correcta': 'Sí' },
-      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 2, 'Pregunta': '¿Qué palabra clave define una función?', 'Opción': 'func', 'Correcta': 'No' }
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 1, 'Pregunta': '¿Cuál es el tipo de dato para decimales?', 'Opción': 'int', 'Correcta': 'No', 'Explicación': 'int es para números enteros, no decimales' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 1, 'Pregunta': '¿Cuál es el tipo de dato para decimales?', 'Opción': 'float', 'Correcta': 'Sí', 'Explicación': '' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 1, 'Pregunta': '¿Cuál es el tipo de dato para decimales?', 'Opción': 'str', 'Correcta': 'No', 'Explicación': 'str es para cadenas de texto, no números' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 2, 'Pregunta': '¿Qué palabra clave define una función?', 'Opción': 'function', 'Correcta': 'No', 'Explicación': 'function se usa en JavaScript, no en Python' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 2, 'Pregunta': '¿Qué palabra clave define una función?', 'Opción': 'def', 'Correcta': 'Sí', 'Explicación': '' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 2, 'Pregunta': '¿Qué palabra clave define una función?', 'Opción': 'func', 'Correcta': 'No', 'Explicación': 'func no existe en Python' }
     ]
 
     // Hoja "Input" - Plantilla vacía
     const inputData = [
-      { 'Curso': '', 'Módulo': '', 'Test': '', 'N° Pregunta': '', 'Pregunta': '', 'Opción': '', 'Correcta': '' }
+      { 'Curso': '', 'Módulo': '', 'Test': '', 'N° Pregunta': '', 'Pregunta': '', 'Opción': '', 'Correcta': '', 'Explicación': '' }
     ]
     
     const workbook = XLSX.utils.book_new()
@@ -3783,6 +3822,24 @@ export default function UserManagementPage() {
                           >
                             + Agregar opción
                           </button>
+                          
+                          {/* Campo de Explicación */}
+                          <div className="mt-3">
+                            <label className="block text-xs font-medium text-secondary-700 mb-1">
+                              Explicación (opcional - se muestra al errar)
+                            </label>
+                            <textarea
+                              value={question.explanation || ''}
+                              onChange={(e) => {
+                                const newQuestions = [...editingItem.questions]
+                                newQuestions[index] = { ...question, explanation: e.target.value }
+                                setEditingItem({ ...editingItem, questions: newQuestions })
+                              }}
+                              rows={2}
+                              placeholder="Explicación de por qué es incorrecta..."
+                              className="w-full px-3 py-2 border border-secondary-300 rounded text-sm focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -3795,7 +3852,8 @@ export default function UserManagementPage() {
                           question: '',
                           options: ['', ''],
                           correctAnswer: 0,
-                          order: editingItem.questions?.length || 0
+                          order: editingItem.questions?.length || 0,
+                          explanation: ''
                         }
                         setEditingItem({ 
                           ...editingItem, 

@@ -49,6 +49,7 @@ export interface Question {
   options: string[]
   correctAnswer: number
   order: number
+  explanation?: string
 }
 
 export interface TestResult {
