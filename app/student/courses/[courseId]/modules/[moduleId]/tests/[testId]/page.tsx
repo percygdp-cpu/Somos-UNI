@@ -117,6 +117,7 @@ export default function TestPage() {
   const router = useRouter()
   const { user } = useAuth()
   const confettiRef = useRef<ConfettiRef>(null)
+  const milestoneConfettiRef = useRef<ConfettiRef>(null)
   const [test, setTest] = useState<any>(null)
   const [shuffledQuestions, setShuffledQuestions] = useState<Question[]>([])
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0)
@@ -162,6 +163,40 @@ export default function TestPage() {
       return () => clearTimeout(timer)
     }
   }, [testCompleted, shouldShowConfetti])
+
+  // Efecto para lanzar confetti cuando se muestra el modal motivacional
+  useEffect(() => {
+    if (showMilestoneModal) {
+      // Esperar a que el modal esté completamente renderizado
+      const timer = setTimeout(() => {
+        if (milestoneConfettiRef.current) {
+          // Lanzar confetti múltiples veces para efecto más impactante
+          milestoneConfettiRef.current.fire({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+          })
+          
+          setTimeout(() => {
+            milestoneConfettiRef.current?.fire({
+              particleCount: 80,
+              spread: 100,
+              origin: { y: 0.5 }
+            })
+          }, 200)
+          
+          setTimeout(() => {
+            milestoneConfettiRef.current?.fire({
+              particleCount: 60,
+              spread: 80,
+              origin: { y: 0.7 }
+            })
+          }, 400)
+        }
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [showMilestoneModal])
 
   // Función para mezclar array usando Fisher-Yates (sin repeticiones)
   const shuffleArray = <T,>(array: T[]): T[] => {
@@ -272,18 +307,8 @@ export default function TestPage() {
     
     if (hasMoreBlocks) {
       // Mostrar modal de felicitaciones antes de ir al siguiente bloque
+      // El confetti se lanzará automáticamente con el useEffect
       setShowMilestoneModal(true)
-      
-      // Lanzar confetti
-      setTimeout(() => {
-        if (confettiRef.current) {
-          confettiRef.current.fire({
-            particleCount: 80,
-            spread: 60,
-            origin: { y: 0.6 }
-          })
-        }
-      }, 100)
     } else {
       // Completar test
       completeTest(updatedAnswers)
@@ -770,10 +795,10 @@ export default function TestPage() {
         {/* Modal de Felicitaciones cada 10 preguntas */}
         {showMilestoneModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn relative">
               {/* Confetti para el modal */}
               <Confetti
-                ref={confettiRef}
+                ref={milestoneConfettiRef}
                 className="absolute inset-0 z-50 size-full pointer-events-none"
               />
               
