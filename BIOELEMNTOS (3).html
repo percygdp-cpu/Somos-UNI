@@ -1,0 +1,2486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Bioelementos - SomosUni</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .modal-content-large {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            max-width: 1000px;
+            width: 100%;
+            height: 95vh;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        /* NUEVO: Estilos para el milestone */
+        .milestone-modal {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .trophy-gold {
+            filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.6));
+            animation: float 2s ease-in-out infinite;
+        }
+        
+        .trophy-silver {
+            filter: drop-shadow(0 0 15px rgba(192, 192, 192, 0.5));
+            animation: float 2s ease-in-out infinite;
+        }
+        
+        .trophy-bronze {
+            filter: drop-shadow(0 0 15px rgba(205, 127, 50, 0.5));
+            animation: float 2s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background: #ff0;
+            animation: confetti-fall 5s linear forwards;
+            z-index: 9998;
+        }
+        
+        @keyframes confetti-fall {
+            0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+        }
+        
+        /* EFECTOS ÉPICOS NUEVOS */
+        @keyframes star-fall {
+            0% { 
+                transform: translateY(0px) rotate(0deg) scale(0.5); 
+                opacity: 0; 
+            }
+            10% { 
+                opacity: 1; 
+                transform: translateY(10px) rotate(180deg) scale(1.2); 
+            }
+            90% { 
+                opacity: 1; 
+            }
+            100% { 
+                transform: translateY(100vh) rotate(720deg) scale(0.5); 
+                opacity: 0; 
+            }
+        }
+
+        @keyframes sparkle-twinkle {
+            0%, 100% { 
+                opacity: 0; 
+                transform: scale(0.5) rotate(0deg);
+            }
+            50% { 
+                opacity: 1; 
+                transform: scale(1.5) rotate(180deg);
+            }
+        }
+
+        .epic-glow {
+            text-shadow: 
+                0 0 10px #fff,
+                0 0 20px #ff0,
+                0 0 30px #ff0,
+                0 0 40px #ff0;
+            animation: epic-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes epic-pulse {
+            0%, 100% { 
+                transform: scale(1);
+                text-shadow: 
+                    0 0 10px #fff,
+                    0 0 20px #ff0,
+                    0 0 30px #ff0;
+            }
+            50% { 
+                transform: scale(1.1);
+                text-shadow: 
+                    0 0 20px #fff,
+                    0 0 30px #ff0,
+                    0 0 40px #ff0,
+                    0 0 50px #ff0;
+            }
+        }
+
+        .confetti-epic {
+            position: fixed;
+            animation: confetti-fall-epic 5s linear forwards;
+            z-index: 9998;
+        }
+
+        @keyframes confetti-fall-epic {
+            0% { 
+                transform: translateY(-100px) rotate(0deg) translateX(0px); 
+                opacity: 1; 
+            }
+            100% { 
+                transform: translateY(100vh) rotate(360deg) translateX(calc(var(--random-x) * 1px)); 
+                opacity: 0; 
+            }
+        }
+        
+        .question-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+        
+        .alternative-label {
+            display: flex;
+            align-items: flex-start;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 8px;
+        }
+        
+        .alternative-label:hover {
+            border-color: #3b82f6;
+            background-color: #f8fafc;
+        }
+        
+        .alternative-label.correct {
+            border-color: #10b981;
+            background-color: #ecfdf5;
+        }
+        
+        .alternative-label.incorrect {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+        
+        .alternative-label.disabled {
+            cursor: not-allowed;
+        }
+        
+        .alternative-label input[type="radio"] {
+            margin-right: 12px;
+            margin-top: 2px;
+        }
+        
+        #floating-stats-button {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 70px;
+            height: 70px;
+            z-index: 100;
+        }
+        
+        #quiz-header-fixed {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 20px 0;
+            margin-bottom: 24px;
+            border-bottom: 2px solid #e5e7eb;
+            z-index: 50;
+        }
+        
+        .quiz-content {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+        
+        .page-navigation {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .pdf-content-area {
+            height: calc(95vh - 180px);
+            overflow-y: auto;
+            padding: 10px;
+            background: #f8fafc;
+        }
+        
+        .bioelemento-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 0.9em;
+        }
+        
+        .bioelemento-table th {
+            background: #3b82f6;
+            color: white;
+            padding: 8px 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        
+        .bioelemento-table td {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+        }
+        
+        .bioelemento-table tr:nth-child(even) {
+            background: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="app-container" class="min-h-screen py-8">
+        <!-- La aplicación se renderiza aquí -->
+    </div>
+    
+    <div id="modal-root">
+        <!-- Los modales se renderizan aquí -->
+    </div>
+
+    <script>
+        // --- Configuración y Variables Globales ---
+        const TEST_NAME = "Bioelementos"; 
+        const TOTAL_QUESTIONS = 100;
+        const APP_ID = 'somosuni-bioelementos-test';
+
+        let participantName = "";
+        let questions = [];
+        let currentPage = 'start';
+        let isModalOpen = false;
+        let isPDFModalOpen = false;
+        let isMilestoneModalOpen = false;
+        let currentPDFPage = 1;
+        const totalPDFPages = 5;
+
+        // --- Utilidades de Interacción ---
+        function playCorrectSound() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                
+                oscillator.start();
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+                oscillator.stop(audioContext.currentTime + 0.2);
+            } catch (e) {
+                console.log('Audio no disponible');
+            }
+        }
+
+        function vibrateIncorrect() {
+            if (navigator.vibrate) {
+                try {
+                    navigator.vibrate(100);
+                } catch (e) {
+                    console.log('Vibración no disponible');
+                }
+            }
+        }
+
+        // --- NUEVO: Sistema de Milestones ÉPICO ---
+        function checkMilestone(qIndex) {
+            // Solo verificar cada 10 preguntas (preguntas 10, 20, 30, etc.)
+            if ((qIndex + 1) % 10 === 0) {
+                const blockStart = Math.floor(qIndex / 10) * 10;
+                const blockEnd = blockStart + 9;
+                
+                // Calcular puntaje del bloque actual
+                let correctInBlock = 0;
+                let totalInBlock = 0;
+                
+                for (let i = blockStart; i <= blockEnd && i < questions.length; i++) {
+                    if (questions[i].userAnswer !== null) {
+                        totalInBlock++;
+                        if (questions[i].alternatives[questions[i].userAnswer].isCorrect) {
+                            correctInBlock++;
+                        }
+                    }
+                }
+                
+                // Solo mostrar milestone si se contestaron todas las preguntas del bloque
+                if (totalInBlock === 10) {
+                    setTimeout(() => {
+                        showMilestoneCelebration(correctInBlock, totalInBlock, qIndex + 1);
+                    }, 800);
+                }
+            }
+        }
+
+        function createEpicCelebration() {
+            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#ff69b4'];
+            
+            // 🌟 CREAR ESTRELLAS
+            for (let i = 0; i < 30; i++) {
+                setTimeout(() => {
+                    const star = document.createElement('div');
+                    star.innerHTML = '⭐';
+                    star.style.position = 'fixed';
+                    star.style.fontSize = (Math.random() * 30 + 20) + 'px';
+                    star.style.left = Math.random() * 100 + 'vw';
+                    star.style.top = '-50px';
+                    star.style.zIndex = '9999';
+                    star.style.opacity = '0';
+                    star.style.animation = `star-fall ${Math.random() * 3 + 2}s linear forwards`;
+                    star.style.textShadow = '0 0 10px gold';
+                    
+                    document.body.appendChild(star);
+                    
+                    setTimeout(() => {
+                        star.remove();
+                    }, 5000);
+                }, i * 150);
+            }
+            
+            // 🎉 CREAR CONFETI ÉPICO
+            for (let i = 0; i < 80; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti-epic';
+                    confetti.style.left = Math.random() * 100 + 'vw';
+                    confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.width = (Math.random() * 15 + 8) + 'px';
+                    confetti.style.height = (Math.random() * 15 + 8) + 'px';
+                    confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0%';
+                    confetti.style.animationDuration = (Math.random() * 3 + 2) + 's';
+                    confetti.style.setProperty('--random-x', Math.random() * 200 - 100);
+                    document.body.appendChild(confetti);
+                    
+                    setTimeout(() => {
+                        confetti.remove();
+                    }, 5000);
+                }, i * 50);
+            }
+            
+            // ✨ CREAR ESTRELLAS CENTELLEANTES
+            for (let i = 0; i < 20; i++) {
+                setTimeout(() => {
+                    const sparkle = document.createElement('div');
+                    sparkle.innerHTML = '✨';
+                    sparkle.style.position = 'fixed';
+                    sparkle.style.fontSize = (Math.random() * 25 + 15) + 'px';
+                    sparkle.style.left = Math.random() * 100 + 'vw';
+                    sparkle.style.top = Math.random() * 100 + 'vh';
+                    sparkle.style.zIndex = '9999';
+                    sparkle.style.animation = `sparkle-twinkle ${Math.random() * 2 + 1}s ease-in-out infinite`;
+                    sparkle.style.textShadow = '0 0 15px yellow';
+                    
+                    document.body.appendChild(sparkle);
+                    
+                    setTimeout(() => {
+                        sparkle.remove();
+                    }, 3000);
+                }, i * 200);
+            }
+        }
+
+        function showMilestoneCelebration(correct, total, currentQuestion) {
+            const milestoneNumber = currentQuestion / 10;
+            const percentage = (correct / total) * 100;
+            
+            let title = "";
+            let message = "";
+            let trophyClass = "";
+            let trophyEmoji = "";
+            
+            // 🔥 NOMBRE EN MAYÚSCULAS Y APOTEÓSICO
+            const nombreApoteosico = participantName.toUpperCase();
+            
+            if (percentage === 100) {
+                title = "🥇 ¡PERFECTO ABSOLUTO!";
+                message = `¡10/10! <span class="text-3xl font-black bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">${nombreApoteosico}</span>, DOMINAS COMPLETAMENTE ESTE BLOQUE. ERES UN CRACK TOTAL DE LOS BIOELEMENTOS.`;
+                trophyClass = "trophy-gold epic-glow";
+                trophyEmoji = "🏆";
+                createEpicCelebration(); // 🌟🎉 LLUVIA ÉPICA
+            } else if (percentage >= 90) {
+                title = "🥈 ¡EXCELENCIA SUPREMA!";
+                message = `¡${correct}/10! <span class="text-2xl font-black bg-gradient-to-r from-gray-300 to-gray-100 bg-clip-text text-transparent">${nombreApoteosico}</span>, UN RENDIMIENTO SOBRESALIENTE. CASI PERFECTO.`;
+                trophyClass = "trophy-silver";
+                trophyEmoji = "🥈";
+                createConfetti(); // 🎉 Solo confetti para excelente
+            } else if (percentage >= 70) {
+                title = "🥉 ¡GRANDEZA!";
+                message = `¡${correct}/10! <span class="text-xl font-black bg-gradient-to-r from-yellow-700 to-yellow-500 bg-clip-text text-transparent">${nombreApoteosico}</span>, BUEN TRABAJO, VAS POR BUEN CAMINO HACIA LA MAESTRÍA.`;
+                trophyClass = "trophy-bronze";
+                trophyEmoji = "🥉";
+                createConfetti(); // 🎉 Solo confetti para muy bien
+            } else {
+                title = "💪 ¡FUERZA GUERRERO!";
+                message = `¡${correct}/10! <span class="text-lg font-black bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">${nombreApoteosico}</span>, SIGUE PRACTICANDO, CADA ERROR TE ACERCA A LA EXCELENCIA.`;
+                trophyEmoji = "📚";
+            }
+            
+            const modalRoot = document.getElementById('modal-root');
+            isMilestoneModalOpen = true;
+            
+            modalRoot.innerHTML = `
+                <div class="modal-overlay">
+                    <div class="modal-content milestone-modal text-center" onclick="event.stopPropagation()">
+                        <div class="mb-6">
+                            <div class="text-8xl ${trophyClass} mb-4">${trophyEmoji}</div>
+                            <h2 class="text-4xl font-black mb-2">${title}</h2>
+                            <p class="text-2xl font-bold mb-4">BLOQUE ${milestoneNumber} COMPLETADO</p>
+                            <div class="bg-white bg-opacity-20 rounded-xl p-6 inline-block border-4 border-white border-opacity-30">
+                                <p class="text-5xl font-black">${correct}/${total}</p>
+                                <p class="text-xl font-bold">(${percentage}%)</p>
+                            </div>
+                        </div>
+                        
+                        <!-- 🔥 NOMBRE APOTEÓSICO CENTRAL -->
+                        <div class="my-6 p-6 bg-white bg-opacity-10 rounded-xl border-4 border-yellow-400 border-opacity-50 shadow-2xl">
+                            <p class="text-xl font-semibold mb-3 text-yellow-300">¡FELICIDADES EPICAS!</p>
+                            <div class="text-5xl font-black bg-gradient-to-r from-yellow-300 via-red-400 to-pink-500 bg-clip-text text-transparent animate-pulse epic-glow">
+                                ${nombreApoteosico}
+                            </div>
+                            <p class="text-lg mt-3 text-yellow-200">¡ERES INCREÍBLE!</p>
+                        </div>
+                        
+                        <p class="text-xl mb-6 leading-relaxed bg-white bg-opacity-10 p-4 rounded-lg">${message}</p>
+                        
+                        <div class="space-y-3 mb-6">
+                            <div class="flex justify-between items-center bg-white bg-opacity-20 p-4 rounded-xl">
+                                <span class="text-lg">Preguntas contestadas:</span>
+                                <span class="text-xl font-black">${getAnsweredCount()}/${TOTAL_QUESTIONS}</span>
+                            </div>
+                            <div class="flex justify-between items-center bg-white bg-opacity-20 p-4 rounded-xl">
+                                <span class="text-lg">Progreso total:</span>
+                                <span class="text-xl font-black">${Math.round((getAnsweredCount() / TOTAL_QUESTIONS) * 100)}%</span>
+                            </div>
+                        </div>
+                        
+                        <button onclick="closeMilestone()"
+                                class="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-black text-xl py-5 rounded-xl hover:from-yellow-500 hover:to-orange-600 transition duration-200 transform hover:scale-[1.02] shadow-2xl border-4 border-yellow-300 epic-glow">
+                            🚀 CONTINUAR CON LAS SIGUIENTES 10 PREGUNTAS
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function closeMilestone() {
+            isMilestoneModalOpen = false;
+            document.getElementById('modal-root').innerHTML = '';
+        }
+
+        // 🎉 FUNCIÓN DE CONFETI SOLO (para niveles menores)
+        function createConfetti() {
+            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * 100 + 'vw';
+                    confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.animationDuration = (Math.random() * 3 + 2) + 's';
+                    document.body.appendChild(confetti);
+                    
+                    setTimeout(() => {
+                        confetti.remove();
+                    }, 5000);
+                }, i * 100);
+            }
+        }
+
+        // --- BASE DE DATOS COMPLETA CON 100 PREGUNTAS DIFERENTES ---
+        function generateQuestions() {
+            const questionDatabase = [
+                {
+                    question: "Los bioelementos se clasifican según la proporción en que se encuentran en los seres vivos. Señale la alternativa incorrecta:",
+                    alternatives: [
+                        "El carbono, hidrógeno, oxígeno y nitrógeno forman parte de los bioelementos primarios.",
+                        "El magnesio, calcio y sodio son ejemplos de bioelementos secundarios.",
+                        "El hierro, yodo y cobre son oligoelementos indispensables para el metabolismo.",
+                        "Los bioelementos secundarios representan aproximadamente el 96% del total de masa del organismo humano.",
+                        "Los oligoelementos se requieren en cantidades mínimas pero cumplen funciones vitales."
+                    ],
+                    correct: 3,
+                    explanation: "Los bioelementos primarios (C, H, O, N, P, S) representan aproximadamente el 96% de la masa del organismo humano, no los secundarios. Los bioelementos secundarios constituyen alrededor del 3.9%."
+                },
+                {
+                    question: "Respecto al fósforo, marque la correcta:",
+                    alternatives: [
+                        "Forma parte de la hormona tiroidea y participa en la regulación del metabolismo basal.",
+                        "Es un oligoelemento cuya función principal es el transporte de oxígeno en la sangre.",
+                        "Es esencial en la formación de ATP, ADN y ARN, y participa en la estructura de los huesos.",
+                        "Su ausencia provoca mixedema y bocio endémico.",
+                        "Participa en la contracción muscular como componente principal de la hemoglobina."
+                    ],
+                    correct: 2,
+                    explanation: "El fósforo es fundamental para la formación de ATP (molécula energética), ADN y ARN (material genético), y forma parte de la hidroxiapatita en los huesos. No está relacionado con hormonas tiroideas ni con la hemoglobina."
+                },
+                {
+                    question: "El carbono es fundamental para la vida porque:",
+                    alternatives: [
+                        "Forma enlaces iónicos muy estables con el oxígeno.",
+                        "Es el elemento más abundante en la corteza terrestre.",
+                        "Puede formar cuatro enlaces covalentes y cadenas carbonadas.",
+                        "Es el principal componente de las sales minerales.",
+                        "Participa exclusivamente en la respiración celular."
+                    ],
+                    correct: 2,
+                    explanation: "El carbono puede formar cuatro enlaces covalentes, permitiendo la formación de cadenas carbonadas y estructuras complejas que son la base de las biomoléculas orgánicas."
+                },
+                {
+                    question: "¿Cuál de los siguientes elementos NO es considerado un bioelemento primario?",
+                    alternatives: [
+                        "Carbono",
+                        "Nitrógeno", 
+                        "Calcio",
+                        "Oxígeno",
+                        "Hidrógeno"
+                    ],
+                    correct: 2,
+                    explanation: "El calcio es un bioelemento secundario. Los bioelementos primarios son C, H, O, N, P, S."
+                },
+                {
+                    question: "La función principal del hierro en el organismo humano es:",
+                    alternatives: [
+                        "Formar parte de la estructura ósea.",
+                        "Participar en la síntesis de hormonas tiroideas.",
+                        "Transportar oxígeno en la hemoglobina y mioglobina.",
+                        "Activar enzimas digestivas.",
+                        "Regular el equilibrio ácido-base."
+                    ],
+                    correct: 2,
+                    explanation: "El hierro es esencial para el transporte de oxígeno como componente de la hemoglobina en glóbulos rojos y la mioglobina en músculos."
+                },
+                {
+                    question: "El yodo es indispensable para:",
+                    alternatives: [
+                        "La formación de hemoglobina.",
+                        "La síntesis de hormonas tiroideas.",
+                        "La contracción muscular.",
+                        "La coagulación sanguínea.",
+                        "La activación de la vitamina D."
+                    ],
+                    correct: 1,
+                    explanation: "El yodo es componente esencial de las hormonas tiroideas T3 y T4, que regulan el metabolismo basal."
+                },
+                {
+                    question: "El magnesio participa principalmente en:",
+                    alternatives: [
+                        "El transporte de oxígeno.",
+                        "La estructura de la clorofila en plantas.",
+                        "La síntesis de hemoglobina.",
+                        "La regulación del metabolismo del calcio.",
+                        "La formación de glóbulos rojos."
+                    ],
+                    correct: 1,
+                    explanation: "El magnesio es el átomo central de la molécula de clorofila, pigmento esencial para la fotosíntesis en plantas."
+                },
+                {
+                    question: "El sodio y el potasio son esenciales para:",
+                    alternatives: [
+                        "La formación de huesos y dientes.",
+                        "El impulso nervioso y equilibrio osmótico.",
+                        "La síntesis de proteínas.",
+                        "La respiración celular.",
+                        "La fotosíntesis."
+                    ],
+                    correct: 1,
+                    explanation: "El sodio y potasio mantienen el potencial de membrana y participan en la bomba Na+/K+ ATPasa, esencial para el impulso nervioso."
+                },
+                {
+                    question: "El calcio cumple las siguientes funciones EXCEPTO:",
+                    alternatives: [
+                        "Contracción muscular.",
+                        "Coagulación sanguínea.",
+                        "Estructura ósea.",
+                        "Transporte de oxígeno.",
+                        "Señalización celular."
+                    ],
+                    correct: 3,
+                    explanation: "El calcio no participa en el transporte de oxígeno. Esta función corresponde al hierro en la hemoglobina."
+                },
+                {
+                    question: "Los oligoelementos se caracterizan por:",
+                    alternatives: [
+                        "Constituir más del 1% de la masa corporal.",
+                        "Ser necesarios en grandes cantidades.",
+                        "Ser indispensables aunque en cantidades mínimas.",
+                        "Formar parte solo de estructuras esqueléticas.",
+                        "Ser sintetizados por el organismo."
+                    ],
+                    correct: 2,
+                    explanation: "Los oligoelementos son elementos traza necesarios en cantidades muy pequeñas pero esenciales para funciones metabólicas específicas."
+                },
+                {
+                    question: "El zinc es importante para:",
+                    alternatives: [
+                        "La síntesis de hemoglobina.",
+                        "La función del sistema inmune y cicatrización.",
+                        "La formación de huesos.",
+                        "La regulación del metabolismo basal.",
+                        "El transporte de electrones."
+                    ],
+                    correct: 1,
+                    explanation: "El zinc es cofactor de múltiples enzimas y es esencial para la función inmune, división celular y cicatrización."
+                },
+                {
+                    question: "El cobre participa en:",
+                    alternatives: [
+                        "La formación de vitamina B12.",
+                        "La síntesis de hemoglobina.",
+                        "La estructura de la clorofila.",
+                        "La regulación de la presión arterial.",
+                        "La síntesis de glucógeno."
+                    ],
+                    correct: 1,
+                    explanation: "El cobre es necesario para la absorción y metabolismo del hierro, y participa en la síntesis de hemoglobina."
+                },
+                {
+                    question: "El flúor es importante para:",
+                    alternatives: [
+                        "La formación de glóbulos rojos.",
+                        "La prevención de caries dentales.",
+                        "La síntesis de proteínas.",
+                        "El metabolismo de carbohidratos.",
+                        "La contracción muscular."
+                    ],
+                    correct: 1,
+                    explanation: "El flúor se incorpora al esmalte dental formando fluorapatita, que lo hace más resistente a las caries."
+                },
+                {
+                    question: "El manganeso actúa como:",
+                    alternatives: [
+                        "Componente de la hemoglobina.",
+                        "Cofactor enzimático en el metabolismo.",
+                        "Regulador del equilibrio hídrico.",
+                        "Elemento estructural de huesos.",
+                        "Transportador de oxígeno."
+                    ],
+                    correct: 1,
+                    explanation: "El manganeso es cofactor de enzimas como la superóxido dismutasa, importante en la defensa antioxidante."
+                },
+                {
+                    question: "El selenio es conocido por:",
+                    alternatives: [
+                        "Su papel en la síntesis de colágeno.",
+                        "Su función antioxidante.",
+                        "Su participación en la coagulación.",
+                        "Su rol en la contracción muscular.",
+                        "Su importancia en la visión."
+                    ],
+                    correct: 1,
+                    explanation: "El selenio es componente de la enzima glutatión peroxidasa, que protege contra el daño oxidativo."
+                },
+                {
+                    question: "El molibdeno es esencial para:",
+                    alternatives: [
+                        "La fijación de nitrógeno.",
+                        "La síntesis de hemoglobina.",
+                        "La formación de huesos.",
+                        "La regulación tiroidea.",
+                        "La contracción cardiaca."
+                    ],
+                    correct: 0,
+                    explanation: "El molibdeno es cofactor de enzimas como la nitrogenasa, importante en la fijación biológica de nitrógeno."
+                },
+                {
+                    question: "El cobalto forma parte de:",
+                    alternatives: [
+                        "La hemoglobina.",
+                        "La vitamina B12.",
+                        "La clorofila.",
+                        "Las hormonas tiroideas.",
+                        "El ATP."
+                    ],
+                    correct: 1,
+                    explanation: "El cobalto es el átomo central de la molécula de vitamina B12 (cobalamina), esencial para la formación de glóbulos rojos."
+                },
+                {
+                    question: "El cromo participa en:",
+                    alternatives: [
+                        "El metabolismo de la glucosa.",
+                        "La síntesis de proteínas.",
+                        "La formación de huesos.",
+                        "El transporte de oxígeno.",
+                        "La contracción muscular."
+                    ],
+                    correct: 0,
+                    explanation: "El cromo potencia la acción de la insulina y está involucrado en el metabolismo de carbohidratos."
+                },
+                {
+                    question: "El níquel es importante para:",
+                    alternatives: [
+                        "La estructura del ADN.",
+                        "El metabolismo del hierro.",
+                        "La síntesis de urea.",
+                        "La formación de membranas.",
+                        "La visión nocturna."
+                    ],
+                    correct: 2,
+                    explanation: "El níquel es cofactor de la enzima ureasa, que cataliza la hidrólisis de la urea."
+                },
+                {
+                    question: "El vanadio puede imitar los efectos de:",
+                    alternatives: [
+                        "La insulina.",
+                        "La hemoglobina.",
+                        "La clorofila.",
+                        "Las hormonas tiroideas.",
+                        "La vitamina D."
+                    ],
+                    correct: 0,
+                    explanation: "El vanadio tiene efectos insulinomiméticos, pudiendo mejorar la sensibilidad a la insulina."
+                },
+                {
+                    question: "El silicio es importante para:",
+                    alternatives: [
+                        "La formación de tejido conectivo.",
+                        "La síntesis de hemoglobina.",
+                        "El impulso nervioso.",
+                        "La respiración celular.",
+                        "La fotosíntesis."
+                    ],
+                    correct: 0,
+                    explanation: "El silicio participa en la formación de colágeno y tejido conectivo, siendo importante para huesos y articulaciones."
+                },
+                {
+                    question: "El estaño parece estar relacionado con:",
+                    alternatives: [
+                        "El crecimiento óseo.",
+                        "La síntesis de proteínas.",
+                        "El metabolismo energético.",
+                        "La función hepática.",
+                        "La visión."
+                    ],
+                    correct: 0,
+                    explanation: "El estaño puede estar involucrado en reacciones redox y parece influir en el crecimiento óseo."
+                },
+                {
+                    question: "En plantas, la deficiencia de nitrógeno causa:",
+                    alternatives: [
+                        "Clorosis en hojas jóvenes.",
+                        "Clorosis en hojas viejas.",
+                        "Necrosis en bordes de hojas.",
+                        "Acumulación de antocianinas.",
+                        "Crecimiento excesivo."
+                    ],
+                    correct: 1,
+                    explanation: "La deficiencia de nitrógeno causa clorosis (amarillamiento) primero en hojas viejas, pues el N es móvil en la planta."
+                },
+                {
+                    question: "La deficiencia de hierro en plantas se manifiesta como:",
+                    alternatives: [
+                        "Clorosis intervenal en hojas jóvenes.",
+                        "Clorosis generalizada en hojas viejas.",
+                        "Necrosis en ápices.",
+                        "Enanismo y hojas pequeñas.",
+                        "Acumulación de pigmentos rojos."
+                    ],
+                    correct: 0,
+                    explanation: "El hierro es inmóvil en plantas, por lo que su deficiencia causa clorosis intervenal primero en hojas jóvenes."
+                },
+                {
+                    question: "El boro es esencial para las plantas porque:",
+                    alternatives: [
+                        "Participa en la división celular.",
+                        "Forma parte de la clorofila.",
+                        "Interviene en el transporte de azúcares.",
+                        "Es componente de enzimas respiratorias.",
+                        "Regula la apertura estomática."
+                    ],
+                    correct: 2,
+                    explanation: "El boro es importante para la formación de la pared celular y el transporte de azúcares a través de las membranas."
+                },
+                {
+                    question: "El molibdeno en plantas es crucial para:",
+                    alternatives: [
+                        "La fijación de nitrógeno.",
+                        "La síntesis de clorofila.",
+                        "La absorción de fósforo.",
+                        "La resistencia a sequía.",
+                        "La floración."
+                    ],
+                    correct: 0,
+                    explanation: "El molibdeno es cofactor de la nitrogenasa y nitrato reductasa, enzimas clave en el metabolismo del nitrógeno."
+                },
+                {
+                    question: "El cobre en plantas participa en:",
+                    alternatives: [
+                        "La fotosíntesis y respiración.",
+                        "La síntesis de lignina.",
+                        "La absorción de agua.",
+                        "La formación de flores.",
+                        "La producción de semillas."
+                    ],
+                    correct: 0,
+                    explanation: "El cobre es componente de enzimas como la plastocianina (fotosíntesis) y citocromo oxidasa (respiración)."
+                },
+                {
+                    question: "¿Cuál de estos elementos NO es un metal?",
+                    alternatives: [
+                        "Sodio",
+                        "Potasio", 
+                        "Calcio",
+                        "Fósforo",
+                        "Magnesio"
+                    ],
+                    correct: 3,
+                    explanation: "El fósforo es un no metal. Los demás elementos mencionados son metales alcalinos o alcalinotérreos."
+                },
+                {
+                    question: "El elemento más abundante en el cuerpo humano es:",
+                    alternatives: [
+                        "Carbono",
+                        "Hidrógeno",
+                        "Oxígeno", 
+                        "Nitrógeno",
+                        "Calcio"
+                    ],
+                    correct: 2,
+                    explanation: "El oxígeno es el elemento más abundante en el cuerpo humano (aproximadamente 65% de la masa), principalmente formando parte del agua."
+                },
+                {
+                    question: "Los bioelementos primarios constituyen aproximadamente:",
+                    alternatives: [
+                        "50% de la masa corporal.",
+                        "75% de la masa corporal.",
+                        "96% de la masa corporal.",
+                        "99% de la masa corporal.",
+                        "85% de la masa corporal."
+                    ],
+                    correct: 2,
+                    explanation: "Los bioelementos primarios (C, H, O, N, P, S) constituyen aproximadamente el 96% de la masa del cuerpo humano."
+                },
+                {
+                    question: "El elemento que forma el esqueleto de las moléculas orgánicas es:",
+                    alternatives: [
+                        "Oxígeno",
+                        "Nitrógeno",
+                        "Carbono",
+                        "Hidrógeno", 
+                        "Fósforo"
+                    ],
+                    correct: 2,
+                    explanation: "El carbono tiene la capacidad única de formar cadenas y anillos estables, siendo la base estructural de todas las moléculas orgánicas."
+                },
+                {
+                    question: "El fósforo es componente esencial de:",
+                    alternatives: [
+                        "Solo los ácidos nucleicos.",
+                        "Solo el ATP.",
+                        "Solo los huesos.",
+                        "Ácidos nucleicos, ATP y huesos.",
+                        "Solo las membranas celulares."
+                    ],
+                    correct: 3,
+                    explanation: "El fósforo forma parte de los ácidos nucleicos (ADN, ARN), moléculas energéticas (ATP) y la hidroxiapatita de huesos y dientes."
+                },
+                {
+                    question: "El azufre se encuentra principalmente en:",
+                    alternatives: [
+                        "Aminoácidos cisteína y metionina.",
+                        "La glucosa y otros azúcares.",
+                        "Los ácidos grasos.",
+                        "Las bases nitrogenadas.",
+                        "La vitamina C."
+                    ],
+                    correct: 0,
+                    explanation: "El azufre forma parte de los aminoácidos cisteína y metionina, permitiendo la formación de puentes disulfuro en proteínas."
+                },
+                {
+                    question: "El potasio se concentra principalmente en:",
+                    alternatives: [
+                        "El líquido extracelular.",
+                        "El líquido intracelular.",
+                        "Los huesos.",
+                        "La sangre.",
+                        "El tejido nervioso."
+                    ],
+                    correct: 1,
+                    explanation: "El potasio es el catión principal del líquido intracelular, donde regula el potencial de membrana y la presión osmótica."
+                },
+                {
+                    question: "El cloro es importante para:",
+                    alternatives: [
+                        "La formación de HCl en el estómago.",
+                        "La síntesis de hormonas.",
+                        "La estructura ósea.",
+                        "El transporte de oxígeno.",
+                        "La contracción muscular."
+                    ],
+                    correct: 0,
+                    explanation: "El cloro forma parte del ácido clorhídrico (HCl) en el jugo gástrico, esencial para la digestión proteica."
+                },
+                {
+                    question: "El magnesio es cofactor de enzimas involucradas en:",
+                    alternatives: [
+                        "Solo la fotosíntesis.",
+                        "Solo la respiración.",
+                        "La fotosíntesis y replicación del ADN.",
+                        "La síntesis de proteínas y metabolismo energético.",
+                        "Solo el metabolismo lipídico."
+                    ],
+                    correct: 3,
+                    explanation: "El magnesio es cofactor de más de 300 enzimas, incluyendo aquellas involucradas en síntesis de proteínas, metabolismo energético y replicación del ADN."
+                },
+                {
+                    question: "El calcio actúa como segundo mensajero en:",
+                    alternatives: [
+                        "La señalización celular.",
+                        "La síntesis de ADN.",
+                        "La fotosíntesis.",
+                        "La respiración anaerobia.",
+                        "La digestión de lípidos."
+                    ],
+                    correct: 0,
+                    explanation: "El calcio funciona como segundo mensajero en múltiples vías de señalización celular, regulando procesos como la contracción muscular y liberación de neurotransmisores."
+                },
+                {
+                    question: "El hierro se almacena en el hígado como:",
+                    alternatives: [
+                        "Hemoglobina.",
+                        "Mioglobina.",
+                        "Ferritina.",
+                        "Transferrina.",
+                        "Hemosiderina."
+                    ],
+                    correct: 2,
+                    correct: 4, // Actualizado para ferritina
+                    explanation: "El hierro se almacena principalmente como ferritina y hemosiderina en el hígado, bazo y médula ósea."
+                },
+                {
+                    question: "La deficiencia de yodo causa:",
+                    alternatives: [
+                        "Anemia.",
+                        "Bocio.",
+                        "Raquitismo.",
+                        "Escorbuto.",
+                        "Osteoporosis."
+                    ],
+                    correct: 1,
+                    explanation: "La deficiencia de yodo causa bocio (agrandamiento de la tiroides) debido a la sobreestimulación para producir hormonas tiroideas."
+                },
+                {
+                    question: "El zinc es componente de:",
+                    alternatives: [
+                        "La enzima anhidrasa carbónica.",
+                        "La hemoglobina.",
+                        "La clorofila.",
+                        "La insulina.",
+                        "La vitamina B12."
+                    ],
+                    correct: 0,
+                    explanation: "El zinc es cofactor de la anhidrasa carbónica, enzima crucial para el transporte de CO2 y equilibrio ácido-base."
+                },
+                {
+                    question: "El cobre es necesario para la formación de:",
+                    alternatives: [
+                        "El colágeno.",
+                        "La hemoglobina.",
+                        "La mielina.",
+                        "La queratina.",
+                        "La elastina."
+                    ],
+                    correct: 0,
+                    explanation: "El cobre es cofactor de la enzima lisil oxidasa, esencial para la formación de enlaces cruzados en el colágeno y elastina."
+                },
+                {
+                    question: "El manganeso participa en la síntesis de:",
+                    alternatives: [
+                        "La urea.",
+                        "El colesterol.",
+                        "La glucosa.",
+                        "Los ácidos biliares.",
+                        "Los neurotransmisores."
+                    ],
+                    correct: 1,
+                    explanation: "El manganeso es cofactor de enzimas como la arginasa (ciclo de la urea) y enzimas del metabolismo de carbohidratos y lípidos."
+                },
+                {
+                    question: "El selenio protege contra:",
+                    alternatives: [
+                        "Infecciones bacterianas.",
+                        "Daño por radicales libres.",
+                        "Deficiencia de calcio.",
+                        "Hipoglucemia.",
+                        "Hipotensión."
+                    ],
+                    correct: 1,
+                    explanation: "El selenio es componente de la glutatión peroxidasa, enzima antioxidante que protege contra el daño de radicales libres."
+                },
+                {
+                    question: "El cromo potencia la acción de:",
+                    alternatives: [
+                        "La insulina.",
+                        "La adrenalina.",
+                        "La hemoglobina.",
+                        "La clorofila.",
+                        "La vitamina D."
+                    ],
+                    correct: 0,
+                    explanation: "El cromo forma parte del factor de tolerancia a la glucosa y potencia la acción de la insulina en el metabolismo de carbohidratos."
+                },
+                {
+                    question: "El molibdeno es cofactor de:",
+                    alternatives: [
+                        "La nitrogenasa.",
+                        "La anhidrasa carbónica.",
+                        "La ATP sintasa.",
+                        "La citocromo oxidasa.",
+                        "La hexoquinasa."
+                    ],
+                    correct: 0,
+                    explanation: "El molibdeno es cofactor esencial de la nitrogenasa (fijación de N2) y xantina oxidasa (metabolismo de purinas)."
+                },
+                {
+                    question: "El cobalto es esencial para:",
+                    alternatives: [
+                        "La síntesis de vitamina B12.",
+                        "La formación de hemoglobina.",
+                        "La contracción muscular.",
+                        "La conducción nerviosa.",
+                        "La absorción de calcio."
+                    ],
+                    correct: 0,
+                    explanation: "El cobalto es el átomo central de la vitamina B12 (cobalamina), esencial para la eritropoyesis y función nerviosa."
+                },
+                {
+                    question: "El níquel está presente en:",
+                    alternatives: [
+                        "La enzima ureasa.",
+                        "La hemoglobina.",
+                        "La clorofila.",
+                        "La insulina.",
+                        "El colágeno."
+                    ],
+                    correct: 0,
+                    explanation: "El níquel es cofactor de la ureasa en algunas bacterias y plantas, catalizando la hidrólisis de la urea."
+                },
+                {
+                    question: "El vanadio puede tener efectos:",
+                    alternatives: [
+                        "Insulinomiméticos.",
+                        "Antibióticos.",
+                        "Anticoagulantes.",
+                        "Analgésicos.",
+                        "Antipiréticos."
+                    ],
+                    correct: 0,
+                    explanation: "El vanadio tiene efectos similares a la insulina, mejorando la captación de glucosa en células."
+                },
+                {
+                    question: "El silicio es importante para:",
+                    alternatives: [
+                        "La formación de tejido conectivo.",
+                        "La síntesis de hemoglobina.",
+                        "La conducción nerviosa.",
+                        "La contracción muscular.",
+                        "La visión."
+                    ],
+                    correct: 0,
+                    explanation: "El silicio participa en la síntesis de colágeno y glicosaminoglicanos, importantes para huesos, cartílagos y tejido conectivo."
+                },
+                {
+                    question: "El estaño puede influir en:",
+                    alternatives: [
+                        "El crecimiento óseo.",
+                        "La síntesis de proteínas.",
+                        "El metabolismo lipídico.",
+                        "La función hepática.",
+                        "La producción de orina."
+                    ],
+                    correct: 0,
+                    explanation: "El estaño parece estar relacionado con reacciones redox y puede influir en el crecimiento y desarrollo óseo."
+                },
+                {
+                    question: "En plantas, el boro es esencial para:",
+                    alternatives: [
+                        "La división celular.",
+                        "La formación de polen.",
+                        "La síntesis de clorofila.",
+                        "La absorción de agua.",
+                        "La respiración."
+                    ],
+                    correct: 1,
+                    explanation: "El boro es crucial para la formación y germinación del polen, y para el desarrollo del tubo polínico en plantas."
+                },
+                {
+                    question: "La deficiencia de molibdeno en plantas causa:",
+                    alternatives: [
+                        "Clorosis en hojas jóvenes.",
+                        "Acumulación de nitratos.",
+                        "Necrosis en bordes.",
+                        "Enanismo severo.",
+                        "Coloración púrpura."
+                    ],
+                    correct: 1,
+                    explanation: "La deficiencia de molibdeno impide la reducción de nitratos, causando su acumulación y síntomas de deficiencia de nitrógeno."
+                },
+                {
+                    question: "El cobre en plantas es importante para:",
+                    alternatives: [
+                        "La lignificación.",
+                        "La fotosíntesis.",
+                        "La respiración.",
+                        "Todas las anteriores.",
+                        "Ninguna de las anteriores."
+                    ],
+                    correct: 3,
+                    explanation: "El cobre participa en la lignificación, fotosíntesis (plastocianina) y respiración (citocromo oxidasa) en plantas."
+                },
+                {
+                    question: "El zinc en plantas es esencial para:",
+                    alternatives: [
+                        "La síntesis de triptófano.",
+                        "La formación de auxinas.",
+                        "La activación enzimática.",
+                        "Todas las anteriores.",
+                        "Ninguna de las anteriores."
+                    ],
+                    correct: 3,
+                    explanation: "El zinc es cofactor enzimático, participa en la síntesis de triptófano (precursor de auxinas) y activa múltiples enzimas."
+                },
+                {
+                    question: "El manganeso en plantas actúa en:",
+                    alternatives: [
+                        "El fotosistema II.",
+                        "La división del agua.",
+                        "La síntesis de clorofila.",
+                        "Todas las anteriores.",
+                        "Ninguna de las anteriores."
+                    ],
+                    correct: 3,
+                    explanation: "El manganeso es esencial para el fotosistema II, participa en la división del agua y síntesis de clorofila."
+                },
+                {
+                    question: "El hierro en plantas es componente de:",
+                    alternatives: [
+                        "Citocromos.",
+                        "Ferredoxina.",
+                        "Catalasa.",
+                        "Todas las anteriores.",
+                        "Ninguna de las anteriores."
+                    ],
+                    correct: 3,
+                    explanation: "El hierro forma parte de citocromos (cadena respiratoria), ferredoxina (fotosíntesis) y catalasa (protección oxidativa)."
+                },
+                {
+                    question: "El cloro en plantas participa en:",
+                    alternatives: [
+                        "La división del agua.",
+                        "El equilibrio iónico.",
+                        "La apertura estomática.",
+                        "Todas las anteriores.",
+                        "Ninguna de las anteriores."
+                    ],
+                    correct: 3,
+                    explanation: "El cloro participa en la división del agua en fotosíntesis, mantiene el equilibrio iónico y regula la apertura estomática."
+                },
+                {
+                    question: "El sodio en algunas plantas es:",
+                    alternatives: [
+                        "Esencial.",
+                        "Benéfico.",
+                        "Tóxico.",
+                        "Indiferente.",
+                        "Inhibidor."
+                    ],
+                    correct: 1,
+                    explanation: "En plantas halófitas y algunas C4, el sodio es benéfico aunque no esencial, mejorando el crecimiento en ciertas condiciones."
+                },
+                {
+                    question: "El cobalto es esencial para:",
+                    alternatives: [
+                        "Plantas leguminosas.",
+                        "Plantas gramíneas.",
+                        "Plantas C4.",
+                        "Plantas CAM.",
+                        "Todas las plantas."
+                    ],
+                    correct: 0,
+                    explanation: "El cobalto es esencial para plantas leguminosas porque es necesario para las bacterias fijadoras de nitrógeno en sus nódulos."
+                },
+                {
+                    question: "El níquel es esencial para:",
+                    alternatives: [
+                        "Plantas que metabolizan urea.",
+                        "Todas las plantas.",
+                        "Solo plantas C3.",
+                        "Solo plantas C4.",
+                        "Ninguna planta."
+                    ],
+                    correct: 1,
+                    explanation: "El níquel es esencial para todas las plantas como cofactor de la ureasa, importante en el metabolismo del nitrógeno."
+                },
+                {
+                    question: "El silicio en plantas proporciona:",
+                    alternatives: [
+                        "Resistencia mecánica.",
+                        "Protección contra patógenos.",
+                        "Tolerancia a sequía.",
+                        "Todas las anteriores.",
+                        "Ninguna de las anteriores."
+                    ],
+                    correct: 3,
+                    explanation: "El silicio se deposita en paredes celulares proporcionando resistencia mecánica, protección contra patógenos y tolerancia a estrés abiótico."
+                },
+                {
+                    question: "El elemento más limitante para el crecimiento de plantas es usually:",
+                    alternatives: [
+                        "Nitrógeno.",
+                        "Fósforo.",
+                        "Potasio.",
+                        "Calcio.",
+                        "Magnesio."
+                    ],
+                    correct: 0,
+                    explanation: "El nitrógeno es usualmente el nutriente más limitante para el crecimiento vegetal debido a su alta demanda y movilidad en suelos."
+                },
+                {
+                    question: "En suelos ácidos, la disponibilidad de ________ disminuye:",
+                    alternatives: [
+                        "Hierro.",
+                        "Manganeso.",
+                        "Aluminio.",
+                        "Fósforo.",
+                        "Molibdeno."
+                    ],
+                    correct: 4,
+                    explanation: "En suelos ácidos, la disponibilidad de molibdeno disminuye porque forma molibdatos insolubles, mientras que la de otros micronutrientes aumenta."
+                },
+                {
+                    question: "La clorosis intervenal es característica de deficiencia de:",
+                    alternatives: [
+                        "Magnesio.",
+                        "Hierro.",
+                        "Manganeso.",
+                        "Zinc.",
+                        "Boro."
+                    ],
+                    correct: 0,
+                    explanation: "La clorosis intervenal (venas verdes, tejido amarillo) es característica de deficiencia de magnesio, que es móvil en la planta."
+                },
+                {
+                    question: "La necrosis en ápices y bordes de hojas indica deficiencia de:",
+                    alternatives: [
+                        "Potasio.",
+                        "Calcio.",
+                        "Boro.",
+                        "Cobre.",
+                        "Cloro."
+                    ],
+                    correct: 0,
+                    explanation: "La necrosis en ápices y bordes de hojas es típica de deficiencia de potasio, que es muy móvil en la planta."
+                },
+                {
+                    question: "El encarrujamiento de hojas jóvenes indica deficiencia de:",
+                    alternatives: [
+                        "Calcio.",
+                        "Boro.",
+                        "Cobre.",
+                        "Molibdeno.",
+                        "Níquel."
+                    ],
+                    correct: 0,
+                    explanation: "El encarrujamiento y deformación de hojas jóvenes indica deficiencia de calcio, que es inmóvil en la planta."
+                },
+                {
+                    question: "La acumulación de antocianinas (coloración púrpura) indica deficiencia de:",
+                    alternatives: [
+                        "Fósforo.",
+                        "Nitrógeno.",
+                        "Potasio.",
+                        "Magnesio.",
+                        "Azufre."
+                    ],
+                    correct: 0,
+                    explanation: "La acumulación de antocianinas causando coloración púrpura en hojas y tallos es característica de deficiencia de fósforo."
+                },
+                {
+                    question: "El acortamiento internodal y rosetamiento indican deficiencia de:",
+                    alternatives: [
+                        "Zinc.",
+                        "Boro.",
+                        "Cobre.",
+                        "Manganeso.",
+                        "Molibdeno."
+                    ],
+                    correct: 0,
+                    explanation: "El acortamiento internodal, rosetamiento y hojas pequeñas son síntomas característicos de deficiencia de zinc."
+                },
+                {
+                    question: "La muerte de meristemos apicales indica deficiencia de:",
+                    alternatives: [
+                        "Boro.",
+                        "Calcio.",
+                        "Cobre.",
+                        "Ambos A y B.",
+                        "Ambos B y C."
+                    ],
+                    correct: 3,
+                    explanation: "La muerte de meristemos apicales puede indicar deficiencia de boro o calcio, ambos inmóviles en la planta."
+                },
+                {
+                    question: "La clorosis generalizada en hojas viejas indica deficiencia de:",
+                    alternatives: [
+                        "Nitrógeno.",
+                        "Magnesio.",
+                        "Potasio.",
+                        "Fósforo.",
+                        "Todas las anteriores."
+                    ],
+                    correct: 4,
+                    explanation: "La clorosis generalizada en hojas viejas indica deficiencia de nutrientes móviles como nitrógeno, magnesio, potasio y fósforo."
+                },
+                {
+                    question: "Los síntomas de deficiencia aparecen primero en hojas jóvenes para:",
+                    alternatives: [
+                        "Hierro.",
+                        "Calcio.",
+                        "Boro.",
+                        "Cobre.",
+                        "Todas las anteriores."
+                    ],
+                    correct: 4,
+                    explanation: "Los nutrientes inmóviles como hierro, calcio, boro y cobre muestran síntomas primero en hojas jóvenes y meristemos."
+                },
+                {
+                    question: "La toxicidad por manganeso se manifiesta como:",
+                    alternatives: [
+                        "Manchas necróticas.",
+                        "Clorosis intervenal.",
+                        "Enanismo.",
+                        "Acumulación de antocianinas.",
+                        "Necrosis marginal."
+                    ],
+                    correct: 0,
+                    explanation: "La toxicidad por manganeso causa manchas necróticas en hojas viejas debido a su acumulación en tejidos."
+                },
+                {
+                    question: "La toxicidad por boro causa:",
+                    alternatives: [
+                        "Necrosis marginal y apical.",
+                        "Clorosis generalizada.",
+                        "Encarrujamiento.",
+                        "Rosetamiento.",
+                        "Coloración púrpura."
+                    ],
+                    correct: 0,
+                    explanation: "La toxicidad por boro causa necrosis marginal y apical en hojas, comenzando en las más viejas."
+                },
+                {
+                    question: "La salinidad afecta principalmente la absorción de:",
+                    alternatives: [
+                        "Agua.",
+                        "Nitrógeno.",
+                        "Fósforo.",
+                        "Potasio.",
+                        "Calcio."
+                    ],
+                    correct: 0,
+                    explanation: "La salinidad reduce el potencial hídrico del suelo, dificultando la absorción de agua por las raíces."
+                },
+                {
+                    question: "El aluminio en suelos ácidos es tóxico porque:",
+                    alternatives: [
+                        "Daña las raíces.",
+                        "Inhibe la división celular.",
+                        "Altera la absorción de nutrientes.",
+                        "Todas las anteriores.",
+                        "Ninguna de las anteriores."
+                    ],
+                    correct: 3,
+                    explanation: "El aluminio tóxico en suelos ácidos daña raíces, inhibe la división celular y altera la absorción de agua y nutrientes."
+                },
+                {
+                    question: "La disponibilidad de hierro aumenta en suelos:",
+                    alternatives: [
+                        "Ácidos.",
+                        "Alcalinos.",
+                        "Salinos.",
+                        "Calcáreos.",
+                        "Arenosos."
+                    ],
+                    correct: 0,
+                    explanation: "La disponibilidad de hierro aumenta en suelos ácidos donde forma compuestos más solubles, mientras que en alcalinos precipita."
+                },
+                {
+                    question: "El encalado de suelos corrige la deficiencia de:",
+                    alternatives: [
+                        "Calcio.",
+                        "Molibdeno.",
+                        "Ambos A y B.",
+                        "Nitrógeno.",
+                        "Fósforo."
+                    ],
+                    correct: 2,
+                    explanation: "El encalado corrige deficiencia de calcio y aumenta el pH, mejorando la disponibilidad de molibdeno en suelos ácidos."
+                },
+                {
+                    question: "La fertilización con quelatos se usa para corregir deficiencias de:",
+                    alternatives: [
+                        "Micronutrientes.",
+                        "Macronutrientes.",
+                        "Solo hierro.",
+                        "Solo zinc.",
+                        "Solo manganeso."
+                    ],
+                    correct: 0,
+                    explanation: "Los fertilizantes quelatados se usan para micronutrientes como hierro, zinc, manganeso y cobre, manteniéndolos disponibles en el suelo."
+                },
+                {
+                    question: "La ley del mínimo establece que:",
+                    alternatives: [
+                        "El crecimiento es limitado por el nutriente más deficiente.",
+                        "Todos los nutrientes son igualmente importantes.",
+                        "El exceso de un nutriente compensa las deficiencias.",
+                        "Los micronutrientes no limitan el crecimiento.",
+                        "El agua es siempre el factor limitante."
+                    ],
+                    correct: 0,
+                    explanation: "La ley del mínimo de Liebig establece que el crecimiento vegetal es limitado por el nutriente que se encuentra en menor cantidad relativa a las necesidades de la planta."
+                },
+                {
+                    question: "La sinergia entre nutrientes ocurre cuando:",
+                    alternatives: [
+                        "Un nutriente mejora la absorción de otro.",
+                        "Los nutrientes compiten por su absorción.",
+                        "Un nutriente inhibe la absorción de otro.",
+                        "Los nutrientes son antagónicos.",
+                        "Los nutrientes no interactúan."
+                    ],
+                    correct: 0,
+                    explanation: "La sinergia ocurre cuando un nutriente facilita la absorción o utilización de otro, como el potasio que mejora la utilización de nitrógeno."
+                },
+                {
+                    question: "El antagonismo entre nutrientes ocurre cuando:",
+                    alternatives: [
+                        "Un nutriente reduce la absorción de otro.",
+                        "Los nutrientes se complementan.",
+                        "Los nutrientes son sinérgicos.",
+                        "Los nutrientes no interactúan.",
+                        "Un nutriente es tóxico."
+                    ],
+                    correct: 0,
+                    explanation: "El antagonismo ocurre cuando un nutriente reduce la absorción o utilización de otro, como el exceso de fósforo que reduce la absorción de zinc."
+                },
+                {
+                    question: "La relación ideal N:P:K en fertilizantes para crecimiento vegetativo es aproximadamente:",
+                    alternatives: [
+                        "3:1:2",
+                        "1:1:1", 
+                        "2:1:1",
+                        "1:2:1",
+                        "1:1:2"
+                    ],
+                    correct: 0,
+                    explanation: "Para crecimiento vegetativo, la relación ideal suele ser 3:1:2 (N:P:K), con mayor proporción de nitrógeno para promover desarrollo foliar."
+                },
+                {
+                    question: "En la fase reproductiva, las plantas requieren más:",
+                    alternatives: [
+                        "Fósforo y potasio.",
+                        "Nitrógeno y calcio.",
+                        "Magnesio y azufre.",
+                        "Hierro y manganeso.",
+                        "Boro y cobre."
+                    ],
+                    correct: 0,
+                    explanation: "En la fase reproductiva, las plantas requieren más fósforo (para energía y división celular) y potasio (para transporte de fotosintatos)."
+                },
+                {
+                    question: "La fertilización foliar es efectiva para corregir deficiencias de:",
+                    alternatives: [
+                        "Micronutrientes.",
+                        "Macronutrientes.",
+                        "Solo hierro.",
+                        "Solo zinc.",
+                        "Todos los nutrientes."
+                    ],
+                    correct: 0,
+                    explanation: "La fertilización foliar es particularmente efectiva para micronutrientes, que se requieren en pequeñas cantidades y pueden ser absorbidos rápidamente."
+                },
+                {
+                    question: "El diagnóstico foliar se basa en:",
+                    alternatives: [
+                        "Análisis químico de tejidos.",
+                        "Observación de síntomas visuales.",
+                        "Ambos A y B.",
+                        "Análisis de suelo solamente.",
+                        "Observación de raíces."
+                    ],
+                    correct: 2,
+                    explanation: "El diagnóstico foliar combina análisis químico de tejidos con observación de síntomas visuales para identificar deficiencias nutricionales."
+                },
+                {
+                    question: "Los valores críticos en análisis foliar indican:",
+                    alternatives: [
+                        "Concentración por debajo de la cual aparece deficiencia.",
+                        "Concentración óptima para máximo crecimiento.",
+                        "Concentración tóxica.",
+                        "Concentración promedio.",
+                        "Concentración máxima tolerable."
+                    ],
+                    correct: 0,
+                    explanation: "El valor crítico es la concentración de nutriente en tejido por debajo de la cual es probable que ocurra deficiencia y reduzca el crecimiento."
+                },
+                {
+                    question: "La movilidad de nutrientes en la planta afecta:",
+                    alternatives: [
+                        "La localización de síntomas de deficiencia.",
+                        "La frecuencia de fertilización.",
+                        "El método de aplicación.",
+                        "Todas las anteriores.",
+                        "Ninguna de las anteriores."
+                    ],
+                    correct: 3,
+                    explanation: "La movilidad afecta dónde aparecen los síntomas (hojas viejas vs jóvenes), la frecuencia de aplicación y el método más efectivo de fertilización."
+                }
+            ];
+
+            // Mezclar y seleccionar 100 preguntas diferentes
+            let todasLasPreguntas = [...questionDatabase];
+            
+            // Verificar que tenemos suficientes preguntas
+            if (todasLasPreguntas.length < TOTAL_QUESTIONS) {
+                console.warn(`No hay suficientes preguntas únicas. Se repetirán algunas.`);
+            }
+            
+            // Mezclar aleatoriamente
+            todasLasPreguntas = todasLasPreguntas
+                .sort(() => Math.random() - 0.5);
+            
+            // Si necesitamos más preguntas, repetiremos algunas pero mezcladas
+            while (todasLasPreguntas.length < TOTAL_QUESTIONS) {
+                const preguntasExtra = [...questionDatabase]
+                    .sort(() => Math.random() - 0.5)
+                    .slice(0, TOTAL_QUESTIONS - todasLasPreguntas.length);
+                todasLasPreguntas = [...todasLasPreguntas, ...preguntasExtra];
+            }
+            
+            // Tomar exactamente 100 preguntas
+            todasLasPreguntas = todasLasPreguntas.slice(0, TOTAL_QUESTIONS);
+
+            return todasLasPreguntas.map((q, index) => ({
+                id: index + 1,
+                questionText: q.question,
+                explanation: q.explanation,
+                alternatives: q.alternatives.map((text, i) => ({
+                    text: text,
+                    isCorrect: i === q.correct
+                })),
+                userAnswer: null,
+                explanationVisible: false
+            }));
+        }
+
+        // --- Datos COMPLETOS del Repaso en PDF ---
+        const pdfContent = [
+            {
+                title: "Página 1 - Conceptos Fundamentales y Clasificación",
+                content: `
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <h2 class="text-2xl font-bold text-blue-800 mb-4 text-center">BIOELEMENTOS – Desarrollo Extremo Nivel UNMSM (San Marcos)</h2>
+                        
+                        <div class="mb-6">
+                            <h3 class="text-xl font-bold text-green-700 mb-3 border-b-2 border-green-200 pb-2">I. Conceptos Fundamentales</h3>
+                            <div class="bg-gray-50 p-4 rounded-lg border-l-4 border-blue-500">
+                                <p class="font-semibold mb-2 text-blue-800">1. Definición:</p>
+                                <p class="mb-3 pl-4">Átomos químicos esenciales que forman biomoléculas y participan en procesos vitales de plantas y animales.</p>
+                                
+                                <p class="font-semibold mb-2 text-blue-800">2. Importancia biológica y química:</p>
+                                <ul class="list-disc list-inside space-y-2 ml-4">
+                                    <li class="bg-white p-2 rounded">Construcción de biomoléculas (proteínas, carbohidratos, lípidos, ácidos nucleicos)</li>
+                                    <li class="bg-white p-2 rounded">Participación en reacciones metabólicas: catabolismo y anabolismo</li>
+                                    <li class="bg-white p-2 rounded">Mantenimiento de homeostasis: equilibrio hídrico, iónico y ácido-base</li>
+                                    <li class="bg-white p-2 rounded">Señalización celular y división celular</li>
+                                </ul>
+                                
+                                <p class="font-semibold mt-4 mb-2 text-blue-800">3. Distinción:</p>
+                                <ul class="list-disc list-inside space-y-2 ml-4">
+                                    <li class="bg-blue-50 p-2 rounded"><span class="font-bold text-blue-700">Primarios:</span> C, H, O, N</li>
+                                    <li class="bg-green-50 p-2 rounded"><span class="font-bold text-green-700">Secundarios:</span> Na, K, Ca, Mg, Cl, P, S</li>
+                                    <li class="bg-yellow-50 p-2 rounded"><span class="font-bold text-yellow-700">Oligoelementos:</span> Fe, Zn, Cu, I, Se, Mn, Co, Mo, Cr, Ni, F</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <h3 class="text-xl font-bold text-green-700 mb-3 border-b-2 border-green-200 pb-2">II. Clasificación y Abundancia según San Marcos</h3>
+                            <table class="bioelemento-table">
+                                <thead>
+                                    <tr>
+                                        <th class="py-3 px-4">Tipo</th>
+                                        <th class="py-3 px-4">Elementos</th>
+                                        <th class="py-3 px-4">% del cuerpo</th>
+                                        <th class="py-3 px-4">Función general</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="font-semibold text-blue-700">Primario</td>
+                                        <td>C, H, O, N</td>
+                                        <td>~96%</td>
+                                        <td>Estructura de biomoléculas</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold text-green-700">Secundario</td>
+                                        <td>Na, K, Ca, Mg, Cl, P, S</td>
+                                        <td>~4%</td>
+                                        <td>Balance osmótico, cofactores, estructura</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold text-yellow-700">Oligoelementos</td>
+                                        <td>Fe, Zn, Cu, I, Se, Mn, Co, Mo</td>
+                                        <td>&lt;0.1%</td>
+                                        <td>Cofactores enzimáticos, regulación</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "Página 2 - Funciones y Aplicaciones I",
+                content: `
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <h3 class="text-xl font-bold text-green-700 mb-4 border-b-2 border-green-200 pb-2">IV. Funciones y aplicaciones en los seres vivos</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                                <h4 class="font-bold text-blue-800 mb-2 text-lg">1. Carbono (C)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Forma cadenas y anillos de biomoléculas</li>
+                                    <li class="bg-white p-2 rounded">Base de carbohidratos, lípidos, proteínas y ácidos nucleicos</li>
+                                    <li class="bg-white p-2 rounded">Participa en fotosíntesis (fijación de CO₂ → glucosa) y respiración celular (oxidación → ATP)</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                                <h4 class="font-bold text-green-800 mb-2 text-lg">2. Hidrógeno (H)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Componente del agua (H₂O)</li>
+                                    <li class="bg-white p-2 rounded">Puentes de hidrógeno → estructura de proteínas y ADN</li>
+                                    <li class="bg-white p-2 rounded">Participa en fotosíntesis y respiración (transporte de electrones)</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-red-50 p-4 rounded-lg border-l-4 border-red-500">
+                                <h4 class="font-bold text-red-800 mb-2 text-lg">3. Oxígeno (O)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Respiración celular → aceptor final de electrones</li>
+                                    <li class="bg-white p-2 rounded">Componente del agua y biomoléculas</li>
+                                    <li class="bg-white p-2 rounded">Participa en oxidación de glucosa → ATP</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-500">
+                                <h4 class="font-bold text-purple-800 mb-2 text-lg">4. Nitrógeno (N)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Aminoácidos → proteínas</li>
+                                    <li class="bg-white p-2 rounded">Nucleótidos → ADN, ARN</li>
+                                    <li class="bg-white p-2 rounded">Participa en síntesis de clorofila (plantas)</li>
+                                    <li class="bg-white p-2 rounded">Ciclo del nitrógeno → fijación biológica por bacterias</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-500">
+                                <h4 class="font-bold text-indigo-800 mb-2 text-lg">5. Fósforo (P) – secundario según San Marcos</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">ATP, ADP → energía celular</li>
+                                    <li class="bg-white p-2 rounded">Fosfolípidos → membrana celular</li>
+                                    <li class="bg-white p-2 rounded">Ácidos nucleicos → estructura genética</li>
+                                    <li class="bg-white p-2 rounded">Fotosíntesis → ATP y NADPH como energía química</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-500">
+                                <h4 class="font-bold text-yellow-800 mb-2 text-lg">6. Azufre (S) – secundario</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Aminoácidos: cisteína y metionina → puentes disulfuro</li>
+                                    <li class="bg-white p-2 rounded">Cofactores enzimáticos</li>
+                                    <li class="bg-white p-2 rounded">Síntesis de proteínas y vitaminas (biotina, tiamina)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "Página 3 - Funciones y Aplicaciones II",
+                content: `
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <div class="space-y-4">
+                            <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                                <h4 class="font-bold text-blue-800 mb-2 text-lg">7. Sodio (Na)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Equilibrio osmótico y líquido extracelular</li>
+                                    <li class="bg-white p-2 rounded">Impulso nervioso → bomba Na⁺/K⁺</li>
+                                    <li class="bg-white p-2 rounded">Transporte activo y difusión</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                                <h4 class="font-bold text-green-800 mb-2 text-lg">8. Potasio (K)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Equilibrio osmótico intracelular</li>
+                                    <li class="bg-white p-2 rounded">Contracción muscular</li>
+                                    <li class="bg-white p-2 rounded">Síntesis proteica</li>
+                                    <li class="bg-white p-2 rounded">Participa en bomba Na⁺/K⁺ → mantenimiento potencial de membrana</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-red-50 p-4 rounded-lg border-l-4 border-red-500">
+                                <h4 class="font-bold text-red-800 mb-2 text-lg">9. Calcio (Ca)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Contracción muscular</li>
+                                    <li class="bg-white p-2 rounded">Coagulación sanguínea</li>
+                                    <li class="bg-white p-2 rounded">Señalización celular (segundo mensajero)</li>
+                                    <li class="bg-white p-2 rounded">Componentes de huesos y paredes celulares vegetales</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-500">
+                                <h4 class="font-bold text-purple-800 mb-2 text-lg">10. Magnesio (Mg)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Cofactor enzimático</li>
+                                    <li class="bg-white p-2 rounded">Clorofila → fotosíntesis</li>
+                                    <li class="bg-white p-2 rounded">Estabiliza ribosomas</li>
+                                    <li class="bg-white p-2 rounded">ATP-metabolismo</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-500">
+                                <h4 class="font-bold text-indigo-800 mb-2 text-lg">11. Cloro (Cl)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Balance hídrico</li>
+                                    <li class="bg-white p-2 rounded">Secreción gástrica (HCl)</li>
+                                    <li class="bg-white p-2 rounded">Osmosis y excitabilidad nerviosa</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-500">
+                                <h4 class="font-bold text-yellow-800 mb-2 text-lg">12. Hierro (Fe)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Transporte de oxígeno → hemoglobina y mioglobina</li>
+                                    <li class="bg-white p-2 rounded">Citocromos → respiración celular</li>
+                                    <li class="bg-white p-2 rounded">Carencias → anemia ferropénica</li>
+                                    <li class="bg-white p-2 rounded">Exceso → hemocromatosis</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "Página 4 - Oligoelementos y Funciones Celulares",
+                content: `
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <div class="space-y-4">
+                            <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                                <h4 class="font-bold text-blue-800 mb-2 text-lg">13. Cobre (Cu)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Cofactor enzimático → citocromo C oxidasa</li>
+                                    <li class="bg-white p-2 rounded">Síntesis de hemoglobina</li>
+                                    <li class="bg-white p-2 rounded">Antioxidante (superóxido dismutasa)</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                                <h4 class="font-bold text-green-800 mb-2 text-lg">14. Zinc (Zn)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Cofactor enzimático → ADN polimerasa</li>
+                                    <li class="bg-white p-2 rounded">Síntesis de proteínas y división celular</li>
+                                    <li class="bg-white p-2 rounded">Cicatrización y función inmune</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-red-50 p-4 rounded-lg border-l-4 border-red-500">
+                                <h4 class="font-bold text-red-800 mb-2 text-lg">15. Yodo (I)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Hormonas tiroideas → T3 y T4</li>
+                                    <li class="bg-white p-2 rounded">Crecimiento y metabolismo</li>
+                                    <li class="bg-white p-2 rounded">Deficiencia → bocio, cretinismo</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-500">
+                                <h4 class="font-bold text-purple-800 mb-2 text-lg">16. Selenio (Se)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Glutatión peroxidasa → defensa antioxidante</li>
+                                    <li class="bg-white p-2 rounded">Regulación tiroidea</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-500">
+                                <h4 class="font-bold text-indigo-800 mb-2 text-lg">17. Manganeso (Mn)</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded">Cofactor enzimático → fotosíntesis, síntesis de aminoácidos</li>
+                                    <li class="bg-white p-2 rounded">Metabolismo de carbohidratos y lípidos</li>
+                                </ul>
+                            </div>
+
+                            <div class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-500 mt-6">
+                                <h4 class="font-bold text-yellow-800 mb-3 text-lg">Funciones celulares y fisiológicas específicas</h4>
+                                <ul class="list-disc list-inside ml-4 space-y-2">
+                                    <li class="bg-white p-2 rounded"><span class="font-bold">Fotosíntesis:</span> C, H, O, Mg, Fe, Mn</li>
+                                    <li class="bg-white p-2 rounded"><span class="font-bold">Respiración celular:</span> C, H, O, N, Fe, Cu</li>
+                                    <li class="bg-white p-2 rounded"><span class="font-bold">Bomba Na⁺/K⁺:</span> Na, K, Mg, ATP</li>
+                                    <li class="bg-white p-2 rounded"><span class="font-bold">Osmosis y equilibrio hídrico:</span> Na, K, Cl</li>
+                                    <li class="bg-white p-2 rounded"><span class="font-bold">División celular y reproducción:</span> Zn, P, Mg</li>
+                                    <li class="bg-white p-2 rounded"><span class="font-bold">Coagulación y contracción:</span> Ca, K, Mg</li>
+                                    <li class="bg-white p-2 rounded"><span class="font-bold">Síntesis de proteínas:</span> N, S, Zn, Mg</li>
+                                    <li class="bg-white p-2 rounded"><span class="font-bold">Señalización celular:</span> Ca, Mg, K</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "Página 5 - Carencias, Excesos y Biomoléculas",
+                content: `
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <h3 class="text-xl font-bold text-green-700 mb-4 border-b-2 border-green-200 pb-2">V. Carencias y excesos (Animales y Plantas)</h3>
+                        
+                        <div class="overflow-x-auto mb-6">
+                            <table class="bioelemento-table">
+                                <thead>
+                                    <tr>
+                                        <th>Elemento</th>
+                                        <th>Carencia</th>
+                                        <th>Efecto</th>
+                                        <th>Exceso</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="font-semibold">Fe</td>
+                                        <td>Anemia</td>
+                                        <td>Fatiga, palidez</td>
+                                        <td>Hemocromatosis</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">Zn</td>
+                                        <td>Retraso de crecimiento</td>
+                                        <td>Caída cabello, mal cicatrización</td>
+                                        <td>Toxicidad → vómitos</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">Cu</td>
+                                        <td>Anemia, defectos óseos</td>
+                                        <td>Fragilidad capilar</td>
+                                        <td>Toxicidad hepática</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">I</td>
+                                        <td>Bocio, cretinismo</td>
+                                        <td>Hipotiroidismo</td>
+                                        <td>Hipertiroidismo</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">Mg</td>
+                                        <td>Calambres, arritmias</td>
+                                        <td>Debilidad</td>
+                                        <td>Diarrea</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">Ca</td>
+                                        <td>Osteoporosis, hipocalcemia</td>
+                                        <td>Tetania</td>
+                                        <td>Hipercalcemia</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">P</td>
+                                        <td>Debilidad ósea, falta de ATP</td>
+                                        <td>Fatiga</td>
+                                        <td>Toxicidad renal</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">K</td>
+                                        <td>Hipokalemia</td>
+                                        <td>Arritmias</td>
+                                        <td>Hiperkalemia</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">Na</td>
+                                        <td>Hiponatremia</td>
+                                        <td>Confusión, calambres</td>
+                                        <td>Hipernatremia</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mb-6">
+                            <h4 class="font-bold text-blue-800 mb-3">En plantas:</h4>
+                            <ul class="list-disc list-inside space-y-2 ml-4">
+                                <li class="bg-gray-50 p-2 rounded"><span class="font-bold">N</span> → clorosis, crecimiento débil</li>
+                                <li class="bg-gray-50 p-2 rounded"><span class="font-bold">P</span> → retraso en floración y fructificación</li>
+                                <li class="bg-gray-50 p-2 rounded"><span class="font-bold">K</span> → bordes amarillos, hojas marchitas</li>
+                                <li class="bg-gray-50 p-2 rounded"><span class="font-bold">Mg</span> → clorosis interveinal</li>
+                                <li class="bg-gray-50 p-2 rounded"><span class="font-bold">Fe</span> → clorosis jóvenes hojas</li>
+                            </ul>
+                        </div>
+
+                        <h3 class="text-xl font-bold text-green-700 mb-4 border-b-2 border-green-200 pb-2">VI. Bioelementos en biomoléculas</h3>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="bioelemento-table">
+                                <thead>
+                                    <tr>
+                                        <th>Biomolécula</th>
+                                        <th>Elementos clave</th>
+                                        <th>Función</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="font-semibold">Carbohidratos</td>
+                                        <td>C, H, O</td>
+                                        <td>Energía rápida, estructura</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">Lípidos</td>
+                                        <td>C, H, O, P</td>
+                                        <td>Energía almacenada, membranas</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">Proteínas</td>
+                                        <td>C, H, O, N, S</td>
+                                        <td>Enzimas, estructura, transporte</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">Ácidos nucleicos</td>
+                                        <td>C, H, O, N, P</td>
+                                        <td>Almacenamiento de información genética</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">Vitaminas</td>
+                                        <td>C, H, O, S, P</td>
+                                        <td>Cofactores, antioxidantes</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-semibold">Pigmentos</td>
+                                        <td>Mg, Fe</td>
+                                        <td>Clorofila, hemoglobina</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `
+            }
+        ];
+
+        // --- FUNCIÓN handleAnswer ---
+        function handleAnswer(qIndex, altIndex) {
+            if (questions[qIndex].userAnswer !== null) {
+                return;
+            }
+
+            questions[qIndex].userAnswer = altIndex;
+            const isCorrect = questions[qIndex].alternatives[altIndex].isCorrect;
+
+            if (isCorrect) {
+                playCorrectSound();
+            } else {
+                vibrateIncorrect();
+            }
+
+            const questionContainer = document.getElementById(`${APP_ID}-q-${qIndex}`);
+            if (questionContainer) {
+                questionContainer.outerHTML = renderQuestion(questions[qIndex], qIndex);
+            }
+            
+            // ✅ NUEVO: Chequear milestone cada 10 preguntas
+            checkMilestone(qIndex);
+            
+            const answered = getAnsweredCount();
+            if (answered === TOTAL_QUESTIONS) {
+                setTimeout(() => {
+                    alert("¡Has completado todas las preguntas! Presiona el botón '📊' para ver tus resultados.");
+                }, 500);
+            }
+        }
+
+        // --- [TODAS LAS DEMÁS FUNCIONES PERMANECEN IGUALES] ---
+        function getAnsweredCount() {
+            return questions.filter(q => q.userAnswer !== null).length;
+        }
+
+        function renderStartPage() {
+            const container = document.getElementById('app-container');
+            container.innerHTML = `
+                <div class="card text-center max-w-lg mx-auto p-8">
+                    <img src="https://placehold.co/100x100/1D4ED8/FFFFFF?text=SomosUni" alt="Logo SomosUni" class="mx-auto h-24 w-24 rounded-full shadow-lg mb-4">
+                    
+                    <h1 class="text-4xl font-extrabold text-blue-800 mb-6">${TEST_NAME}</h1>
+                    
+                    <div class="mb-8">
+                        <input type="text" id="${APP_ID}-name" value="${participantName}" placeholder="Ingresa tu nombre" 
+                               class="w-full p-4 text-lg border-2 border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 transition duration-150 text-center font-medium">
+                        <p id="${APP_ID}-name-error" class="text-base text-red-600 mt-3 hidden">Por favor, ingresa tu nombre completo para iniciar.</p>
+                    </div>
+
+                    <button onclick="initQuiz()" id="${APP_ID}-start-btn"
+                            class="w-full bg-blue-600 text-white font-bold py-4 text-lg rounded-xl hover:bg-blue-700 transition duration-200 shadow-md transform hover:scale-[1.01]">
+                        INICIAR CUESTIONARIO Y VER PREGUNTAS
+                    </button>
+                    
+                    <button onclick="showPDFReview()"
+                            class="mt-5 w-full bg-yellow-400 text-gray-800 font-medium py-4 text-lg rounded-xl hover:bg-yellow-500 transition duration-200 shadow-md">
+                        📚 REPASO COMPLETO (PDF) antes de Empezar
+                    </button>
+
+                    <div class="mt-12 pt-6 border-t-2 border-gray-300 text-center bg-blue-50 rounded-xl p-5">
+                        <p class="text-lg font-semibold text-gray-700">
+                            Desarrollado por: 
+                            <span class="font-bold text-blue-800 text-xl">Percy Romeo Gonzales Tarazona</span>
+                        </p>
+                        <p class="text-base font-medium text-gray-600 mt-2">
+                            Ingeniero y Matemático
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function initQuiz() {
+            const nameInput = document.getElementById(`${APP_ID}-name`);
+            const errorElement = document.getElementById(`${APP_ID}-name-error`);
+            participantName = nameInput.value.trim();
+
+            if (participantName.length < 3) {
+                errorElement.classList.remove('hidden');
+                nameInput.focus();
+                return;
+            }
+
+            errorElement.classList.add('hidden');
+            questions = generateQuestions();
+            currentPage = 'quiz';
+            renderQuizPage();
+        }
+
+        function renderQuizPage() {
+            const container = document.getElementById('app-container');
+            const questionsHtml = questions.map((q, i) => renderQuestion(q, i)).join('');
+            
+            container.innerHTML = `
+                <div id="quiz-header-fixed">
+                    <h1 class="text-4xl font-extrabold text-blue-800 text-center">${TEST_NAME}</h1>
+                    <p class="text-center text-gray-600 mt-2">Estudiante: ${participantName}</p>
+                </div>
+
+                <div class="quiz-content pb-20">${questionsHtml}</div>
+                
+                <button id="floating-stats-button" onclick="toggleModal(true)"
+                        class="bg-indigo-600 text-white text-3xl font-bold rounded-full shadow-xl flex items-center justify-center border-4 border-white hover:bg-indigo-700">
+                    📊
+                </button>
+            `;
+            
+            isModalOpen = false;
+            isPDFModalOpen = false;
+            isMilestoneModalOpen = false;
+            renderModal();
+        }
+
+        function renderQuestion(question, qIndex) {
+            const questionId = `${APP_ID}-q-${qIndex}`;
+            const isAnswered = question.userAnswer !== null;
+
+            let globalEmoji = '';
+            if (isAnswered) {
+                globalEmoji = question.alternatives[question.userAnswer].isCorrect 
+                              ? `<span class="ml-2 text-2xl" aria-label="Correcto">😄</span>`
+                              : `<span class="ml-2 text-2xl" aria-label="Incorrecto">😞</span>`;
+            }
+
+            return `
+                <div id="${questionId}" class="question-card">
+                    <div class="bg-blue-50 p-4 rounded-xl mb-4 border-l-4 border-blue-400">
+                        <p class="text-lg font-bold text-gray-800 whitespace-pre-line">
+                            P${qIndex + 1}: ${question.questionText}
+                            ${globalEmoji}
+                        </p>
+                    </div>
+
+                    <div class="space-y-2">
+                        ${question.alternatives.map((alt, index) => {
+                            const isCorrect = alt.isCorrect;
+                            const isUserChoice = question.userAnswer === index;
+                            let classes = 'alternative-label';
+                            let emoji = '';
+
+                            if (isAnswered) {
+                                classes += ' disabled';
+                                if (isUserChoice) {
+                                    classes += isCorrect ? ' correct' : ' incorrect';
+                                    emoji = isCorrect ? '😄' : '😞';
+                                } else if (isCorrect && question.explanationVisible) {
+                                    classes += ' correct';
+                                    emoji = '✅';
+                                }
+                            }
+
+                            return `
+                                <label class="${classes}" data-q-index="${qIndex}" data-alt-index="${index}">
+                                    <input type="radio" name="${APP_ID}-alt-q-${qIndex}" value="${index}" 
+                                           ${isUserChoice ? 'checked' : ''}
+                                           ${isAnswered ? 'disabled' : ''}
+                                           onclick="handleAnswer(${qIndex}, ${index})">
+                                    <span class="mr-3 font-medium text-blue-800">${String.fromCharCode(65 + index)}.</span>
+                                    <span class="flex-1 text-gray-700">${alt.text}</span>
+                                    <span class="text-2xl ml-2">${emoji}</span>
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
+                    
+                    <div id="${questionId}-feedback-area" class="mt-4">
+                        ${isAnswered ? renderAnswerFeedback(question, qIndex) : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAnswerFeedback(question, qIndex) {
+            const questionId = `${APP_ID}-q-${qIndex}`;
+            const feedbackArea = document.getElementById(`${questionId}-feedback-area`);
+            
+            if (!question.explanationVisible) {
+                const html = `
+                    <button onclick="showAnswerExplanation(${qIndex})"
+                            class="mt-2 text-sm bg-yellow-400 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-yellow-500 transition duration-200 shadow-sm">
+                        VER RESPUESTA Y EXPLICACIÓN
+                    </button>
+                `;
+                if (feedbackArea) { feedbackArea.innerHTML = html; }
+                return html;
+            }
+            
+            const correctAnswer = question.alternatives.find(a => a.isCorrect);
+            const correctIndex = question.alternatives.findIndex(a => a.isCorrect);
+            
+            const html = `
+                <div class="bg-indigo-100 p-4 rounded-xl shadow-inner border-l-4 border-indigo-500 mt-2">
+                    <p class="font-bold text-indigo-700 mb-2">Explicación de la Respuesta:</p>
+                    <p class="text-sm text-indigo-800">${question.explanation}</p>
+                    <p class="mt-3 text-base font-semibold text-indigo-900">
+                        Correcta: ${String.fromCharCode(65 + correctIndex)} - ${correctAnswer.text}
+                    </p>
+                </div>
+            `;
+            if (feedbackArea) { feedbackArea.innerHTML = html; }
+            return html;
+        }
+
+        function showAnswerExplanation(qIndex) {
+            questions[qIndex].explanationVisible = true;
+            const questionContainer = document.getElementById(`${APP_ID}-q-${qIndex}`);
+            if (questionContainer) {
+                questionContainer.outerHTML = renderQuestion(questions[qIndex], qIndex);
+            }
+        }
+
+        function toggleModal(open) {
+            if (typeof open === 'boolean') {
+                isModalOpen = open;
+            } else {
+                isModalOpen = !isModalOpen;
+            }
+            renderModal();
+        }
+
+        function renderModal() {
+            const modalRoot = document.getElementById('modal-root');
+            
+            if (!isModalOpen) {
+                if (!isPDFModalOpen && !isMilestoneModalOpen) {
+                    modalRoot.innerHTML = '';
+                }
+                return;
+            }
+
+            if (isPDFModalOpen || isMilestoneModalOpen) {
+                togglePDFReview(false);
+                closeMilestone();
+            }
+
+            const answeredCount = getAnsweredCount();
+            
+            modalRoot.innerHTML = `
+                <div class="modal-overlay" onclick="toggleModal(false)">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <div class="flex justify-between items-start border-b pb-2 mb-4">
+                            <h3 class="text-xl font-bold text-gray-800 truncate">
+                                Estadísticas de ${participantName}
+                            </h3>
+                            <button onclick="toggleModal(false)" class="text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none">
+                                &times;
+                            </button>
+                        </div>
+
+                        <div class="mb-6 p-4 bg-yellow-50 rounded-lg border-2 border-yellow-300 text-center">
+                            <p class="text-lg font-mono text-gray-800">
+                                Respuestas Contestadas
+                            </p>
+                            <p class="text-4xl font-extrabold text-yellow-600">
+                                ${answeredCount} / ${TOTAL_QUESTIONS}
+                            </p>
+                        </div>
+                        
+                        <button onclick="showResults()"
+                                class="w-full bg-green-500 text-white font-bold py-3 rounded-xl hover:bg-green-600 transition duration-200 shadow-md transform hover:scale-[1.01]">
+                            FINALIZAR CUESTIONARIO Y VER ESTADÍSTICAS
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showResults() {
+            currentPage = 'results';
+            renderResultsPage();
+            toggleModal(false);
+        }
+
+        function calculateScore() {
+            let correct = 0;
+            let incorrect = 0;
+            
+            questions.forEach(q => {
+                if (q.userAnswer !== null) {
+                    if (q.alternatives[q.userAnswer].isCorrect) {
+                        correct++;
+                    } else {
+                        incorrect++;
+                    }
+                }
+            });
+            
+            return { correct, incorrect, skipped: TOTAL_QUESTIONS - (correct + incorrect) };
+        }
+
+        function renderResultsPage() {
+            const container = document.getElementById('app-container');
+            const finalScore = calculateScore();
+            const total = TOTAL_QUESTIONS;
+            const percentage = total > 0 ? ((finalScore.correct / total) * 100).toFixed(1) : 0;
+            const performanceMessage = getPerformanceMessage(percentage);
+
+            container.innerHTML = `
+                <div class="card text-center max-w-lg mx-auto p-8">
+                    <img src="https://placehold.co/100x100/1D4ED8/FFFFFF?text=SomosUni" alt="Logo SomosUni" class="mx-auto h-24 w-24 rounded-full shadow-lg mb-4">
+                    <h1 class="text-3xl font-extrabold text-blue-700 mb-4">¡Estadísticas del Cuestionario, ${participantName}!</h1>
+                    <p class="text-xl text-gray-700">${performanceMessage}</p>
+                </div>
+                
+                <div class="card max-w-lg mx-auto p-6">
+                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-2 mb-4">Detalles del Desempeño</h2>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center p-3 bg-green-50 rounded-lg shadow-sm">
+                            <span class="text-lg font-semibold text-green-700">Respuestas Correctas:</span>
+                            <span class="text-2xl font-extrabold text-green-600">${finalScore.correct}</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg shadow-sm">
+                            <span class="text-lg font-semibold text-red-700">Respuestas Incorrectas:</span>
+                            <span class="text-2xl font-extrabold text-red-600">${finalScore.incorrect}</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center p-3 bg-yellow-50 rounded-lg shadow-sm">
+                            <span class="text-lg font-semibold text-yellow-700">Preguntas No Contestadas:</span>
+                            <span class="text-2xl font-extrabold text-yellow-600">${finalScore.skipped}</span>
+                        </div>
+
+                        <div class="flex justify-between items-center p-4 bg-blue-100 rounded-lg shadow-lg mt-6 border-2 border-blue-300">
+                            <span class="text-xl font-bold text-blue-800">Puntuación Total:</span>
+                            <span class="text-3xl font-extrabold text-blue-700">${percentage}%</span>
+                        </div>
+                    </div>
+
+                    <button onclick="restartTest()"
+                            class="mt-8 w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition duration-200 shadow-lg transform hover:scale-[1.01]">
+                        Volver a la Página de Inicio
+                    </button>
+                </div>
+                
+                <div class="text-center mt-6">
+                    <p class="text-base font-semibold text-gray-600">
+                        Desarrollado por: 
+                        <span class="font-bold text-blue-800 text-lg">Percy Romeo Gonzales Tarazona</span>
+                    </p>
+                    <p class="text-sm font-medium text-gray-500">Ingeniero y Matemático</p>
+                </div>
+            `;
+        }
+
+        function getPerformanceMessage(percentage) {
+            if (percentage >= 90) return "¡Felicidades! Tienes un dominio superior de los Bioelementos.";
+            if (percentage >= 70) return "¡Muy bien! Un sólido entendimiento de la materia.";
+            if (percentage >= 50) return "Nivel aceptable. Es momento de enfocarse en las áreas débiles.";
+            return "Requiere un repaso intensivo. ¡Ánimo y a estudiar!";
+        }
+
+        function restartTest() {
+            participantName = "";
+            questions = [];
+            currentPage = 'start';
+            initApp();
+        }
+
+        // --- Funciones del PDF CORREGIDAS ---
+        function showPDFReview() {
+            const modalRoot = document.getElementById('modal-root');
+            currentPDFPage = 1;
+            
+            modalRoot.innerHTML = `
+                <div class="modal-overlay" onclick="togglePDFReview(false)">
+                    <div class="modal-content-large" onclick="event.stopPropagation()">
+                        <div class="flex justify-between items-center border-b pb-3 mb-4">
+                            <h3 class="text-2xl font-bold text-blue-800">📚 Repaso Completo: Bioelementos</h3>
+                            <button onclick="togglePDFReview(false)" class="text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none">
+                                &times;
+                            </button>
+                        </div>
+                        
+                        <div class="pdf-content-area mb-4" id="pdf-content-display">
+                            ${pdfContent[0].content}
+                        </div>
+                        
+                        <div class="page-navigation">
+                            <button onclick="changePDFPage(${currentPDFPage - 1})" 
+                                    class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                    ${currentPDFPage === 1 ? 'disabled' : ''}>
+                                ← Anterior
+                            </button>
+                            
+                            <span class="text-lg font-semibold" id="pdf-page-indicator">
+                                Página ${currentPDFPage} de ${totalPDFPages}
+                            </span>
+                            
+                            <button onclick="changePDFPage(${currentPDFPage + 1})" 
+                                    class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                    ${currentPDFPage === totalPDFPages ? 'disabled' : ''}>
+                                Siguiente →
+                            </button>
+                        </div>
+                        
+                        <div class="text-center mt-4">
+                            <button onclick="togglePDFReview(false)"
+                                    class="bg-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-blue-700 transition duration-200">
+                                Cerrar Repaso y Comenzar Test
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            isPDFModalOpen = true;
+        }
+
+        function changePDFPage(pageNumber) {
+            if (pageNumber < 1 || pageNumber > totalPDFPages) return;
+            
+            currentPDFPage = pageNumber;
+            const contentArea = document.getElementById('pdf-content-display');
+            const pageIndicator = document.getElementById('pdf-page-indicator');
+            
+            if (contentArea) {
+                contentArea.innerHTML = pdfContent[pageNumber - 1].content;
+            }
+            
+            if (pageIndicator) {
+                pageIndicator.textContent = `Página ${pageNumber} de ${totalPDFPages}`;
+            }
+            
+            // Actualizar botones
+            const prevBtn = document.querySelector('.page-navigation button:first-child');
+            const nextBtn = document.querySelector('.page-navigation button:last-child');
+            
+            if (prevBtn) {
+                prevBtn.disabled = pageNumber === 1;
+                prevBtn.onclick = () => changePDFPage(pageNumber - 1);
+            }
+            if (nextBtn) {
+                nextBtn.disabled = pageNumber === totalPDFPages;
+                nextBtn.onclick = () => changePDFPage(pageNumber + 1);
+            }
+        }
+
+        function togglePDFReview(open) {
+            if (open === false) {
+                document.getElementById('modal-root').innerHTML = '';
+                isPDFModalOpen = false;
+            }
+        }
+
+        // --- Inicialización de la App ---
+        function initApp() {
+            currentPage = 'start';
+            renderStartPage();
+            
+            document.addEventListener('click', (e) => {
+                if (isPDFModalOpen && e.target.classList.contains('modal-overlay')) {
+                    togglePDFReview(false);
+                }
+                if (isModalOpen && e.target.classList.contains('modal-overlay')) {
+                    toggleModal(false);
+                }
+                if (isMilestoneModalOpen && e.target.classList.contains('modal-overlay')) {
+                    closeMilestone();
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>

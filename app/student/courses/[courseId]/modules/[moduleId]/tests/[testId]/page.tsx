@@ -128,6 +128,15 @@ export default function TestPage() {
   const [courseProgress, setCourseProgress] = useState(0)
   const [prevProgress, setPrevProgress] = useState(0)
   const [shouldShowConfetti, setShouldShowConfetti] = useState(false)
+  
+  // Estados para milestone
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false)
+  const [milestoneData, setMilestoneData] = useState<{
+    correct: number
+    total: number
+    currentQuestion: number
+    percentage: number
+  } | null>(null)
 
   useEffect(() => {
     loadTestData()
@@ -250,6 +259,11 @@ export default function TestPage() {
       setShowResult(true)
       
       setTimeout(() => {
+        // Verificar milestone cada 10 preguntas
+        if ((currentQuestionIndex + 1) % 10 === 0) {
+          checkMilestone(currentQuestionIndex, updatedAnswers)
+        }
+        
         if (currentQuestionIndex < shuffledQuestions.length - 1) {
           // Pasar a la siguiente pregunta
           setCurrentQuestionIndex(currentQuestionIndex + 1)
@@ -259,6 +273,82 @@ export default function TestPage() {
           // Completar test con las respuestas actualizadas
           completeTest(updatedAnswers)
         }
+      }, 1500)
+    }, 500)
+  }
+  
+  const checkMilestone = (qIndex: number, currentAnswers: Answer[]) => {
+    const blockStart = Math.floor(qIndex / 10) * 10
+    const blockEnd = blockStart + 9
+    
+    // Calcular puntaje del bloque actual
+    let correctInBlock = 0
+    let totalInBlock = 0
+    
+    for (let i = blockStart; i <= blockEnd && i < shuffledQuestions.length; i++) {
+      const answer = currentAnswers.find(a => a.questionId === shuffledQuestions[i].id)
+      if (answer) {
+        totalInBlock++
+        if (answer.isCorrect) {
+          correctInBlock++
+        }
+      }
+    }
+    
+    // Solo mostrar milestone si se contestaron todas las preguntas del bloque
+    if (totalInBlock === 10) {
+      const percentage = (correctInBlock / totalInBlock) * 100
+      setMilestoneData({
+        correct: correctInBlock,
+        total: totalInBlock,
+        currentQuestion: qIndex + 1,
+        percentage
+      })
+      
+      // Mostrar modal de milestone después de un delay
+      setTimeout(() => {
+        setShowMilestoneModal(true)
+        
+        // Lanzar efectos de celebración según el porcentaje
+        if (percentage === 100) {
+          createEpicCelebration()
+        } else if (percentage >= 70) {
+          createConfetti()
+        }
+      }, 800)
+    }
+  }
+  
+  const createEpicCelebration = () => {
+    // Lanzar confetti épico para 10/10
+    if (confettiRef.current) {
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => {
+          confettiRef.current?.fire({
+            particleCount: 100,
+            spread: 100,
+            origin: { y: 0.5, x: 0.5 }
+          })
+        }, i * 300)
+      }
+    }
+  }
+  
+  const createConfetti = () => {
+    // Lanzar confetti normal para >= 70%
+    if (confettiRef.current) {
+      confettiRef.current.fire({
+        particleCount: 50,
+        spread: 70,
+        origin: { y: 0.6 }
+      })
+    }
+  }
+  
+  const closeMilestoneModal = () => {
+    setShowMilestoneModal(false)
+    setMilestoneData(null)
+  }
       }, 1500)
     }, 500)
   }
@@ -637,6 +727,97 @@ export default function TestPage() {
             </div>
           )}
         </div>
+        
+        {/* Modal de Milestone */}
+        {showMilestoneModal && milestoneData && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50"
+            onClick={closeMilestoneModal}
+          >
+            <div 
+              className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-8 rounded-2xl max-w-md w-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center">
+                {/* Trofeo/Emoji según rendimiento */}
+                <div className="text-8xl mb-4 animate-bounce">
+                  {milestoneData.percentage === 100 && '🏆'}
+                  {milestoneData.percentage >= 90 && milestoneData.percentage < 100 && '🥈'}
+                  {milestoneData.percentage >= 70 && milestoneData.percentage < 90 && '🥉'}
+                  {milestoneData.percentage < 70 && '💪'}
+                </div>
+                
+                {/* Título */}
+                <h2 className="text-3xl font-bold mb-2">
+                  {milestoneData.percentage === 100 && '¡PERFECTO ABSOLUTO!'}
+                  {milestoneData.percentage >= 90 && milestoneData.percentage < 100 && '¡EXCELENCIA SUPREMA!'}
+                  {milestoneData.percentage >= 70 && milestoneData.percentage < 90 && '¡GRANDEZA!'}
+                  {milestoneData.percentage < 70 && '¡FUERZA GUERRERO!'}
+                </h2>
+                
+                {/* Mensaje personalizado */}
+                <p className="text-xl mb-6">
+                  <span className="font-bold text-yellow-300">¡{milestoneData.correct}/10!</span>
+                  {' '}
+                  {milestoneData.percentage === 100 && (
+                    <span className="block mt-2">
+                      <span className="text-2xl font-black bg-gradient-to-r from-yellow-200 to-orange-300 bg-clip-text text-transparent">
+                        {user?.name?.split(' ')[0]?.toUpperCase() || 'ESTUDIANTE'}
+                      </span>
+                      <span className="block mt-1 text-base">DOMINAS COMPLETAMENTE ESTE BLOQUE. ERES UN CRACK TOTAL.</span>
+                    </span>
+                  )}
+                  {milestoneData.percentage >= 90 && milestoneData.percentage < 100 && (
+                    <span className="block mt-2">
+                      <span className="text-xl font-black bg-gradient-to-r from-gray-200 to-gray-100 bg-clip-text text-transparent">
+                        {user?.name?.split(' ')[0]?.toUpperCase() || 'ESTUDIANTE'}
+                      </span>
+                      <span className="block mt-1 text-base">UN RENDIMIENTO SOBRESALIENTE. CASI PERFECTO.</span>
+                    </span>
+                  )}
+                  {milestoneData.percentage >= 70 && milestoneData.percentage < 90 && (
+                    <span className="block mt-2">
+                      <span className="text-lg font-black bg-gradient-to-r from-yellow-600 to-yellow-400 bg-clip-text text-transparent">
+                        {user?.name?.split(' ')[0]?.toUpperCase() || 'ESTUDIANTE'}
+                      </span>
+                      <span className="block mt-1 text-base">BUEN TRABAJO, VAS POR BUEN CAMINO HACIA LA MAESTRÍA.</span>
+                    </span>
+                  )}
+                  {milestoneData.percentage < 70 && (
+                    <span className="block mt-2">
+                      <span className="text-base font-black bg-gradient-to-r from-blue-300 to-purple-400 bg-clip-text text-transparent">
+                        {user?.name?.split(' ')[0]?.toUpperCase() || 'ESTUDIANTE'}
+                      </span>
+                      <span className="block mt-1 text-sm">SIGUE PRACTICANDO, CADA ERROR TE ACERCA A LA EXCELENCIA.</span>
+                    </span>
+                  )}
+                </p>
+                
+                {/* Barra de progreso */}
+                <div className="w-full bg-white/20 rounded-full h-3 mb-6">
+                  <div 
+                    className="bg-gradient-to-r from-yellow-400 to-orange-500 h-3 rounded-full transition-all duration-1000"
+                    style={{ width: `${milestoneData.percentage}%` }}
+                  ></div>
+                </div>
+                
+                {/* Contador */}
+                <p className="text-sm text-white/80 mb-6">
+                  Has completado {milestoneData.currentQuestion} de {shuffledQuestions.length} preguntas
+                </p>
+                
+                {/* Botón continuar */}
+                <button
+                  onClick={closeMilestoneModal}
+                  className="w-full px-8 py-3 bg-white text-purple-700 rounded-lg font-bold hover:bg-gray-100 transition-colors shadow-lg"
+                >
+                  ¡Continuar!
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         </div>
       </div>
     </ProtectedRoute>

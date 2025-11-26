@@ -781,11 +781,11 @@ export default function UserManagementPage() {
       const courseName = String(rowData['Curso'] || rowData['curso'] || '')
       const moduleName = String(rowData['Módulo'] || rowData['modulo'] || rowData['Modulo'] || '')
       const testTitle = String(rowData['Test'] || rowData['test'] || '')
-      const questionNumber = rowData['N° Pregunta'] || rowData['Pregunta'] || rowData['pregunta']
-      const questionText = String(rowData['Pregunta'] || '')
+      const questionNumber = rowData['N° Pregunta'] || rowData['N Pregunta'] || rowData['Numero Pregunta'] || rowData['pregunta'] || ''
+      const questionText = String(rowData['Pregunta'] || rowData['Texto Pregunta'] || '')
       const option = String(rowData['Opción'] || rowData['opcion'] || rowData['Opcion'] || '')
       const correctaValue = String(rowData['Correcta'] || rowData['correcta'] || '').toLowerCase()
-      const isCorrect = correctaValue === 'sí' || correctaValue === 'si'
+      const isCorrect = correctaValue === 'sí' || correctaValue === 'si' || correctaValue === 'x' || correctaValue === '1' || correctaValue === 'true'
 
       // Validar que no estén vacíos
       if (!courseName.trim() || !moduleName.trim() || !testTitle.trim() || !questionText.trim() || !option.trim()) continue
@@ -810,27 +810,30 @@ export default function UserManagementPage() {
         continue
       }
 
-      const key = `${module.id}_${testTitle}`
+      const key = `${module.id}_${testTitle.trim()}`
       if (!testsByModule.has(key)) {
         testsByModule.set(key, {
           moduleId: module.id,
           moduleName: module.title,
           courseName: course.title,
-          title: testTitle,
+          title: testTitle.trim(),
           questions: new Map()
         })
       }
 
       const testData = testsByModule.get(key)
-      if (!testData.questions.has(questionNumber)) {
-        testData.questions.set(questionNumber, {
+      // Usar el número de pregunta como clave, o el texto de la pregunta si no hay número
+      const questionKey = questionNumber ? String(questionNumber) : questionText
+      
+      if (!testData.questions.has(questionKey)) {
+        testData.questions.set(questionKey, {
           question: questionText,
           options: [],
           correctAnswer: -1
         })
       }
 
-      const questionData = testData.questions.get(questionNumber)
+      const questionData = testData.questions.get(questionKey)
       const optionIndex = questionData.options.length
       questionData.options.push(option)
       if (isCorrect) {
@@ -2202,11 +2205,14 @@ export default function UserManagementPage() {
                             )}
                           </div>
                         </th>
+                        <th className="hidden px-3 py-3.5 text-left text-sm font-semibold text-secondary-900 sm:table-cell" scope="col">
+                          # Docs
+                        </th>
                         <th onClick={() => handleSort('tests')} className="hidden px-3 py-3.5 text-left text-sm font-semibold text-secondary-900 sm:table-cell cursor-pointer hover:bg-gray-100 select-none" scope="col">
                           <div className="flex items-center gap-1">
                             Tests
                             {sortConfig?.key === 'tests' && (
-                              <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                              <span>{sortConfig.direction === 'asc' ? '↓' : '↑'}</span>
                             )}
                           </div>
                         </th>
@@ -2237,6 +2243,14 @@ export default function UserManagementPage() {
                           </td>
                           <td className="hidden whitespace-nowrap px-3 py-4 text-sm text-secondary-500 sm:table-cell">
                             {module.order}
+                          </td>
+                          <td className="hidden whitespace-nowrap px-3 py-4 text-sm text-secondary-500 sm:table-cell">
+                            <div className="flex items-center gap-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
+                              </svg>
+                              {module.pdfFiles?.length || 0}
+                            </div>
                           </td>
                           <td className="hidden whitespace-nowrap px-3 py-4 text-sm text-secondary-500 sm:table-cell">
                             {module.tests?.length || 0}
