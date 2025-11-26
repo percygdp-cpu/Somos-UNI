@@ -68,6 +68,15 @@ export interface Answer {
   isCorrect: boolean
 }
 
+export interface MotivationalPhrase {
+  id: string
+  phrase: string
+  rangeType: '0-30' | '31-50' | '51-70' | '71-90' | '91-100'
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
 export interface AuthContextType {
   user: User | null
   login: (username: string, password: string) => Promise<boolean>

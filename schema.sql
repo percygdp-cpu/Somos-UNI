@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS questions (
   question TEXT NOT NULL,
   options TEXT NOT NULL,
   correct_answer INTEGER NOT NULL,
+  explanation TEXT,
   "order" INTEGER NOT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
@@ -72,6 +73,26 @@ CREATE TABLE IF NOT EXISTS test_results (
   FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
 );
 
+-- Tabla de frases motivacionales
+CREATE TABLE IF NOT EXISTS motivational_phrases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  phrase TEXT NOT NULL,
+  range_type TEXT NOT NULL CHECK (range_type IN ('0-30', '31-50', '51-70', '71-90', '91-100')),
+  is_active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Tabla de historial de frases usadas por usuario
+CREATE TABLE IF NOT EXISTS user_phrase_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  phrase_id INTEGER NOT NULL,
+  used_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (phrase_id) REFERENCES motivational_phrases(id) ON DELETE CASCADE
+);
+
 -- Índices para mejorar el rendimiento
 CREATE INDEX IF NOT EXISTS idx_modules_course_id ON modules(course_id);
 CREATE INDEX IF NOT EXISTS idx_tests_course_id ON tests(course_id);
@@ -81,6 +102,9 @@ CREATE INDEX IF NOT EXISTS idx_test_results_user_id ON test_results(user_id);
 CREATE INDEX IF NOT EXISTS idx_test_results_test_id ON test_results(test_id);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_motivational_phrases_range ON motivational_phrases(range_type);
+CREATE INDEX IF NOT EXISTS idx_user_phrase_history_user ON user_phrase_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_phrase_history_phrase ON user_phrase_history(phrase_id);
 
 -- Datos iniciales (admin y algunos datos de prueba)
 INSERT OR IGNORE INTO users (name, username, password, role, status) 

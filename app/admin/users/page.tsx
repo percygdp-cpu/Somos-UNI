@@ -108,7 +108,7 @@ export default function UserManagementPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeTab, setActiveTab] = useState<'students' | 'courses' | 'modules' | 'tests'>('students')
+  const [activeTab, setActiveTab] = useState<'students' | 'courses' | 'modules' | 'tests' | 'phrases'>('students')
   
   // Estados de filtro para cada tabla
   const [studentFilters, setStudentFilters] = useState({
@@ -141,9 +141,9 @@ export default function UserManagementPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
-  const [pendingTab, setPendingTab] = useState<'students' | 'courses' | 'modules' | 'tests' | null>(null)
+  const [pendingTab, setPendingTab] = useState<'students' | 'courses' | 'modules' | 'tests' | 'phrases' | null>(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [deleteItem, setDeleteItem] = useState<{ id: string; type: 'user' | 'course' | 'module' | 'test'; name: string } | null>(null)
+  const [deleteItem, setDeleteItem] = useState<{ id: string; type: 'user' | 'course' | 'module' | 'test' | 'phrase'; name: string } | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingItem, setEditingItem] = useState<any>(null)
   const [newUser, setNewUser] = useState({
@@ -174,6 +174,7 @@ export default function UserManagementPage() {
   const [courses, setCourses] = useState<any[]>([])
   const [modules, setModules] = useState<any[]>([])
   const [tests, setTests] = useState<any[]>([])
+  const [phrases, setPhrases] = useState<any[]>([])
   const [sortConfig, setSortConfig] = useState<{
     key: string
     direction: 'asc' | 'desc'
@@ -220,11 +221,12 @@ export default function UserManagementPage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [usersRes, coursesRes, modulesRes, testsRes] = await Promise.all([
+      const [usersRes, coursesRes, modulesRes, testsRes, phrasesRes] = await Promise.all([
         fetch('/api/users'),
         fetch('/api/courses'),
         fetch('/api/modules'),
-        fetch('/api/tests')
+        fetch('/api/tests'),
+        fetch('/api/motivational-phrases')
       ])
 
       if (usersRes.ok) {
@@ -242,6 +244,10 @@ export default function UserManagementPage() {
       if (testsRes.ok) {
         const testsData = await testsRes.json()
         setTests(testsData)
+      }
+      if (phrasesRes.ok) {
+        const phrasesData = await phrasesRes.json()
+        setPhrases(phrasesData)
       }
     } catch (error) {
       console.error('Error cargando datos:', error)
@@ -603,6 +609,36 @@ export default function UserManagementPage() {
     }
   }
 
+  const handleCreatePhrase = async () => {
+    if (!editingItem?.phrase) {
+      alert('Por favor completa la frase motivacional')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/motivational-phrases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phrase: editingItem.phrase,
+          rangeType: editingItem.rangeType || '0-30'
+        })
+      })
+
+      if (response.ok) {
+        await loadData()
+        setShowCreateModal(false)
+        setEditingItem(null)
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Error al crear frase')
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al crear frase')
+    }
+  }
+
   const toggleUserStatus = (userId: string) => {
     const user = users.find(u => u.id === userId)
     if (!user) return
@@ -670,7 +706,7 @@ export default function UserManagementPage() {
     }
   }
 
-  const handleTabChange = (newTab: 'students' | 'courses' | 'modules' | 'tests') => {
+  const handleTabChange = (newTab: 'students' | 'courses' | 'modules' | 'tests' | 'phrases') => {
     if (modifiedUserIds.length > 0) {
       setPendingTab(newTab)
       setShowConfirmModal(true)
@@ -1247,6 +1283,9 @@ export default function UserManagementPage() {
         case 'test':
           endpoint = `/api/tests?id=${deleteItem.id}`
           break
+        case 'phrase':
+          endpoint = `/api/motivational-phrases?id=${deleteItem.id}`
+          break
       }
 
       const response = await fetch(endpoint, { method: 'DELETE' })
@@ -1452,6 +1491,15 @@ export default function UserManagementPage() {
             questions: editingItem.questions
           }
           break
+        case 'phrase':
+          endpoint = '/api/motivational-phrases'
+          body = {
+            id: editingItem.id,
+            phrase: editingItem.phrase,
+            rangeType: editingItem.rangeType,
+            isActive: editingItem.isActive
+          }
+          break
       }
 
       const response = await fetch(endpoint, {
@@ -1617,6 +1665,16 @@ export default function UserManagementPage() {
                 }`}
               >
                 <p className="text-sm font-bold">Tests</p>
+              </button>
+              <button
+                onClick={() => handleTabChange('phrases')}
+                className={`flex flex-col items-center justify-center border-b-[3px] pb-3 pt-4 transition-colors ${
+                  activeTab === 'phrases'
+                    ? 'border-primary-600 text-primary-600'
+                    : 'border-transparent text-secondary-500 hover:text-secondary-800'
+                }`}
+              >
+                <p className="text-sm font-bold">Frases de Motivación</p>
               </button>
             </div>
           </div>
@@ -2622,6 +2680,111 @@ export default function UserManagementPage() {
               </div>
             </>
           )}
+
+          {activeTab === 'phrases' && (
+            <>
+              {/* Header Frases */}
+              <div className="pb-4">
+                <div className="flex gap-4 items-end justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-secondary-900 mb-2">Gestión de Frases Motivacionales</h3>
+                    <p className="text-sm text-secondary-600">Administra las frases que se mostrarán a los estudiantes según su rendimiento</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowCreateModal(true)
+                    }}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    </svg>
+                    Nueva Frase
+                  </button>
+                </div>
+              </div>
+
+              {/* Tabla de Frases por Rango */}
+              {['0-30', '31-50', '51-70', '71-90', '91-100'].map((range) => {
+                const rangePhrases = phrases.filter(p => p.range_type === range)
+                const rangeLabels = {
+                  '0-30': '0-30% (Necesita mejorar)',
+                  '31-50': '31-50% (En progreso)',
+                  '51-70': '51-70% (Bien)',
+                  '71-90': '71-90% (Muy bien)',
+                  '91-100': '91-100% (Excelente)'
+                }
+                
+                return (
+                  <div key={range} className="mb-6 bg-white rounded-xl border-2 border-gray-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-primary-50 to-primary-100 px-6 py-4 border-b border-gray-200">
+                      <h4 className="text-lg font-bold text-primary-900">{rangeLabels[range]}</h4>
+                      <p className="text-sm text-primary-700 mt-1">{rangePhrases.length} frase(s) configurada(s)</p>
+                    </div>
+                    
+                    <div className="p-4">
+                      {rangePhrases.length === 0 ? (
+                        <div className="text-center py-8 text-secondary-500">
+                          <p className="text-sm">No hay frases configuradas para este rango</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {rangePhrases.map((phrase) => (
+                            <div key={phrase.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                              <div className="flex-1">
+                                <p className="text-sm text-secondary-900">{phrase.phrase}</p>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <span className={`text-xs px-2 py-1 rounded-full ${
+                                    phrase.is_active 
+                                      ? 'bg-green-100 text-green-700' 
+                                      : 'bg-gray-100 text-gray-600'
+                                  }`}>
+                                    {phrase.is_active ? 'Activa' : 'Inactiva'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingItem({
+                                      type: 'phrase',
+                                      id: phrase.id,
+                                      phrase: phrase.phrase,
+                                      rangeType: phrase.range_type,
+                                      isActive: phrase.is_active
+                                    })
+                                    setShowEditModal(true)
+                                  }}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Editar frase"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setDeleteItem({ id: phrase.id, type: 'phrase', name: phrase.phrase })
+                                    setShowDeleteModal(true)
+                                  }}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Eliminar frase"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </>
+          )}
         </div>
       </div>
 
@@ -3074,6 +3237,54 @@ export default function UserManagementPage() {
                   </div>
                 </>
               )}
+
+              {/* Formulario Frases */}
+              {activeTab === 'phrases' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">
+                      Frase Motivacional <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={editingItem?.phrase || ''}
+                      onChange={(e) => setEditingItem({...editingItem, phrase: e.target.value})}
+                      rows={3}
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="Ej: ¡Felicitaciones! Has demostrado un excelente dominio del tema."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">
+                      Rango de Porcentaje <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={editingItem?.rangeType || '0-30'}
+                      onChange={(e) => setEditingItem({...editingItem, rangeType: e.target.value})}
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="0-30">0-30% (Necesita mejorar)</option>
+                      <option value="31-50">31-50% (En progreso)</option>
+                      <option value="51-70">51-70% (Bien)</option>
+                      <option value="71-90">71-90% (Muy bien)</option>
+                      <option value="91-100">91-100% (Excelente)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="isActive"
+                      checked={editingItem?.isActive !== false}
+                      onChange={(e) => setEditingItem({...editingItem, isActive: e.target.checked})}
+                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
+                    />
+                    <label htmlFor="isActive" className="text-sm font-medium text-secondary-700">
+                      Frase activa
+                    </label>
+                  </div>
+                </>
+              )}
             </div>
             
             <div className="flex gap-3 mt-6">
@@ -3089,10 +3300,11 @@ export default function UserManagementPage() {
                   else if (activeTab === 'courses') handleCreateCourse()
                   else if (activeTab === 'modules') handleCreateModule()
                   else if (activeTab === 'tests') handleCreateTest()
+                  else if (activeTab === 'phrases') handleCreatePhrase()
                 }}
                 className="flex-1 btn-primary"
               >
-                Crear {activeTab === 'students' ? 'Usuario' : activeTab === 'courses' ? 'Curso' : activeTab === 'modules' ? 'Módulo' : 'Test'}
+                Crear {activeTab === 'students' ? 'Usuario' : activeTab === 'courses' ? 'Curso' : activeTab === 'modules' ? 'Módulo' : activeTab === 'tests' ? 'Test' : 'Frase'}
               </button>
             </div>
           </div>
@@ -3210,7 +3422,7 @@ export default function UserManagementPage() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                 </svg>
-                Editar {editingItem.type === 'user' ? 'Usuario' : editingItem.type === 'course' ? 'Curso' : editingItem.type === 'module' ? 'Módulo' : 'Test'}
+                Editar {editingItem.type === 'user' ? 'Usuario' : editingItem.type === 'course' ? 'Curso' : editingItem.type === 'module' ? 'Módulo' : editingItem.type === 'phrase' ? 'Frase' : 'Test'}
               </h3>
             </div>
 
@@ -3864,6 +4076,53 @@ export default function UserManagementPage() {
                     >
                       + Agregar pregunta
                     </button>
+                  </div>
+                </>
+              )}
+
+              {editingItem.type === 'phrase' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">
+                      Frase Motivacional <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={editingItem.phrase || ''}
+                      onChange={(e) => setEditingItem({...editingItem, phrase: e.target.value})}
+                      rows={3}
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="Ej: ¡Felicitaciones! Has demostrado un excelente dominio del tema."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">
+                      Rango de Porcentaje <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={editingItem.rangeType || '0-30'}
+                      onChange={(e) => setEditingItem({...editingItem, rangeType: e.target.value})}
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="0-30">0-30% (Necesita mejorar)</option>
+                      <option value="31-50">31-50% (En progreso)</option>
+                      <option value="51-70">51-70% (Bien)</option>
+                      <option value="71-90">71-90% (Muy bien)</option>
+                      <option value="91-100">91-100% (Excelente)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="editIsActive"
+                      checked={editingItem.isActive !== false}
+                      onChange={(e) => setEditingItem({...editingItem, isActive: e.target.checked})}
+                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
+                    />
+                    <label htmlFor="editIsActive" className="text-sm font-medium text-secondary-700">
+                      Frase activa
+                    </label>
                   </div>
                 </>
               )}

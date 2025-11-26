@@ -127,6 +127,9 @@ export default function TestPage() {
   const [courseProgress, setCourseProgress] = useState(0)
   const [prevProgress, setPrevProgress] = useState(0)
   const [shouldShowConfetti, setShouldShowConfetti] = useState(false)
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false)
+  const [milestoneBlockScore, setMilestoneBlockScore] = useState(0)
+  const [motivationalPhrase, setMotivationalPhrase] = useState<string>('')
   const questionsPerBlock = 10
 
   useEffect(() => {
@@ -266,18 +269,38 @@ export default function TestPage() {
     const updatedAnswers = [...answers, ...newAnswers]
     setAnswers(updatedAnswers)
     
+    // Calcular puntaje del bloque actual
+    const blockScore = newAnswers.filter(a => a.isCorrect).length
+    setMilestoneBlockScore(blockScore)
+    
     // Verificar si hay más bloques
     const nextBlockIndex = currentBlockIndex + 1
     const hasMoreBlocks = nextBlockIndex * questionsPerBlock < shuffledQuestions.length
     
     if (hasMoreBlocks) {
-      // Ir al siguiente bloque
-      setCurrentBlockIndex(nextBlockIndex)
-      setBlockAnswers({})
+      // Mostrar modal de felicitaciones antes de ir al siguiente bloque
+      setShowMilestoneModal(true)
+      
+      // Lanzar confetti
+      setTimeout(() => {
+        if (confettiRef.current) {
+          confettiRef.current.fire({
+            particleCount: 80,
+            spread: 60,
+            origin: { y: 0.6 }
+          })
+        }
+      }, 100)
     } else {
       // Completar test
       completeTest(updatedAnswers)
     }
+  }
+  
+  const handleContinueToNextBlock = () => {
+    setShowMilestoneModal(false)
+    setCurrentBlockIndex(currentBlockIndex + 1)
+    setBlockAnswers({})
   }
 
   const completeTest = async (finalAnswers: Answer[]) => {
@@ -291,6 +314,18 @@ export default function TestPage() {
     // Activar confetti si aprobó (>= 70%)
     if (percentage >= 70) {
       setShouldShowConfetti(true)
+    }
+    
+    // Obtener frase motivacional
+    try {
+      const phraseResponse = await fetch(`/api/motivational-phrases?percentage=${percentage}&userId=${user?.id}`)
+      if (phraseResponse.ok) {
+        const phraseData = await phraseResponse.json()
+        setMotivationalPhrase(phraseData.phrase || '¡Sigue adelante!')
+      }
+    } catch (error) {
+      console.error('Error obteniendo frase motivacional:', error)
+      setMotivationalPhrase('¡Sigue adelante!')
     }
     
     // Guardar resultado en la base de datos
@@ -535,17 +570,14 @@ export default function TestPage() {
                       
                       {/* Feedback y explicación */}
                       {hasAnswer && !isCorrect && (
-                        <div className="mt-4 p-4 rounded-lg border-2 bg-red-50 border-red-200">
-                          <p className="font-bold text-lg mb-1 text-red-800">
-                            ¡Incorrecto!
-                          </p>
-                          <p className="text-sm text-red-700 mb-2">
+                        <div className="mt-4 p-4 rounded-lg border-2 bg-yellow-50 border-yellow-200">
+                          <p className="text-sm text-yellow-700 mb-2">
                             <strong>Respuesta correcta:</strong> {question.options.find((opt: any) => opt.isCorrect)?.text}
                           </p>
                           {question.explanation && (
-                            <div className="mt-3 pt-3 border-t border-red-200">
-                              <p className="text-xs font-semibold text-red-800 mb-2">💡 EXPLICACIÓN</p>
-                              <p className="text-sm text-red-900">
+                            <div className="mt-3 pt-3 border-t border-yellow-200">
+                              <p className="text-xs font-semibold text-yellow-800 mb-2">💡 EXPLICACIÓN</p>
+                              <p className="text-sm text-yellow-900">
                                 {renderFormattedText(question.explanation)}
                               </p>
                             </div>
@@ -568,141 +600,173 @@ export default function TestPage() {
               </div>
             </div>
           ) : (
-            /* Test Completion */
-            <div className="flex flex-col min-h-[calc(100vh-200px)]">
-              {/* Congratulations Section */}
-              <div className="flex flex-col items-center justify-center pt-8 pb-4">
-                <div className={`flex items-center justify-center w-24 h-24 rounded-full mb-4 ${
+            /* Test Completion - Diseño profesional pero moderno */
+            <div className="flex flex-col min-h-[calc(100vh-200px)] pb-32">
+              {/* Header con resultado */}
+              <div className={`rounded-xl p-8 mb-6 text-center ${
+                Math.round((score / shuffledQuestions.length) * 100) >= 70 
+                  ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200' 
+                  : 'bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200'
+              }`}>
+                {/* Icono */}
+                <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 ${
                   Math.round((score / shuffledQuestions.length) * 100) >= 70 
-                    ? 'bg-green-500/10' 
-                    : 'bg-orange-500/10'
+                    ? 'bg-green-100' 
+                    : 'bg-blue-100'
                 }`}>
-                  <div className={`flex items-center justify-center w-20 h-20 rounded-full ${
-                    Math.round((score / shuffledQuestions.length) * 100) >= 70 
-                      ? 'bg-green-500/20' 
-                      : 'bg-orange-500/20'
-                  }`}>
-                    {Math.round((score / shuffledQuestions.length) * 100) >= 70 ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 text-green-400" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
-                      </svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 text-orange-400" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-                      </svg>
-                    )}
-                  </div>
+                  <span className="text-5xl">
+                    {Math.round((score / shuffledQuestions.length) * 100) >= 70 ? '🎯' : '📘'}
+                  </span>
                 </div>
-                <h1 className="text-secondary-900 tracking-tight text-[32px] font-bold leading-tight px-4 text-center">
-                  {Math.round((score / shuffledQuestions.length) * 100) >= 70 ? '¡Felicitaciones!' : '¡Sigue Practicando!'}
-                </h1>
-                <p className="text-secondary-500 mt-2">
+                
+                {/* Título */}
+                <h1 className={`text-3xl font-bold mb-2 ${
+                  Math.round((score / shuffledQuestions.length) * 100) >= 70 ? 'text-green-700' : 'text-blue-700'
+                }`}>
                   {Math.round((score / shuffledQuestions.length) * 100) >= 70 
-                    ? 'Has completado exitosamente el test.' 
-                    : 'Puedes volver a intentarlo para mejorar tu puntaje.'}
+                    ? '¡Felicitaciones!' 
+                    : '¡Buen trabajo!'}
+                </h1>
+                
+                {/* Nombre del estudiante */}
+                <p className="text-xl font-semibold text-gray-700 mb-3">
+                  {user?.name || 'Estudiante'}
+                </p>
+                
+                {/* Frase motivacional */}
+                <p className="text-base text-gray-600 italic">
+                  {motivationalPhrase || 'Cargando...'}
                 </p>
               </div>
 
               {/* Score Card */}
-              <div className="p-4">
-                <div className="flex flex-col items-stretch justify-start rounded-xl bg-slate-100 p-6">
-                  <div className="flex w-full grow flex-col items-stretch justify-center gap-1">
-                    <p className="text-secondary-500 text-sm font-medium leading-normal">YOUR SCORE</p>
-                    <div className="flex items-end gap-3 justify-between">
-                      <p className="text-secondary-900 text-4xl font-bold leading-tight tracking-[-0.015em]">
-                        {score}/{shuffledQuestions.length}
-                      </p>
-                      <div className="flex flex-col gap-1 items-end">
-                        <p className={`text-lg font-bold leading-tight ${
-                          Math.round((score / shuffledQuestions.length) * 100) >= 70 ? 'text-green-500' : 'text-red-500'
-                        }`}>
-                          {Math.round((score / shuffledQuestions.length) * 100) >= 70 ? 'Great Job!' : 'Keep Trying!'}
-                        </p>
-                        <p className="text-secondary-500 text-base font-normal leading-normal">
-                          {Math.round((score / shuffledQuestions.length) * 100)}% Correct
-                        </p>
-                      </div>
+              <div className="mb-6">
+                <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-sm">
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                      Tu Puntuación
+                    </p>
+                    
+                    {/* Score */}
+                    <div className="flex items-center justify-center gap-2 mb-4">
+                      <span className={`text-6xl font-bold ${
+                        Math.round((score / shuffledQuestions.length) * 100) >= 70 ? 'text-green-600' : 'text-blue-600'
+                      }`}>
+                        {score}
+                      </span>
+                      <span className="text-3xl text-gray-400">/</span>
+                      <span className="text-4xl font-semibold text-gray-500">{shuffledQuestions.length}</span>
+                    </div>
+                    
+                    {/* Porcentaje */}
+                    <div className={`inline-block px-5 py-2 rounded-full text-xl font-bold ${
+                      Math.round((score / shuffledQuestions.length) * 100) >= 70 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {Math.round((score / shuffledQuestions.length) * 100)}% Correcto
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Course Progress */}
-              <div className="flex flex-col gap-2 px-4 pt-4">
-                <div className="flex gap-6 justify-between items-center">
-                  <p className="text-secondary-900 text-base font-medium leading-normal">Progreso del Curso</p>
-                  <p className="text-secondary-500 text-sm font-normal leading-normal">{courseProgress}%</p>
-                </div>
-                <div className="rounded-full bg-slate-200 h-2 overflow-hidden">
-                  <div 
-                    className="h-2 rounded-full bg-primary-600 transition-all duration-500"
-                    style={{ width: `${courseProgress}%` }}
-                  ></div>
+              <div className="mb-6">
+                <div className="bg-white rounded-xl border-2 border-gray-200 p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-base font-semibold text-gray-700">Progreso del Curso</p>
+                    <p className="text-lg font-bold text-primary-600">{courseProgress}%</p>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div 
+                      className="h-3 rounded-full bg-primary-600 transition-all duration-500"
+                      style={{ width: `${courseProgress}%` }}
+                    ></div>
+                  </div>
                 </div>
               </div>
 
               {/* Review Answers */}
-              <div className="flex flex-col gap-4 px-4 pt-8 pb-32">
-                <h3 className="text-secondary-900 text-lg font-bold leading-tight">Review Your Answers</h3>
-                <div className="flex flex-col gap-4">
-                  {shuffledQuestions.map((question, qIndex) => {
-                    const answer = answers[qIndex]
-                    const isCorrect = answer?.isCorrect
-                    return (
-                      <div key={question.id} className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-100/50 p-4">
-                        <p className="text-slate-800 font-medium">
-                          {qIndex + 1}. {renderFormattedText(question.text)}
-                        </p>
-                        <div className={`flex items-center gap-2 rounded-md p-3 ${
-                          isCorrect ? 'bg-green-100' : 'bg-red-100'
+              <div className="mb-6">
+                <div className="bg-white rounded-xl border-2 border-gray-200 p-5 shadow-sm">
+                  <h3 className="text-xl font-bold text-gray-800 mb-4">Revisión de Respuestas</h3>
+                  
+                  <div className="space-y-3">
+                    {shuffledQuestions.map((question, qIndex) => {
+                      const answer = answers[qIndex]
+                      const isCorrect = answer?.isCorrect
+                      return (
+                        <div key={question.id} className={`rounded-lg border-2 p-4 ${
+                          isCorrect 
+                            ? 'bg-green-50 border-green-200' 
+                            : 'bg-red-50 border-red-200'
                         }`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" className={`w-5 h-5 ${isCorrect ? 'text-green-600' : 'text-red-600'}`} viewBox="0 0 24 24" fill="currentColor">
-                            {isCorrect ? (
-                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                            ) : (
-                              <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/>
-                            )}
-                          </svg>
-                          <p className="text-slate-700 text-sm flex-1">
-                            {renderFormattedText(question.options[answer?.selectedAnswer || 0]?.text)}
-                          </p>
-                        </div>
-                        {!isCorrect && (
-                          <div className="flex flex-col gap-2 pt-2 border-t border-slate-200">
-                            <p className="text-xs font-medium text-slate-500">CORRECT ANSWER</p>
-                            <p className="text-sm text-slate-700">
-                              {renderFormattedText(question.options.find((opt: any) => opt.isCorrect)?.text)}
+                          {/* Pregunta */}
+                          <div className="flex items-start gap-3 mb-3">
+                            <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold text-white ${
+                              isCorrect ? 'bg-green-500' : 'bg-red-500'
+                            }`}>
+                              {qIndex + 1}
+                            </span>
+                            <p className="text-sm font-medium text-gray-800 flex-1">
+                              {renderFormattedText(question.text)}
                             </p>
-                            {question.explanation && (
-                              <div className="mt-2 pt-2 border-t border-slate-200">
-                                <p className="text-xs font-medium text-slate-500 mb-1">EXPLICACIÓN</p>
-                                <p className="text-sm text-slate-600 bg-amber-50 p-3 rounded-md border border-amber-200">
-                                  {renderFormattedText(question.explanation)}
+                            <span className="text-xl">
+                              {isCorrect ? '✓' : '✗'}
+                            </span>
+                          </div>
+                          
+                          {/* Respuesta del estudiante */}
+                          <div className={`ml-10 p-3 rounded-md ${
+                            isCorrect ? 'bg-green-100' : 'bg-red-100'
+                          }`}>
+                            <p className="text-xs font-semibold text-gray-600 mb-1">Tu respuesta:</p>
+                            <p className="text-sm text-gray-800">
+                              {renderFormattedText(question.options[answer?.selectedAnswer || 0]?.text)}
+                            </p>
+                          </div>
+                          
+                          {/* Respuesta correcta y explicación si falló */}
+                          {!isCorrect && (
+                            <div className="ml-10 mt-3 space-y-2">
+                              <div className="p-3 rounded-md bg-yellow-50 border border-yellow-200">
+                                <p className="text-xs font-semibold text-yellow-800 mb-1">Respuesta correcta:</p>
+                                <p className="text-sm font-medium text-yellow-900">
+                                  {renderFormattedText(question.options.find((opt: any) => opt.isCorrect)?.text)}
                                 </p>
                               </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                              
+                              {question.explanation && (
+                                <div className="p-3 rounded-md bg-blue-50 border border-blue-200">
+                                  <p className="text-xs font-semibold text-blue-800 mb-1">💡 Explicación:</p>
+                                  <p className="text-sm text-blue-900">
+                                    {renderFormattedText(question.explanation)}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
 
               {/* Sticky Bottom Buttons */}
-              <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-br from-primary-50 to-secondary-50 pt-4 pb-4 shadow-lg">
+              <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 pt-4 pb-4 shadow-lg">
                 <div className="flex flex-col gap-3 px-4 max-w-4xl mx-auto">
                   <button
                     onClick={handleContinue}
-                    className="flex w-full items-center justify-center rounded-lg bg-primary-600 px-6 py-3.5 text-base font-bold text-white shadow-sm transition-all hover:bg-primary-700 focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold text-base transition-all hover:bg-primary-700 shadow-sm"
                   >
-                    Start Next Test
+                    Siguiente Test
                   </button>
                   <button
                     onClick={() => router.push(`/student/courses/${params.courseId}/modules/${params.moduleId}`)}
-                    className="flex w-full items-center justify-center rounded-lg bg-transparent px-6 py-3.5 text-base font-bold text-secondary-900 ring-1 ring-inset ring-slate-300 transition-all hover:bg-slate-100 focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold text-base border-2 border-gray-300 transition-all hover:bg-gray-200"
                   >
-                    Back to Module
+                    Volver al Módulo
                   </button>
                 </div>
               </div>
@@ -710,6 +774,91 @@ export default function TestPage() {
           )}
         </div>
         
+        {/* Modal de Felicitaciones cada 10 preguntas */}
+        {showMilestoneModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn">
+              {/* Confetti para el modal */}
+              <Confetti
+                ref={confettiRef}
+                className="absolute inset-0 z-50 size-full pointer-events-none"
+              />
+              
+              {/* Header con emoji y título */}
+              <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-8 py-6 text-center relative">
+                <div className="text-6xl mb-3">📚</div>
+                <h2 className="text-2xl font-bold text-white mb-2">💪 ¡FUERZA GUERRERO!</h2>
+                <p className="text-white/90 text-xl font-bold">BLOQUE {currentBlockIndex + 1} COMPLETADO</p>
+              </div>
+
+              {/* Body */}
+              <div className="px-8 py-8 text-center">
+                {/* Score grande */}
+                <div className="mb-6">
+                  <p className="text-7xl font-black text-purple-600 mb-2">
+                    {milestoneBlockScore}/{questionsPerBlock}
+                  </p>
+                  <p className="text-2xl text-secondary-500 mb-4">
+                    ({Math.round((milestoneBlockScore / questionsPerBlock) * 100)}%)
+                  </p>
+                </div>
+
+                {/* Mensaje de felicitaciones épicas */}
+                <div className="mb-6">
+                  <h3 className="text-2xl font-bold text-purple-700 mb-4">
+                    ¡FELICIDADES ÉPICAS!
+                  </h3>
+                  <p className="text-3xl font-black text-secondary-900 mb-3">
+                    {user?.name?.toUpperCase() || 'GUERRERO'}
+                  </p>
+                  <p className="text-xl font-bold text-purple-600 mb-4">
+                    ¡ERES INCREÍBLE!
+                  </p>
+                </div>
+
+                {/* Mensaje motivacional personalizado */}
+                <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-lg p-4 mb-6">
+                  <p className="text-sm font-bold text-purple-900">
+                    {milestoneBlockScore >= 7 
+                      ? `¡${milestoneBlockScore}/${questionsPerBlock}! ${user?.name?.toUpperCase() || 'GUERRERO'}, ¡EXCELENTE TRABAJO! SIGUE ASÍ, ESTÁS DOMINANDO EL TEMA.`
+                      : `¡${milestoneBlockScore}/${questionsPerBlock}! ${user?.name?.toUpperCase() || 'GUERRERO'}, SIGUE PRACTICANDO, CADA ERROR TE ACERCA A LA EXCELENCIA.`
+                    }
+                  </p>
+                </div>
+
+                {/* Progreso total */}
+                <div className="bg-gray-50 rounded-lg p-4 mb-6 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-secondary-700">Preguntas contestadas:</span>
+                    <span className="text-lg font-bold text-secondary-900">
+                      {(currentBlockIndex + 1) * questionsPerBlock}/{shuffledQuestions.length}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div 
+                      className="bg-gradient-to-r from-purple-600 to-blue-600 h-3 rounded-full transition-all duration-500"
+                      style={{ width: `${((currentBlockIndex + 1) * questionsPerBlock / shuffledQuestions.length) * 100}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-secondary-700">Progreso total:</span>
+                    <span className="text-lg font-bold text-purple-600">
+                      {Math.round(((currentBlockIndex + 1) * questionsPerBlock / shuffledQuestions.length) * 100)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Botón continuar */}
+                <button
+                  onClick={handleContinueToNextBlock}
+                  className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center gap-2"
+                >
+                  <span>🚀 CONTINUAR CON LAS SIGUIENTES {questionsPerBlock} PREGUNTAS</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         </div>
       </div>

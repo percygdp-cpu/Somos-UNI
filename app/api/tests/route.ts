@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       
       // Obtener preguntas del test
       const questionsResult = await client.execute({
-        sql: 'SELECT id, test_id as testId, question, options, correct_answer as correctAnswer, "order" FROM questions WHERE test_id = ? ORDER BY "order"',
+        sql: 'SELECT id, test_id as testId, question, options, correct_answer as correctAnswer, explanation, "order" FROM questions WHERE test_id = ? ORDER BY "order"',
         args: [test.id]
       })
       
@@ -55,6 +55,7 @@ export async function GET(request: Request) {
           testId: q.testId,
           text: q.question,
           options: formattedOptions,
+          explanation: q.explanation || undefined,
           order: q.order
         }
       })
@@ -71,7 +72,7 @@ export async function GET(request: Request) {
     const testsWithQuestions = await Promise.all(
       result.rows.map(async (test: any) => {
         const questionsResult = await client.execute({
-          sql: 'SELECT id, test_id as testId, question, options, correct_answer as correctAnswer, "order" FROM questions WHERE test_id = ? ORDER BY "order"',
+          sql: 'SELECT id, test_id as testId, question, options, correct_answer as correctAnswer, explanation, "order" FROM questions WHERE test_id = ? ORDER BY "order"',
           args: [test.id]
         })
         
@@ -103,6 +104,7 @@ export async function GET(request: Request) {
             testId: q.testId,
             text: q.question, // Usar 'text' en lugar de 'question' para consistencia
             options: formattedOptions,
+            explanation: q.explanation || undefined,
             order: q.order
           }
         })
@@ -148,12 +150,13 @@ export async function POST(request: Request) {
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i]
         const qResult = await client.execute({
-          sql: 'INSERT INTO questions (test_id, question, options, correct_answer, "order") VALUES (?, ?, ?, ?, ?) RETURNING id, test_id as testId, question, options, correct_answer as correctAnswer, "order"',
+          sql: 'INSERT INTO questions (test_id, question, options, correct_answer, explanation, "order") VALUES (?, ?, ?, ?, ?, ?) RETURNING id, test_id as testId, question, options, correct_answer as correctAnswer, explanation, "order"',
           args: [
             test.id,
             q.question,
             JSON.stringify(q.options),
             q.correctAnswer,
+            q.explanation || null,
             i
           ]
         })
@@ -264,12 +267,13 @@ export async function PUT(request: Request) {
         const correctAnswer = typeof q.correctAnswer === 'number' ? q.correctAnswer : (typeof q.correct_answer === 'number' ? q.correct_answer : 0)
         
         const qResult = await client.execute({
-          sql: 'INSERT INTO questions (test_id, question, options, correct_answer, "order") VALUES (?, ?, ?, ?, ?) RETURNING id, test_id as testId, question, options, correct_answer as correctAnswer, "order"',
+          sql: 'INSERT INTO questions (test_id, question, options, correct_answer, explanation, "order") VALUES (?, ?, ?, ?, ?, ?) RETURNING id, test_id as testId, question, options, correct_answer as correctAnswer, explanation, "order"',
           args: [
             id,
             q.question || '',
             JSON.stringify(options),
             correctAnswer,
+            q.explanation || null,
             i
           ]
         })
