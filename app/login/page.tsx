@@ -52,7 +52,7 @@ export default function LoginPage() {
         {/* Logo and Header */}
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex items-center justify-center">
-            <Image src="/logo.jpg" alt="Somos UNI" width={150} height={150} className="object-contain" />
+            <Image src="/logo.jpg" alt="Somos UNI" width={200} height={200} className="object-contain" />
           </div>
         </div>
 
@@ -175,6 +175,13 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
+          
+          {/* Engineer Credit */}
+          <div className="mt-6 text-center">
+            <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+              Ingeniero - Percy Romeo Gonzales Tarazona
+            </p>
+          </div>
         </div>
 
         {/* Footer */}

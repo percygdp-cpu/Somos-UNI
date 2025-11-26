@@ -3,10 +3,10 @@
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import StudentHeader from '@/components/StudentHeader'
-import confetti from 'canvas-confetti'
 import anime from 'animejs'
+import confetti from 'canvas-confetti'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 // Función para renderizar texto con subíndices, superíndices e imágenes
 const renderFormattedText = (text: string) => {
