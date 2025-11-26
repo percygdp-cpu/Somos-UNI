@@ -36,9 +36,6 @@ export default function ModuleDetailPage() {
           return
         }
         
-        console.log('Módulo cargado:', foundModule)
-        console.log('PDFs del módulo:', foundModule.pdfFiles)
-        
         setModule(foundModule)
         
         // Cargar tests del módulo
@@ -105,10 +102,6 @@ export default function ModuleDetailPage() {
   }
 
   const handlePdfDownload = (pdfUrl: string, fileName: string) => {
-    console.log('=== DESCARGAR PDF ===')
-    console.log('URL:', pdfUrl)
-    console.log('Nombre:', fileName)
-    
     if (!pdfUrl || pdfUrl === 'undefined' || pdfUrl === 'null') {
       console.error('URL inválida:', pdfUrl)
       return
@@ -122,11 +115,9 @@ export default function ModuleDetailPage() {
       link.rel = 'noopener noreferrer'
       document.body.appendChild(link)
       
-      console.log('Iniciando descarga...')
       link.click()
       
       document.body.removeChild(link)
-      console.log('✅ Descarga iniciada')
     } catch (error) {
       console.error('Error al descargar PDF:', error)
     }

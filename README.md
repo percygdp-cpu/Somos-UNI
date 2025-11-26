@@ -1,8 +1,8 @@
-# Somos UNI - Plataforma de Aprendizaje
+# 🎓 LMS Platform - Sistema de Gestión de Aprendizaje
 
-Una plataforma completa de gestión de cursos construida con Next.js, TypeScript y Tailwind CSS.
+Plataforma moderna de gestión de aprendizaje (LMS) desarrollada con Next.js 14, React, TypeScript y Turso Database.
 
-## Características
+## ✨ Características Principales
 
 ### Vista Estudiante
 - ✅ Sistema de autenticación seguro

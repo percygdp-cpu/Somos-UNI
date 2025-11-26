@@ -1,3 +1,4 @@
+import { getMissingFieldsError, isValidId, isValidPercentage, isValidPhraseRange, validateRequiredFields } from '@/lib/validation'
 import { createClient } from '@libsql/client'
 import { NextResponse } from 'next/server'
 
@@ -15,6 +16,21 @@ export async function GET(request: Request) {
     
     // Si se solicita una frase para un porcentaje específico
     if (percentage !== null && userId) {
+      // Validar entrada
+      if (!isValidPercentage(percentage)) {
+        return NextResponse.json(
+          { error: 'Porcentaje inválido' },
+          { status: 400 }
+        )
+      }
+
+      if (!isValidId(userId)) {
+        return NextResponse.json(
+          { error: 'ID de usuario inválido' },
+          { status: 400 }
+        )
+      }
+
       const percent = parseInt(percentage)
       let rangeType = '0-30'
       
@@ -89,28 +105,39 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { phrase, rangeType } = body
     
-    if (!phrase || !rangeType) {
+    // Validar campos requeridos
+    const validation = validateRequiredFields(body, ['phrase', 'rangeType'])
+    if (!validation.valid) {
       return NextResponse.json(
-        { error: 'phrase y rangeType son requeridos' },
+        { error: getMissingFieldsError(validation.missing) },
         { status: 400 }
       )
     }
+
+    const { phrase, rangeType, isActive } = body
     
-    const validRanges = ['0-30', '31-50', '51-70', '71-90', '91-100']
-    if (!validRanges.includes(rangeType)) {
+    // Validar rango
+    if (!isValidPhraseRange(rangeType)) {
       return NextResponse.json(
-        { error: 'rangeType inválido' },
+        { error: 'rangeType inválido. Debe ser: 0-30, 31-50, 51-70, 71-90, o 91-100' },
+        { status: 400 }
+      )
+    }
+
+    // Validar longitud de frase
+    if (phrase.length < 10 || phrase.length > 500) {
+      return NextResponse.json(
+        { error: 'La frase debe tener entre 10 y 500 caracteres' },
         { status: 400 }
       )
     }
     
     const result = await client.execute({
-      sql: `INSERT INTO motivational_phrases (phrase, range_type) 
-            VALUES (?, ?) 
+      sql: `INSERT INTO motivational_phrases (phrase, range_type, is_active) 
+            VALUES (?, ?, ?) 
             RETURNING *`,
-      args: [phrase, rangeType]
+      args: [phrase, rangeType, isActive !== false ? 1 : 0]
     })
     
     return NextResponse.json(result.rows[0], { status: 201 })
@@ -126,9 +153,10 @@ export async function PUT(request: Request) {
     const body = await request.json()
     const { id, phrase, rangeType, isActive } = body
     
-    if (!id) {
+    // Validar ID
+    if (!id || !isValidId(id)) {
       return NextResponse.json(
-        { error: 'ID es requerido' },
+        { error: 'ID inválido' },
         { status: 400 }
       )
     }
@@ -137,13 +165,27 @@ export async function PUT(request: Request) {
     const args = []
     
     if (phrase !== undefined) {
+      if (phrase.length < 10 || phrase.length > 500) {
+        return NextResponse.json(
+          { error: 'La frase debe tener entre 10 y 500 caracteres' },
+          { status: 400 }
+        )
+      }
       updates.push('phrase = ?')
       args.push(phrase)
     }
+    
     if (rangeType !== undefined) {
+      if (!isValidPhraseRange(rangeType)) {
+        return NextResponse.json(
+          { error: 'rangeType inválido' },
+          { status: 400 }
+        )
+      }
       updates.push('range_type = ?')
       args.push(rangeType)
     }
+    
     if (isActive !== undefined) {
       updates.push('is_active = ?')
       args.push(isActive ? 1 : 0)
@@ -187,9 +229,9 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     
-    if (!id) {
+    if (!id || !isValidId(id)) {
       return NextResponse.json(
-        { error: 'ID es requerido' },
+        { error: 'ID inválido' },
         { status: 400 }
       )
     }

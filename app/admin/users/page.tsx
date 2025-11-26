@@ -504,11 +504,6 @@ export default function UserManagementPage() {
         .filter(m => String(m.courseId) === String(courseId))
         .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
       
-      console.log('Curso seleccionado:', courseId)
-      console.log('Total módulos:', modules.length)
-      console.log('Módulos del curso:', courseModules.length)
-      console.log('Módulos filtrados:', courseModules)
-      
       setReorderedModules(courseModules)
     } else {
       setReorderedModules([])

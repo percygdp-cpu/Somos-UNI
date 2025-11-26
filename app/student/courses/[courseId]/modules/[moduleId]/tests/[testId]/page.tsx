@@ -139,13 +139,9 @@ export default function TestPage() {
   // Efecto para lanzar confetti cuando se aprueba
   useEffect(() => {
     if (testCompleted && shouldShowConfetti) {
-      console.log('🎉 Test aprobado! Intentando lanzar confetti...')
-      console.log('confettiRef.current:', confettiRef.current)
-      
       // Esperar más tiempo para asegurar que el componente y el script estén listos
       const timer = setTimeout(() => {
         if (confettiRef.current) {
-          console.log('✅ Lanzando confetti!')
           confettiRef.current.fire({
             particleCount: 100,
             spread: 70,
@@ -160,8 +156,6 @@ export default function TestPage() {
               origin: { y: 0.7 }
             })
           }, 250)
-        } else {
-          console.log('❌ confettiRef.current es null')
         }
       }, 800)
       return () => clearTimeout(timer)
@@ -196,8 +190,6 @@ export default function TestPage() {
         console.error('Test no encontrado:', testId)
         return
       }
-      
-      console.log('Test encontrado:', foundTest)
       
       // Verificar que el test tenga preguntas
       if (!foundTest.questions || foundTest.questions.length === 0) {

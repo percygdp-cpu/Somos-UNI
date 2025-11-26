@@ -11,7 +11,9 @@
     "clean:all": "rm -rf .next out node_modules package-lock.json",
     "reinstall": "npm run clean:all && npm install",
     "type-check": "tsc --noEmit",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "validate": "node validate-deploy.js",
+    "predeploy": "npm run validate && npm run type-check && npm run build"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",
