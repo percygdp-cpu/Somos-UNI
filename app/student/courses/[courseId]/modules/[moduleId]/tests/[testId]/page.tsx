@@ -3,7 +3,7 @@
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import StudentHeader from '@/components/StudentHeader'
-import { Confetti, type ConfettiRef } from '@/components/magicui/confetti'
+import confetti from 'canvas-confetti'
 import anime from 'animejs'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
@@ -116,8 +116,6 @@ export default function TestPage() {
   const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
-  const confettiRef = useRef<ConfettiRef>(null)
-  const milestoneConfettiRef = useRef<ConfettiRef>(null)
   const [test, setTest] = useState<any>(null)
   const [shuffledQuestions, setShuffledQuestions] = useState<Question[]>([])
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0)
@@ -141,60 +139,60 @@ export default function TestPage() {
   // Efecto para lanzar confetti cuando se aprueba
   useEffect(() => {
     if (testCompleted && shouldShowConfetti) {
-      // Esperar más tiempo para asegurar que el componente y el script estén listos
-      const timer = setTimeout(() => {
-        if (confettiRef.current) {
-          confettiRef.current.fire({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 }
-          })
-          
-          // Lanzar más confetti para que sea más visible
-          setTimeout(() => {
-            confettiRef.current?.fire({
-              particleCount: 50,
-              spread: 100,
-              origin: { y: 0.7 }
-            })
-          }, 250)
-        }
-      }, 800)
-      return () => clearTimeout(timer)
+      // Lanzar confetti inmediatamente
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      })
+      
+      // Lanzar más confetti para que sea más visible
+      setTimeout(() => {
+        confetti({
+          particleCount: 50,
+          spread: 100,
+          origin: { y: 0.7 }
+        })
+      }, 250)
+      
+      setTimeout(() => {
+        confetti({
+          particleCount: 75,
+          spread: 85,
+          origin: { y: 0.65 }
+        })
+      }, 500)
     }
   }, [testCompleted, shouldShowConfetti])
 
   // Efecto para lanzar confetti cuando se muestra el modal motivacional
   useEffect(() => {
     if (showMilestoneModal) {
-      // Esperar a que el modal esté completamente renderizado
-      const timer = setTimeout(() => {
-        if (milestoneConfettiRef.current) {
-          // Lanzar confetti múltiples veces para efecto más impactante
-          milestoneConfettiRef.current.fire({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 }
-          })
-          
-          setTimeout(() => {
-            milestoneConfettiRef.current?.fire({
-              particleCount: 80,
-              spread: 100,
-              origin: { y: 0.5 }
-            })
-          }, 200)
-          
-          setTimeout(() => {
-            milestoneConfettiRef.current?.fire({
-              particleCount: 60,
-              spread: 80,
-              origin: { y: 0.7 }
-            })
-          }, 400)
-        }
-      }, 300)
-      return () => clearTimeout(timer)
+      // Lanzar confetti inmediatamente
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#9333ea', '#3b82f6', '#8b5cf6', '#60a5fa']
+      })
+      
+      setTimeout(() => {
+        confetti({
+          particleCount: 80,
+          spread: 100,
+          origin: { y: 0.5 },
+          colors: ['#9333ea', '#3b82f6', '#8b5cf6', '#60a5fa']
+        })
+      }, 200)
+      
+      setTimeout(() => {
+        confetti({
+          particleCount: 60,
+          spread: 80,
+          origin: { y: 0.7 },
+          colors: ['#9333ea', '#3b82f6', '#8b5cf6', '#60a5fa']
+        })
+      }, 400)
     }
   }, [showMilestoneModal])
 
@@ -458,12 +456,6 @@ export default function TestPage() {
   return (
     <ProtectedRoute allowedRoles={['student']}>
       <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary-50 to-secondary-50 relative">
-        {testCompleted && Math.round((score / shuffledQuestions.length) * 100) >= 70 && (
-          <Confetti
-            ref={confettiRef}
-            className="absolute inset-0 z-50 size-full pointer-events-none"
-          />
-        )}
         <StudentHeader />
         <div className="flex-grow p-6">
         <div className="max-w-4xl mx-auto">
@@ -796,11 +788,6 @@ export default function TestPage() {
         {showMilestoneModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn relative">
-              {/* Confetti para el modal */}
-              <Confetti
-                ref={milestoneConfettiRef}
-                className="absolute inset-0 z-50 size-full pointer-events-none"
-              />
               
               {/* Header con emoji y título */}
               <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-8 py-6 text-center relative">
