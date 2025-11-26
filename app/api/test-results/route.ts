@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     
     return NextResponse.json(
       { 
-        id: result.lastInsertRowid,
+        id: Number(result.lastInsertRowid),
         userId,
         testId,
         score,

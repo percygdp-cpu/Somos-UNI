@@ -8,6 +8,97 @@ import anime from 'animejs'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 
+// Función para renderizar texto con subíndices, superíndices e imágenes
+const renderFormattedText = (text: string) => {
+  if (!text) return null
+  
+  const parts: any[] = []
+  
+  // Regex para detectar imágenes markdown: ![alt](url) o ![alt](url){width}
+  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)(?:\s*\{(\d+)\})?/g
+  const formatRegex = /([_^])(\{([^}]+)\}|(\d+)|([a-zA-Z]))/g
+  
+  // Primero procesar imágenes
+  let imageMatch
+  const segments: any[] = []
+  let lastIndex = 0
+  
+  while ((imageMatch = imageRegex.exec(text)) !== null) {
+    // Agregar texto antes de la imagen
+    if (imageMatch.index > lastIndex) {
+      segments.push({ type: 'text', content: text.substring(lastIndex, imageMatch.index), index: lastIndex })
+    }
+    
+    // Agregar imagen
+    segments.push({ 
+      type: 'image', 
+      alt: imageMatch[1] || 'imagen',
+      url: imageMatch[2],
+      width: imageMatch[3] ? parseInt(imageMatch[3]) : 300,
+      index: imageMatch.index
+    })
+    
+    lastIndex = imageMatch.index + imageMatch[0].length
+  }
+  
+  // Agregar texto restante
+  if (lastIndex < text.length) {
+    segments.push({ type: 'text', content: text.substring(lastIndex), index: lastIndex })
+  }
+  
+  // Si no hay imágenes, procesar todo como texto
+  if (segments.length === 0) {
+    segments.push({ type: 'text', content: text, index: 0 })
+  }
+  
+  // Procesar cada segmento
+  segments.forEach((segment, segIndex) => {
+    if (segment.type === 'image') {
+      parts.push(
+        <img 
+          key={`img-${segment.index}`}
+          src={segment.url} 
+          alt={segment.alt}
+          style={{ maxWidth: `${segment.width}px`, width: '100%', height: 'auto', display: 'block', margin: '8px 0' }}
+          className="rounded border border-gray-300"
+        />
+      )
+    } else {
+      // Procesar formato de texto (sub/superíndices)
+      const textParts: any[] = []
+      let textIndex = 0
+      let match
+      formatRegex.lastIndex = 0
+      
+      while ((match = formatRegex.exec(segment.content)) !== null) {
+        if (match.index > textIndex) {
+          textParts.push(segment.content.substring(textIndex, match.index))
+        }
+        
+        const type = match[1]
+        const content = match[3] || match[4] || match[5]
+        
+        if (type === '_') {
+          textParts.push(<sub key={`sub-${segment.index}-${match.index}`}>{content}</sub>)
+        } else if (type === '^') {
+          textParts.push(<sup key={`sup-${segment.index}-${match.index}`}>{content}</sup>)
+        }
+        
+        textIndex = match.index + match[0].length
+      }
+      
+      if (textIndex < segment.content.length) {
+        textParts.push(segment.content.substring(textIndex))
+      }
+      
+      // Agregar las partes de texto procesadas
+      textParts.forEach(part => parts.push(part))
+    }
+  })
+  
+  return parts.length > 0 ? <>{parts}</> : text
+}
+
 interface Question {
   id: string
   text: string
@@ -337,7 +428,7 @@ export default function TestPage() {
               {/* Question */}
               <div className="card mb-6">
                 <h2 className="text-2xl font-semibold text-secondary-900 mb-6">
-                  {currentQuestion.text}
+                  {renderFormattedText(currentQuestion.text)}
                 </h2>
                 
                 <div className="space-y-3">
@@ -377,7 +468,7 @@ export default function TestPage() {
                             {showIncorrect && <span className="text-white text-sm">✗</span>}
                             {isSelected && !showResult && <span className="text-white text-sm">●</span>}
                           </div>
-                          <span>{option.text}</span>
+                          <span>{renderFormattedText(option.text)}</span>
                         </div>
                       </button>
                     )
@@ -496,7 +587,7 @@ export default function TestPage() {
                     return (
                       <div key={question.id} className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-100/50 p-4">
                         <p className="text-slate-800 font-medium">
-                          {qIndex + 1}. {question.text}
+                          {qIndex + 1}. {renderFormattedText(question.text)}
                         </p>
                         <div className={`flex items-center gap-2 rounded-md p-3 ${
                           isCorrect ? 'bg-green-100' : 'bg-red-100'
@@ -509,14 +600,14 @@ export default function TestPage() {
                             )}
                           </svg>
                           <p className="text-slate-700 text-sm flex-1">
-                            {question.options[answer?.selectedAnswer || 0]?.text}
+                            {renderFormattedText(question.options[answer?.selectedAnswer || 0]?.text)}
                           </p>
                         </div>
                         {!isCorrect && (
                           <div className="flex flex-col gap-2 pt-2 border-t border-slate-200">
                             <p className="text-xs font-medium text-slate-500">CORRECT ANSWER</p>
                             <p className="text-sm text-slate-700">
-                              {question.options.find((opt: any) => opt.isCorrect)?.text}
+                              {renderFormattedText(question.options.find((opt: any) => opt.isCorrect)?.text)}
                             </p>
                           </div>
                         )}

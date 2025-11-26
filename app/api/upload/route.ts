@@ -29,15 +29,31 @@ export async function POST(request: Request) {
       )
     }
 
+    // Verificar token
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.error('BLOB_READ_WRITE_TOKEN no está configurado')
+      return NextResponse.json(
+        { error: 'Configuración del servidor incompleta. Contacta al administrador.' },
+        { status: 500 }
+      )
+    }
+
+    // Generar nombre único para evitar colisiones
+    const timestamp = Date.now()
+    const randomSuffix = Math.random().toString(36).substring(2, 8)
+    const fileExtension = file.name.split('.').pop()
+    const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, '')
+    const uniqueFileName = `${fileNameWithoutExt}-${timestamp}-${randomSuffix}.${fileExtension}`
+
     // Subir a Vercel Blob
-    const blob = await put(file.name, file, {
+    const blob = await put(uniqueFileName, file, {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN
     })
 
     return NextResponse.json({
       url: blob.url,
-      name: file.name,
+      name: file.name, // Devolver el nombre original para mostrar al usuario
       size: file.size
     })
   } catch (error: any) {

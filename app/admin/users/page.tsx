@@ -10,6 +10,97 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import React, { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
 
+// Función para renderizar texto con subíndices, superíndices e imágenes
+const renderFormattedText = (text: string) => {
+  if (!text) return null
+  
+  const parts: any[] = []
+  
+  // Regex para detectar imágenes markdown: ![alt](url) o ![alt](url){width}
+  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)(?:\s*\{(\d+)\})?/g
+  const formatRegex = /([_^])(\{([^}]+)\}|(\d+)|([a-zA-Z]))/g
+  
+  // Primero procesar imágenes
+  let imageMatch
+  const segments: any[] = []
+  let lastIndex = 0
+  
+  while ((imageMatch = imageRegex.exec(text)) !== null) {
+    // Agregar texto antes de la imagen
+    if (imageMatch.index > lastIndex) {
+      segments.push({ type: 'text', content: text.substring(lastIndex, imageMatch.index), index: lastIndex })
+    }
+    
+    // Agregar imagen
+    segments.push({ 
+      type: 'image', 
+      alt: imageMatch[1] || 'imagen',
+      url: imageMatch[2],
+      width: imageMatch[3] ? parseInt(imageMatch[3]) : 300,
+      index: imageMatch.index
+    })
+    
+    lastIndex = imageMatch.index + imageMatch[0].length
+  }
+  
+  // Agregar texto restante
+  if (lastIndex < text.length) {
+    segments.push({ type: 'text', content: text.substring(lastIndex), index: lastIndex })
+  }
+  
+  // Si no hay imágenes, procesar todo como texto
+  if (segments.length === 0) {
+    segments.push({ type: 'text', content: text, index: 0 })
+  }
+  
+  // Procesar cada segmento
+  segments.forEach((segment, segIndex) => {
+    if (segment.type === 'image') {
+      parts.push(
+        <img 
+          key={`img-${segment.index}`}
+          src={segment.url} 
+          alt={segment.alt}
+          style={{ maxWidth: `${segment.width}px`, height: 'auto', display: 'inline-block', margin: '0 4px', verticalAlign: 'middle' }}
+          className="rounded border border-gray-300"
+        />
+      )
+    } else {
+      // Procesar formato de texto (sub/superíndices)
+      const textParts: any[] = []
+      let textIndex = 0
+      let match
+      formatRegex.lastIndex = 0
+      
+      while ((match = formatRegex.exec(segment.content)) !== null) {
+        if (match.index > textIndex) {
+          textParts.push(segment.content.substring(textIndex, match.index))
+        }
+        
+        const type = match[1]
+        const content = match[3] || match[4] || match[5]
+        
+        if (type === '_') {
+          textParts.push(<sub key={`sub-${segment.index}-${match.index}`}>{content}</sub>)
+        } else if (type === '^') {
+          textParts.push(<sup key={`sup-${segment.index}-${match.index}`}>{content}</sup>)
+        }
+        
+        textIndex = match.index + match[0].length
+      }
+      
+      if (textIndex < segment.content.length) {
+        textParts.push(segment.content.substring(textIndex))
+      }
+      
+      // Agregar las partes de texto procesadas
+      textParts.forEach(part => parts.push(part))
+    }
+  })
+  
+  return parts.length > 0 ? <>{parts}</> : text
+}
+
 export default function UserManagementPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -90,6 +181,13 @@ export default function UserManagementPage() {
   const [pendingTests, setPendingTests] = useState<any[]>([])
   const [showTestPreviewModal, setShowTestPreviewModal] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  
+  // Estados para modal de reordenamiento de módulos
+  const [showReorderModal, setShowReorderModal] = useState(false)
+  const [reorderCourseId, setReorderCourseId] = useState<string>('')
+  const [draggedModuleIndex, setDraggedModuleIndex] = useState<number | null>(null)
+  const [reorderedModules, setReorderedModules] = useState<any[]>([])
+  const [isSavingOrder, setIsSavingOrder] = useState(false)
   
   // Estados para cursos y módulos faltantes
   const [missingCourses, setMissingCourses] = useState<Array<{name: string, description: string}>>([])
@@ -352,11 +450,22 @@ export default function UserManagementPage() {
       return
     }
 
+    // Calcular el orden automáticamente basado en los módulos existentes del curso
+    const courseModules = modules.filter(m => m.courseId === newModule.courseId)
+    
+    // Si no hay módulos, comenzar en 1
+    // Si hay módulos, tomar el máximo orden y sumarle 1
+    // Esto funciona incluso si hay duplicados (ej: varios con orden 1)
+    const maxOrder = courseModules.length > 0 
+      ? Math.max(...courseModules.map(m => Number(m.order) || 0))
+      : 0
+    const nextOrder = maxOrder + 1
+
     try {
       const response = await fetch('/api/modules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newModule)
+        body: JSON.stringify({ ...newModule, order: nextOrder })
       })
 
       if (response.ok) {
@@ -371,6 +480,100 @@ export default function UserManagementPage() {
       console.error('Error:', error)
       alert('Error al crear módulo')
     }
+  }
+
+  // Funciones para reordenar módulos con drag & drop
+  const handleOpenReorderModal = () => {
+    setShowReorderModal(true)
+    setReorderCourseId('')
+    setReorderedModules([])
+  }
+
+  const handleCourseSelectForReorder = (courseId: string) => {
+    setReorderCourseId(courseId)
+    
+    if (courseId) {
+      // Obtener módulos del curso seleccionado y ordenarlos
+      const courseModules = modules
+        .filter(m => String(m.courseId) === String(courseId))
+        .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+      
+      console.log('Curso seleccionado:', courseId)
+      console.log('Total módulos:', modules.length)
+      console.log('Módulos del curso:', courseModules.length)
+      console.log('Módulos filtrados:', courseModules)
+      
+      setReorderedModules(courseModules)
+    } else {
+      setReorderedModules([])
+    }
+  }
+
+  const handleDragStart = (index: number) => {
+    setDraggedModuleIndex(index)
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    
+    if (draggedModuleIndex === null || draggedModuleIndex === index) return
+    
+    const newModules = [...reorderedModules]
+    const draggedModule = newModules[draggedModuleIndex]
+    
+    // Remover el módulo de su posición original
+    newModules.splice(draggedModuleIndex, 1)
+    // Insertarlo en la nueva posición
+    newModules.splice(index, 0, draggedModule)
+    
+    setReorderedModules(newModules)
+    setDraggedModuleIndex(index)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedModuleIndex(null)
+  }
+
+  const handleSaveReorder = async () => {
+    if (reorderedModules.length === 0) return
+    
+    setIsSavingOrder(true)
+    try {
+      // Actualizar el orden de cada módulo (1, 2, 3...)
+      const updates = reorderedModules.map((module, index) => ({
+        id: module.id,
+        order: index + 1
+      }))
+
+      const response = await fetch('/api/modules/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modules: updates })
+      })
+
+      if (response.ok) {
+        await loadData()
+        setShowReorderModal(false)
+        setReorderCourseId('')
+        setReorderedModules([])
+        showToast('Orden de módulos actualizado correctamente')
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Error al guardar el orden')
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al guardar el orden')
+    } finally {
+      setIsSavingOrder(false)
+    }
+  }
+
+  const handleCloseReorderModal = () => {
+    setShowReorderModal(false)
+    setReorderCourseId('')
+    setReorderedModules([])
+    setDraggedModuleIndex(null)
   }
 
   const handleCreateTest = async () => {
@@ -954,12 +1157,16 @@ export default function UserManagementPage() {
           const correctIndex = q.options.findIndex((opt: any) => opt.isCorrect)
           return {
             ...q,
+            question: q.question || q.text, // Normalizar el campo question/text
             options: optionsArray,
             correctAnswer: correctIndex >= 0 ? correctIndex : 0
           }
         }
         // Si ya es un array de strings
-        return q
+        return {
+          ...q,
+          question: q.question || q.text // Asegurar que question esté presente
+        }
       })
       
       setEditingItem({ 
@@ -1138,6 +1345,24 @@ export default function UserManagementPage() {
     if (!editingItem) return
 
     console.log('🔍 handleSaveEdit llamado para:', editingItem.type, editingItem)
+
+    // Validaciones específicas por tipo
+    if (editingItem.type === 'test') {
+      // Validar que cada pregunta tenga al menos 2 opciones
+      for (let i = 0; i < editingItem.questions.length; i++) {
+        const question = editingItem.questions[i]
+        if (!question.options || question.options.length < 2) {
+          alert(`La pregunta ${i + 1} debe tener al menos 2 opciones`)
+          return
+        }
+        // Validar que cada opción tenga contenido
+        const emptyOptions = question.options.filter((opt: string) => !opt || opt.trim() === '')
+        if (emptyOptions.length > 0) {
+          alert(`La pregunta ${i + 1} tiene opciones vacías. Por favor complételas o elimínelas.`)
+          return
+        }
+      }
+    }
 
     try {
       let endpoint = ''
@@ -1925,6 +2150,17 @@ export default function UserManagementPage() {
                     </svg>
                     <span className="truncate">Agregar Módulo</span>
                   </button>
+                  
+                  <button
+                    onClick={handleOpenReorderModal}
+                    className="flex h-10 min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg bg-amber-600 px-4 text-sm font-bold text-white transition-colors hover:bg-amber-700"
+                    title="Reordenar módulos de un curso"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+                    </svg>
+                    <span className="truncate">Reordenar Módulos</span>
+                  </button>
                 </div>
               </div>
 
@@ -2336,6 +2572,124 @@ export default function UserManagementPage() {
         </div>
       </div>
 
+      {/* Modal de Reordenamiento de Módulos */}
+      {showReorderModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="card max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <h2 className="text-2xl font-bold text-secondary-900 mb-6">
+              Reordenar Módulos
+            </h2>
+            
+            {/* Selector de Curso */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                Selecciona el curso <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={reorderCourseId}
+                onChange={(e) => handleCourseSelectForReorder(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">-- Selecciona un curso --</option>
+                {[...courses].sort((a, b) => a.title.localeCompare(b.title)).map(course => (
+                  <option key={course.id} value={course.id}>{course.title}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Lista de módulos con drag & drop */}
+            {reorderedModules.length > 0 ? (
+              <div className="mb-6">
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                  </svg>
+                  <p className="text-sm text-amber-800">
+                    <strong>Instrucciones:</strong> Arrastra los módulos para cambiar su orden. Los números se actualizarán automáticamente.
+                  </p>
+                </div>
+
+                <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+                  {reorderedModules.map((module, index) => (
+                    <div
+                      key={module.id}
+                      draggable
+                      onDragStart={() => handleDragStart(index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragEnd={handleDragEnd}
+                      className={`flex items-center gap-4 p-4 bg-white rounded-lg border-2 transition-all cursor-move ${
+                        draggedModuleIndex === index 
+                          ? 'border-primary-500 opacity-50 scale-[0.98] shadow-lg' 
+                          : 'border-gray-200 hover:border-primary-300 hover:shadow-md'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                        </svg>
+                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary-100 text-primary-700 font-bold text-lg">
+                          {index + 1}
+                        </div>
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 truncate">{module.title}</h3>
+                        <p className="text-sm text-gray-500 truncate">{module.description}</p>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 text-sm text-gray-500 flex-shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
+                        </svg>
+                        {module.pdfFiles?.length || 0}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              reorderCourseId && (
+                <div className="mb-6 p-8 text-center text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 mx-auto mb-3 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/>
+                  </svg>
+                  <p className="font-medium">Este curso no tiene módulos</p>
+                  <p className="text-sm">Agrega módulos primero para poder reordenarlos</p>
+                </div>
+              )
+            )}
+
+            {/* Botones */}
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button
+                onClick={handleCloseReorderModal}
+                disabled={isSavingOrder}
+                className="px-6 py-2.5 border border-gray-300 rounded-lg text-secondary-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveReorder}
+                disabled={reorderedModules.length === 0 || isSavingOrder}
+                className="px-6 py-2.5 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isSavingOrder ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Guardando...
+                  </>
+                ) : (
+                  'Guardar Orden'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create Modal - Dinámico según tab activo */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -2560,6 +2914,15 @@ export default function UserManagementPage() {
                           const file = e.target.files?.[0]
                           if (!file) return
                           
+                          // Validar tamaño del archivo (10MB máximo)
+                          const maxSize = 10 * 1024 * 1024 // 10MB en bytes
+                          if (file.size > maxSize) {
+                            const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
+                            alert(`El archivo es demasiado grande (${sizeMB}MB).\n\nEl tamaño máximo permitido es 10MB.\n\nPor favor, comprime el PDF usando:\nhttps://www.ilovepdf.com/es/comprimir_pdf`)
+                            e.target.value = ''
+                            return
+                          }
+                          
                           const formData = new FormData()
                           formData.append('file', file)
                           
@@ -2575,13 +2938,14 @@ export default function UserManagementPage() {
                                 ...newModule,
                                 pdfFiles: [...newModule.pdfFiles, { name: data.name, url: data.url }]
                               })
+                              showToast('PDF subido correctamente', 'success')
                             } else {
                               const error = await response.json()
                               alert(error.error || 'Error al subir el archivo')
                             }
-                          } catch (error) {
+                          } catch (error: any) {
                             console.error('Error:', error)
-                            alert('Error al subir el archivo')
+                            alert(error.message || 'Error al subir el archivo')
                           }
                           
                           // Reset input
@@ -3008,6 +3372,21 @@ export default function UserManagementPage() {
                             const files = Array.from(e.target.files || [])
                             if (files.length === 0) return
                             
+                            // Validar tamaño de cada archivo (10MB máximo)
+                            const maxSize = 10 * 1024 * 1024 // 10MB en bytes
+                            const oversizedFiles = files.filter(file => file.size > maxSize)
+                            
+                            if (oversizedFiles.length > 0) {
+                              const fileNames = oversizedFiles.map(f => {
+                                const sizeMB = (f.size / (1024 * 1024)).toFixed(2)
+                                return `• ${f.name} (${sizeMB}MB)`
+                              }).join('\n')
+                              
+                              alert(`Los siguientes archivos superan el límite de 10MB:\n\n${fileNames}\n\nPor favor, comprime los PDFs usando:\nhttps://www.ilovepdf.com/es/comprimir_pdf`)
+                              e.target.value = ''
+                              return
+                            }
+                            
                             try {
                               // Subir cada archivo a Vercel Blob
                               const uploadPromises = files.map(async (file) => {
@@ -3020,7 +3399,8 @@ export default function UserManagementPage() {
                                 })
                                 
                                 if (!response.ok) {
-                                  throw new Error(`Error al subir ${file.name}`)
+                                  const errorData = await response.json()
+                                  throw new Error(errorData.error || `Error al subir ${file.name}`)
                                 }
                                 
                                 const data = await response.json()
@@ -3035,9 +3415,9 @@ export default function UserManagementPage() {
                               })
                               
                               showToast('PDFs subidos correctamente', 'success')
-                            } catch (error) {
+                            } catch (error: any) {
                               console.error('Error subiendo archivos:', error)
-                              showToast('Error al subir los archivos', 'error')
+                              alert(error.message || 'Error al subir los archivos')
                             }
                             
                             // Reset input
@@ -3108,8 +3488,8 @@ export default function UserManagementPage() {
                     <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                       {editingItem.questions?.map((question: any, index: number) => (
                         <div key={question.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                          <div className="flex items-start justify-between mb-2">
-                            <label className="block text-sm font-medium text-secondary-700">
+                          <div className="flex items-start justify-between mb-3">
+                            <label className="block text-sm font-semibold text-secondary-900">
                               Pregunta {index + 1}
                             </label>
                             <button
@@ -3117,29 +3497,203 @@ export default function UserManagementPage() {
                                 const newQuestions = editingItem.questions.filter((_: any, i: number) => i !== index)
                                 setEditingItem({ ...editingItem, questions: newQuestions })
                               }}
-                              className="text-red-500 hover:text-red-700 text-xs"
+                              className="text-red-500 hover:text-red-700 text-sm font-bold px-2"
                               title="Eliminar pregunta"
                             >
                               ✕
                             </button>
                           </div>
-                          <textarea
-                            value={question.question}
-                            onChange={(e) => {
-                              const newQuestions = [...editingItem.questions]
-                              newQuestions[index] = { ...question, question: e.target.value }
-                              setEditingItem({ ...editingItem, questions: newQuestions })
-                            }}
-                            rows={2}
-                            className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm mb-2"
-                          />
+                          <div className="mb-3">
+                            <label className="block text-xs font-medium text-secondary-700 mb-1">
+                              Texto de la pregunta
+                            </label>
+                            <div className="flex gap-1 mb-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const textarea = document.getElementById(`question-${index}`) as HTMLTextAreaElement
+                                  if (!textarea) return
+                                  
+                                  const start = textarea.selectionStart
+                                  const end = textarea.selectionEnd
+                                  const selectedText = textarea.value.substring(start, end)
+                                  
+                                  if (selectedText) {
+                                    const newText = textarea.value.substring(0, start) + 
+                                      `_{${selectedText}}` + 
+                                      textarea.value.substring(end)
+                                    
+                                    const newQuestions = [...editingItem.questions]
+                                    newQuestions[index] = { ...question, question: newText }
+                                    setEditingItem({ ...editingItem, questions: newQuestions })
+                                  }
+                                }}
+                                className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                                title="Subíndice (selecciona texto primero)"
+                              >
+                                X<sub>2</sub>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const textarea = document.getElementById(`question-${index}`) as HTMLTextAreaElement
+                                  if (!textarea) return
+                                  
+                                  const start = textarea.selectionStart
+                                  const end = textarea.selectionEnd
+                                  const selectedText = textarea.value.substring(start, end)
+                                  
+                                  if (selectedText) {
+                                    const newText = textarea.value.substring(0, start) + 
+                                      `^{${selectedText}}` + 
+                                      textarea.value.substring(end)
+                                    
+                                    const newQuestions = [...editingItem.questions]
+                                    newQuestions[index] = { ...question, question: newText }
+                                    setEditingItem({ ...editingItem, questions: newQuestions })
+                                  }
+                                }}
+                                className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                                title="Superíndice (selecciona texto primero)"
+                              >
+                                X<sup>2</sup>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const input = document.createElement('input')
+                                  input.type = 'file'
+                                  input.accept = 'image/*'
+                                  input.onchange = async (e: any) => {
+                                    const file = e.target.files[0]
+                                    if (!file) return
+                                    
+                                    try {
+                                      // Subir imagen a Vercel Blob
+                                      const formData = new FormData()
+                                      formData.append('file', file)
+                                      
+                                      const response = await fetch('/api/upload-image', {
+                                        method: 'POST',
+                                        body: formData
+                                      })
+                                      
+                                      if (!response.ok) throw new Error('Error subiendo imagen')
+                                      
+                                      const { url } = await response.json()
+                                      
+                                      // Insertar sintaxis de imagen en el cursor
+                                      const textarea = document.getElementById(`question-${index}`) as HTMLTextAreaElement
+                                      if (!textarea) return
+                                      
+                                      const start = textarea.selectionStart
+                                      const newText = textarea.value.substring(0, start) + 
+                                        ` ![imagen](${url}){300} ` + 
+                                        textarea.value.substring(start)
+                                      
+                                      const newQuestions = [...editingItem.questions]
+                                      newQuestions[index] = { ...question, question: newText }
+                                      setEditingItem({ ...editingItem, questions: newQuestions })
+                                    } catch (error) {
+                                      console.error('Error subiendo imagen:', error)
+                                      alert('Error al subir la imagen')
+                                    }
+                                  }
+                                  input.click()
+                                }}
+                                className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                                title="Subir imagen"
+                              >
+                                📷 Imagen
+                              </button>
+                              <span className="text-xs text-gray-500 self-center ml-2">Selecciona texto y haz clic</span>
+                            </div>
+                            <textarea
+                              id={`question-${index}`}
+                              value={question.question}
+                              onChange={(e) => {
+                                const newQuestions = [...editingItem.questions]
+                                newQuestions[index] = { ...question, question: e.target.value }
+                                setEditingItem({ ...editingItem, questions: newQuestions })
+                              }}
+                              rows={3}
+                              placeholder="Escriba aquí el texto de la pregunta..."
+                              className="w-full px-3 py-2 border-2 border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm bg-white"
+                            />
+                            {question.question && (
+                              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
+                                <span className="text-xs text-blue-600 font-medium">Vista previa: </span>
+                                <span>{renderFormattedText(question.question)}</span>
+                              </div>
+                            )}
+                          </div>
                           
                           <label className="block text-xs font-medium text-secondary-600 mb-1 mt-3">
                             Opciones
                           </label>
+                          <div className="flex gap-1 mb-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const textarea = document.getElementById(`option-${index}-focused`) as HTMLInputElement
+                                if (!textarea) return
+                                
+                                const start = textarea.selectionStart || 0
+                                const end = textarea.selectionEnd || 0
+                                const selectedText = textarea.value.substring(start, end)
+                                
+                                if (selectedText) {
+                                  const optIndex = parseInt(textarea.dataset.optionIndex || '0')
+                                  const newText = textarea.value.substring(0, start) + 
+                                    `_{${selectedText}}` + 
+                                    textarea.value.substring(end)
+                                  
+                                  const newQuestions = [...editingItem.questions]
+                                  const newOptions = [...question.options]
+                                  newOptions[optIndex] = newText
+                                  newQuestions[index] = { ...question, options: newOptions }
+                                  setEditingItem({ ...editingItem, questions: newQuestions })
+                                }
+                              }}
+                              className="px-2 py-0.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                              title="Subíndice para opción (selecciona texto primero)"
+                            >
+                              X<sub>2</sub>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const textarea = document.getElementById(`option-${index}-focused`) as HTMLInputElement
+                                if (!textarea) return
+                                
+                                const start = textarea.selectionStart || 0
+                                const end = textarea.selectionEnd || 0
+                                const selectedText = textarea.value.substring(start, end)
+                                
+                                if (selectedText) {
+                                  const optIndex = parseInt(textarea.dataset.optionIndex || '0')
+                                  const newText = textarea.value.substring(0, start) + 
+                                    `^{${selectedText}}` + 
+                                    textarea.value.substring(end)
+                                  
+                                  const newQuestions = [...editingItem.questions]
+                                  const newOptions = [...question.options]
+                                  newOptions[optIndex] = newText
+                                  newQuestions[index] = { ...question, options: newOptions }
+                                  setEditingItem({ ...editingItem, questions: newQuestions })
+                                }
+                              }}
+                              className="px-2 py-0.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                              title="Superíndice para opción (selecciona texto primero)"
+                            >
+                              X<sup>2</sup>
+                            </button>
+                            <span className="text-xs text-gray-500 self-center ml-1">Para opciones</span>
+                          </div>
                           <div className="space-y-1">
                             {question.options?.map((option: string, optIndex: number) => (
-                              <div key={optIndex} className="flex items-center gap-2">
+                              <div key={optIndex}>
+                                <div className="flex items-center gap-2">
                                 <input
                                   type="radio"
                                   checked={question.correctAnswer === optIndex}
@@ -3153,13 +3707,22 @@ export default function UserManagementPage() {
                                 />
                                 <input
                                   type="text"
-                                  value={option}
+                                  id={`option-${index}-focused`}
+                                  data-option-index={optIndex}
+                                  value={typeof option === 'string' ? option : option.text || ''}
                                   onChange={(e) => {
                                     const newQuestions = [...editingItem.questions]
                                     const newOptions = [...question.options]
                                     newOptions[optIndex] = e.target.value
                                     newQuestions[index] = { ...question, options: newOptions }
                                     setEditingItem({ ...editingItem, questions: newQuestions })
+                                  }}
+                                  onFocus={(e) => {
+                                    // Actualizar el id del input enfocado
+                                    document.querySelectorAll(`[id^="option-${index}-"]`).forEach(el => {
+                                      if (el.id !== e.target.id) el.removeAttribute('id')
+                                    })
+                                    e.target.id = `option-${index}-focused`
                                   }}
                                   className="flex-1 px-3 py-1.5 border border-secondary-300 rounded text-sm focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
                                   placeholder={`Opción ${optIndex + 1}`}
@@ -3186,6 +3749,12 @@ export default function UserManagementPage() {
                                   </button>
                                 )}
                               </div>
+                              {option && (
+                                <div className="ml-8 mt-1 text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded px-2 py-1">
+                                  Vista: {renderFormattedText(typeof option === 'string' ? option : option.text)}
+                                </div>
+                              )}
+                              </div>
                             ))}
                           </div>
                           
@@ -3210,7 +3779,7 @@ export default function UserManagementPage() {
                           id: `q-${Date.now()}`,
                           testId: editingItem.id,
                           question: '',
-                          options: ['', '', '', ''],
+                          options: ['', ''],
                           correctAnswer: 0,
                           order: editingItem.questions?.length || 0
                         }
