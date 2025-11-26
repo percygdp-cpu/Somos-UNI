@@ -42,11 +42,17 @@ export interface Test {
   updatedAt: Date
 }
 
+export interface QuestionOption {
+  id: string
+  text: string
+  isCorrect: boolean
+}
+
 export interface Question {
   id: string
   testId: string
   question: string
-  options: string[]
+  options: QuestionOption[]
   correctAnswer: number
   order: number
   explanation?: string

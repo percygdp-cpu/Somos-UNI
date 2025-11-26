@@ -103,6 +103,7 @@ interface Question {
   id: string
   text: string
   options: Array<{ text: string; isCorrect: boolean }>
+  explanation?: string
 }
 
 interface Answer {
@@ -724,7 +725,7 @@ export default function TestPage() {
                               <div className="p-3 rounded-md bg-yellow-50 border border-yellow-200">
                                 <p className="text-xs font-semibold text-yellow-800 mb-1">Respuesta correcta:</p>
                                 <p className="text-sm font-medium text-yellow-900">
-                                  {renderFormattedText(question.options.find((opt: any) => opt.isCorrect)?.text)}
+                                  {renderFormattedText(question.options.find((opt: any) => opt.isCorrect)?.text || '')}
                                 </p>
                               </div>
                               
