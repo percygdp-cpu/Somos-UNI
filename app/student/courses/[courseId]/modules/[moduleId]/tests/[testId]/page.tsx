@@ -169,67 +169,158 @@ export default function TestPage() {
   // Efecto para lanzar confetti cuando se muestra el modal motivacional
   useEffect(() => {
     if (showMilestoneModal) {
-      // Lanzar confetti inmediatamente
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#9333ea', '#3b82f6', '#8b5cf6', '#60a5fa']
-      })
+      const blockPercentage = Math.round((milestoneBlockScore / questionsPerBlock) * 100)
+      const colors = blockPercentage >= 80 
+        ? ['#FFD700', '#FFA500', '#FF8C00', '#FFFF00'] // Oro
+        : blockPercentage >= 60
+        ? ['#C0C0C0', '#D3D3D3', '#E8E8E8', '#A9A9A9'] // Plata
+        : [] // Bronce sin confeti
       
-      setTimeout(() => {
+      if (colors.length > 0) {
+        // Lanzar confetti inmediatamente
         confetti({
-          particleCount: 80,
-          spread: 100,
-          origin: { y: 0.5 },
-          colors: ['#9333ea', '#3b82f6', '#8b5cf6', '#60a5fa']
+          particleCount: blockPercentage >= 80 ? 100 : 80,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors
         })
-      }, 200)
-      
-      setTimeout(() => {
-        confetti({
-          particleCount: 60,
-          spread: 80,
-          origin: { y: 0.7 },
-          colors: ['#9333ea', '#3b82f6', '#8b5cf6', '#60a5fa']
-        })
-      }, 400)
+        
+        setTimeout(() => {
+          confetti({
+            particleCount: blockPercentage >= 80 ? 80 : 60,
+            spread: 100,
+            origin: { y: 0.5 },
+            colors
+          })
+        }, 200)
+        
+        setTimeout(() => {
+          confetti({
+            particleCount: blockPercentage >= 80 ? 60 : 40,
+            spread: 80,
+            origin: { y: 0.7 },
+            colors
+          })
+        }, 400)
+        
+        // Globos solo para oro
+        if (blockPercentage >= 80) {
+          const createBalloon = (delay: number) => {
+            setTimeout(() => {
+              confetti({
+                particleCount: 1,
+                startVelocity: 0,
+                ticks: 300,
+                origin: {
+                  x: Math.random() * 0.8 + 0.1,
+                  y: 1
+                },
+                colors: [colors[Math.floor(Math.random() * colors.length)]],
+                shapes: ['circle'],
+                scalar: 3,
+                gravity: -0.5,
+                drift: Math.random() * 0.5 - 0.25
+              })
+            }, delay)
+          }
+          
+          // Crear 6 globos con diferentes delays
+          for (let i = 0; i < 6; i++) {
+            createBalloon(i * 100 + 600)
+          }
+        }
+      }
     }
-  }, [showMilestoneModal])
+  }, [showMilestoneModal, milestoneBlockScore])
 
   // Efecto para lanzar confetti cuando se muestra el modal de celebración final
   useEffect(() => {
     if (showFinalCelebration) {
       const percentage = Math.round((score / shuffledQuestions.length) * 100)
-      const colors = percentage >= 70 
-        ? ['#10b981', '#059669', '#34d399', '#6ee7b7'] // Verde
-        : ['#3b82f6', '#2563eb', '#60a5fa', '#93c5fd'] // Azul
       
-      // Lanzar confetti inmediatamente
-      confetti({
-        particleCount: 150,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors
-      })
+      // Sistema de medallas:
+      // 🏆 Oro (80-100%): Confeti intenso + globos
+      // 🥈 Plata (60-79%): Confeti moderado
+      // 🥉 Bronce (0-59%): Sin confeti
       
-      setTimeout(() => {
+      if (percentage >= 80) {
+        // 🏆 MEDALLA DE ORO - Apoteósico
+        const goldColors = ['#FFD700', '#FFA500', '#FF8C00', '#FFFF00']
+        
+        // Confeti intenso
         confetti({
-          particleCount: 100,
-          spread: 120,
-          origin: { y: 0.5 },
-          colors
+          particleCount: 500,
+          spread: 90,
+          origin: { y: 0.6 },
+          colors: goldColors,
+          ticks: 300
         })
-      }, 250)
-      
-      setTimeout(() => {
+        
+        setTimeout(() => {
+          confetti({
+            particleCount: 300,
+            spread: 120,
+            origin: { y: 0.5 },
+            colors: goldColors
+          })
+        }, 250)
+        
+        setTimeout(() => {
+          confetti({
+            particleCount: 400,
+            spread: 100,
+            origin: { y: 0.7 },
+            colors: goldColors
+          })
+        }, 500)
+        
+        // Globos flotantes (círculos que suben)
+        const createBalloon = (delay: number) => {
+          setTimeout(() => {
+            confetti({
+              particleCount: 1,
+              startVelocity: 0,
+              ticks: 300,
+              origin: {
+                x: Math.random() * 0.8 + 0.1,
+                y: 1
+              },
+              colors: [goldColors[Math.floor(Math.random() * goldColors.length)]],
+              shapes: ['circle'],
+              scalar: 3,
+              gravity: -0.5,
+              drift: Math.random() * 0.5 - 0.25
+            })
+          }, delay)
+        }
+        
+        // Crear 8 globos con diferentes delays
+        for (let i = 0; i < 8; i++) {
+          createBalloon(i * 100)
+        }
+      } else if (percentage >= 60) {
+        // 🥈 MEDALLA DE PLATA
+        const silverColors = ['#C0C0C0', '#D3D3D3', '#E8E8E8', '#A9A9A9']
+        
+        // Confeti moderado
         confetti({
-          particleCount: 120,
-          spread: 100,
-          origin: { y: 0.7 },
-          colors
+          particleCount: 300,
+          spread: 90,
+          origin: { y: 0.6 },
+          colors: silverColors,
+          ticks: 200
         })
-      }, 500)
+        
+        setTimeout(() => {
+          confetti({
+            particleCount: 150,
+            spread: 100,
+            origin: { y: 0.5 },
+            colors: silverColors
+          })
+        }, 300)
+      }
+      // 🥉 MEDALLA DE BRONCE - Sin confeti
     }
   }, [showFinalCelebration, score, shuffledQuestions.length])
 
@@ -651,73 +742,96 @@ export default function TestPage() {
           ) : (
             /* Test Completion - Diseño profesional pero moderno */
             <div className="flex flex-col min-h-[calc(100vh-200px)] pb-32">
-              {/* Header con resultado */}
-              <div className={`rounded-xl p-8 mb-6 text-center ${
-                Math.round((score / shuffledQuestions.length) * 100) >= 70 
-                  ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200' 
-                  : 'bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200'
-              }`}>
-                {/* Icono */}
-                <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 ${
-                  Math.round((score / shuffledQuestions.length) * 100) >= 70 
-                    ? 'bg-green-100' 
-                    : 'bg-blue-100'
-                }`}>
-                  <span className="text-5xl">
-                    {Math.round((score / shuffledQuestions.length) * 100) >= 70 ? '🎯' : '📘'}
-                  </span>
-                </div>
+              {(() => {
+                const finalPercentage = Math.round((score / shuffledQuestions.length) * 100)
+                const isGoldFinal = finalPercentage >= 80
+                const isSilverFinal = finalPercentage >= 60 && finalPercentage < 80
+                const isBronzeFinal = finalPercentage < 60
                 
-                {/* Título */}
-                <h1 className={`text-3xl font-bold mb-2 ${
-                  Math.round((score / shuffledQuestions.length) * 100) >= 70 ? 'text-green-700' : 'text-blue-700'
-                }`}>
-                  {Math.round((score / shuffledQuestions.length) * 100) >= 70 
-                    ? '¡Felicitaciones!' 
-                    : '¡Buen trabajo!'}
-                </h1>
+                const finalMedalEmoji = isGoldFinal ? '🏆' : isSilverFinal ? '🥈' : '🥉'
+                const finalGradient = isGoldFinal 
+                  ? 'from-yellow-50 to-orange-50 border-2 border-yellow-300'
+                  : isSilverFinal 
+                  ? 'from-gray-50 to-gray-100 border-2 border-gray-300'
+                  : 'from-orange-50 to-amber-50 border-2 border-orange-300'
+                const finalBgColor = isGoldFinal
+                  ? 'bg-yellow-100'
+                  : isSilverFinal
+                  ? 'bg-gray-100'
+                  : 'bg-orange-100'
+                const finalTextColor = isGoldFinal
+                  ? 'text-yellow-700'
+                  : isSilverFinal
+                  ? 'text-gray-700'
+                  : 'text-orange-700'
+                const finalTitle = isGoldFinal
+                  ? '¡Apoteósico!'
+                  : isSilverFinal
+                  ? '¡Muy bien!'
+                  : '¡Buen trabajo!'
                 
-                {/* Nombre del estudiante */}
-                <p className="text-xl font-semibold text-gray-700 mb-3">
-                  {user?.name || 'Estudiante'}
-                </p>
-                
-                {/* Frase motivacional */}
-                <p className="text-base text-gray-600 italic">
-                  {motivationalPhrase || 'Cargando...'}
-                </p>
-              </div>
+                return (
+                  <>
+                    {/* Header con resultado */}
+                    <div className={`rounded-xl p-8 mb-6 text-center bg-gradient-to-br ${finalGradient}`}>
+                      {/* Icono de medalla */}
+                      <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 ${finalBgColor}`}>
+                        <span className="text-5xl">
+                          {finalMedalEmoji}
+                        </span>
+                      </div>
+                      
+                      {/* Título */}
+                      <h1 className={`text-3xl font-bold mb-2 ${finalTextColor}`}>
+                        {finalTitle}
+                      </h1>
+                      
+                      {/* Nombre del estudiante */}
+                      <p className="text-xl font-semibold text-gray-700 mb-3">
+                        {user?.name || 'Estudiante'}
+                      </p>
+                      
+                      {/* Frase motivacional */}
+                      <p className="text-base text-gray-600 italic">
+                        {motivationalPhrase || 'Cargando...'}
+                      </p>
+                    </div>
 
-              {/* Score Card */}
-              <div className="mb-6">
-                <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-sm">
-                  <div className="text-center">
-                    <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                      Tu Puntuación
-                    </p>
-                    
-                    {/* Score */}
-                    <div className="flex items-center justify-center gap-2 mb-4">
-                      <span className={`text-6xl font-bold ${
-                        Math.round((score / shuffledQuestions.length) * 100) >= 70 ? 'text-green-600' : 'text-blue-600'
-                      }`}>
-                        {score}
-                      </span>
-                      <span className="text-3xl text-gray-400">/</span>
-                      <span className="text-4xl font-semibold text-gray-500">{shuffledQuestions.length}</span>
+                    {/* Score Card */}
+                    <div className="mb-6">
+                      <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-sm">
+                        <div className="text-center">
+                          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                            Tu Puntuación
+                          </p>
+                          
+                          {/* Score */}
+                          <div className="flex items-center justify-center gap-2 mb-4">
+                            <span className={`text-6xl font-bold ${
+                              isGoldFinal ? 'text-yellow-600' : isSilverFinal ? 'text-gray-500' : 'text-orange-600'
+                            }`}>
+                              {score}
+                            </span>
+                            <span className="text-3xl text-gray-400">/</span>
+                            <span className="text-4xl font-semibold text-gray-500">{shuffledQuestions.length}</span>
+                          </div>
+                          
+                          {/* Porcentaje */}
+                          <div className={`inline-block px-5 py-2 rounded-full text-xl font-bold ${
+                            isGoldFinal
+                              ? 'bg-yellow-100 text-yellow-700' 
+                              : isSilverFinal
+                              ? 'bg-gray-100 text-gray-700'
+                              : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {finalPercentage}% Correcto
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    
-                    {/* Porcentaje */}
-                    <div className={`inline-block px-5 py-2 rounded-full text-xl font-bold ${
-                      Math.round((score / shuffledQuestions.length) * 100) >= 70 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {Math.round((score / shuffledQuestions.length) * 100)}% Correcto
-                    </div>
-                  </div>
-                </div>
-              </div>
+                  </>
+                )
+              })()}
 
               {/* Course Progress */}
               <div className="mb-6">
@@ -824,132 +938,248 @@ export default function TestPage() {
         </div>
         
         {/* Modal de Felicitaciones cada 10 preguntas */}
-        {showMilestoneModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn relative">
-              
-              {/* Header con emoji y título */}
-              <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-8 py-6 text-center relative">
-                <div className="text-6xl mb-3">📚</div>
-                <h2 className="text-2xl font-bold text-white mb-2">💪 ¡FUERZA GUERRERO!</h2>
-                <p className="text-white/90 text-xl font-bold">BLOQUE {currentBlockIndex + 1} COMPLETADO</p>
-              </div>
-
-              {/* Body */}
-              <div className="px-8 py-8 text-center">
-                {/* Score grande */}
-                <div className="mb-6">
-                  <p className="text-7xl font-black text-purple-600 mb-2">
-                    {milestoneBlockScore}/{questionsPerBlock}
-                  </p>
-                  <p className="text-2xl text-secondary-500 mb-4">
-                    ({Math.round((milestoneBlockScore / questionsPerBlock) * 100)}%)
-                  </p>
+        {showMilestoneModal && (() => {
+          const blockPercentage = Math.round((milestoneBlockScore / questionsPerBlock) * 100)
+          const isGold = blockPercentage >= 80
+          const isSilver = blockPercentage >= 60 && blockPercentage < 80
+          const isBronze = blockPercentage < 60
+          
+          // Configuración por medalla del bloque
+          const medalConfig = isGold ? {
+            emoji: '🏆',
+            medal: '🏆 ORO',
+            gradient: 'from-yellow-400 via-yellow-500 to-orange-500',
+            bgGradient: 'from-yellow-50 to-orange-50',
+            borderColor: 'border-yellow-300',
+            textColor: 'text-yellow-900',
+            message: '¡APOTEÓSICO!',
+            nameClass: 'animate-neon'
+          } : isSilver ? {
+            emoji: '🥈',
+            medal: '🥈 PLATA',
+            gradient: 'from-gray-300 via-gray-400 to-gray-500',
+            bgGradient: 'from-gray-50 to-gray-100',
+            borderColor: 'border-gray-300',
+            textColor: 'text-gray-700',
+            message: '¡MUY BIEN!',
+            nameClass: ''
+          } : {
+            emoji: '🥉',
+            medal: '🥉 BRONCE',
+            gradient: 'from-orange-300 via-orange-400 to-orange-500',
+            bgGradient: 'from-orange-50 to-amber-50',
+            borderColor: 'border-orange-300',
+            textColor: 'text-orange-900',
+            message: '¡SIGUE ADELANTE!',
+            nameClass: ''
+          }
+          
+          return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn relative">
+                
+                {/* Icono de medalla flotante grande en el fondo */}
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none z-0">
+                  <div className="text-[250px]">{medalConfig.emoji}</div>
+                </div>
+                
+                {/* Header con gradiente según medalla */}
+                <div className={`bg-gradient-to-r ${medalConfig.gradient} px-8 py-6 text-center relative z-10`}>
+                  <div className="text-6xl mb-3">{medalConfig.emoji}</div>
+                  <h2 className="text-2xl font-bold text-white mb-2 drop-shadow-lg">💪 ¡FUERZA GUERRERO!</h2>
+                  <p className="text-white/90 text-xl font-bold drop-shadow-lg">BLOQUE {currentBlockIndex + 1} COMPLETADO</p>
                 </div>
 
-                {/* Mensaje de felicitaciones épicas */}
-                <div className="mb-6">
-                  <h3 className="text-2xl font-bold text-purple-700 mb-4">
-                    ¡FELICIDADES ÉPICAS!
-                  </h3>
-                  <p className="text-3xl font-black text-secondary-900 mb-3">
-                    {user?.name?.toUpperCase() || 'GUERRERO'}
-                  </p>
-                  <p className="text-xl font-bold text-purple-600 mb-4">
-                    ¡ERES INCREÍBLE!
-                  </p>
-                </div>
-
-                {/* Mensaje motivacional personalizado */}
-                <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-lg p-4 mb-6">
-                  <p className="text-sm font-bold text-purple-900">
-                    {milestoneBlockScore >= 7 
-                      ? `¡${milestoneBlockScore}/${questionsPerBlock}! ${user?.name?.toUpperCase() || 'GUERRERO'}, ¡EXCELENTE TRABAJO! SIGUE ASÍ, ESTÁS DOMINANDO EL TEMA.`
-                      : `¡${milestoneBlockScore}/${questionsPerBlock}! ${user?.name?.toUpperCase() || 'GUERRERO'}, SIGUE PRACTICANDO, CADA ERROR TE ACERCA A LA EXCELENCIA.`
-                    }
-                  </p>
-                </div>
-
-                {/* Progreso total */}
-                <div className="bg-gray-50 rounded-lg p-4 mb-6 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-secondary-700">Preguntas contestadas:</span>
-                    <span className="text-lg font-bold text-secondary-900">
-                      {(currentBlockIndex + 1) * questionsPerBlock}/{shuffledQuestions.length}
-                    </span>
+                {/* Body */}
+                <div className="px-8 py-8 text-center relative z-10">
+                  {/* Score grande */}
+                  <div className="mb-6">
+                    <p className="text-8xl font-black mb-3 text-gray-700">
+                      {milestoneBlockScore}/{questionsPerBlock}
+                    </p>
+                    <p className="text-3xl font-bold text-gray-600 mb-4">
+                      ({blockPercentage}%)
+                    </p>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div 
-                      className="bg-gradient-to-r from-purple-600 to-blue-600 h-3 rounded-full transition-all duration-500"
-                      style={{ width: `${((currentBlockIndex + 1) * questionsPerBlock / shuffledQuestions.length) * 100}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-secondary-700">Progreso total:</span>
-                    <span className="text-lg font-bold text-purple-600">
-                      {Math.round(((currentBlockIndex + 1) * questionsPerBlock / shuffledQuestions.length) * 100)}%
-                    </span>
-                  </div>
-                </div>
 
-                {/* Botón continuar */}
-                <button
-                  onClick={handleContinueToNextBlock}
-                  className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center gap-2"
-                >
-                  <span>🚀 CONTINUAR CON LAS SIGUIENTES {questionsPerBlock} PREGUNTAS</span>
-                </button>
+                  {/* Mensaje de felicitaciones épicas */}
+                  <div className="mb-6">
+                    <h3 className={`text-3xl font-bold mb-4 bg-gradient-to-r ${medalConfig.gradient} bg-clip-text text-transparent`}>
+                      {medalConfig.message}
+                    </h3>
+                    <p 
+                      className={`text-4xl font-black mb-2 ${medalConfig.nameClass}`}
+                      style={{
+                        color: isGold ? '#1f2937' : isSilver ? '#1f2937' : '#1f2937',
+                        textShadow: isGold ? '0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(255, 165, 0, 0.6)' : 'none'
+                      }}
+                    >
+                      {user?.name?.toUpperCase() || 'GUERRERO'}
+                    </p>
+                    <p className="text-2xl font-bold text-gray-700 mb-3">
+                      ¡ERES INCREÍBLE!
+                    </p>
+                  </div>
+
+                  {/* Mensaje motivacional personalizado */}
+                  <div className={`bg-gradient-to-r ${medalConfig.bgGradient} border-2 ${medalConfig.borderColor} rounded-lg p-4 mb-6`}>
+                    <p className={`text-sm font-bold ${medalConfig.textColor}`}>
+                      {isGold
+                        ? `¡${milestoneBlockScore}/${questionsPerBlock}! ${user?.name?.toUpperCase() || 'GUERRERO'}, ¡ERES UN CAMPEÓN! DOMINAS EL BLOQUE A LA PERFECCIÓN.`
+                        : isSilver
+                        ? `¡${milestoneBlockScore}/${questionsPerBlock}! ${user?.name?.toUpperCase() || 'GUERRERO'}, ¡MUY BUEN TRABAJO! ESTÁS EN EL CAMINO CORRECTO.`
+                        : `¡${milestoneBlockScore}/${questionsPerBlock}! ${user?.name?.toUpperCase() || 'GUERRERO'}, SIGUE PRACTICANDO, CADA ERROR TE ACERCA A LA EXCELENCIA.`
+                      }
+                    </p>
+                  </div>
+
+                  {/* Progreso total */}
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-secondary-700">Preguntas contestadas:</span>
+                      <span className="text-lg font-bold text-secondary-900">
+                        {(currentBlockIndex + 1) * questionsPerBlock}/{shuffledQuestions.length}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div 
+                        className={`bg-gradient-to-r ${medalConfig.gradient} h-3 rounded-full transition-all duration-500`}
+                        style={{ width: `${((currentBlockIndex + 1) * questionsPerBlock / shuffledQuestions.length) * 100}%` }}
+                      ></div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-secondary-700">Progreso total:</span>
+                      <span className={`text-lg font-bold bg-gradient-to-r ${medalConfig.gradient} bg-clip-text text-transparent`}>
+                        {Math.round(((currentBlockIndex + 1) * questionsPerBlock / shuffledQuestions.length) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Botón continuar */}
+                  <button
+                    onClick={handleContinueToNextBlock}
+                    className={`w-full px-6 py-4 bg-gradient-to-r ${medalConfig.gradient} text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center justify-center gap-2`}
+                  >
+                    <span>🚀 CONTINUAR CON LAS SIGUIENTES {questionsPerBlock} PREGUNTAS</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
         
         {/* Modal de Celebración Final */}
-        {showFinalCelebration && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn relative">
-              
-              {/* Header con emoji y título */}
-              <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-8 py-6 text-center relative">
-                <div className="text-6xl mb-3">📚</div>
-                <h2 className="text-2xl font-bold text-white mb-2">💪 ¡FUERZA GUERRERO!</h2>
-                <p className="text-white/90 text-xl font-bold">TEST COMPLETADO</p>
-              </div>
-
-              {/* Body */}
-              <div className="px-8 py-8 text-center">
-                {/* Nombre del estudiante */}
-                <p className="text-2xl font-black text-gray-800 mb-2">
-                  {user?.name?.toUpperCase() || 'GUERRERO'}
-                </p>
-                <p className="text-xl font-bold text-purple-600 mb-4">
-                  ¡ERES INCREÍBLE!
-                </p>
-
-                {/* Mensaje motivacional personalizado */}
-                <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-lg p-4 mb-6">
-                  <p className="text-sm font-bold text-purple-900">
-                    {score >= (shuffledQuestions.length * 0.7)
-                      ? `¡${score}/${shuffledQuestions.length}! ${user?.name?.toUpperCase() || 'GUERRERO'}, ¡EXCELENTE TRABAJO! SIGUE ASÍ, ESTÁS DOMINANDO EL TEMA.`
-                      : `¡${score}/${shuffledQuestions.length}! ${user?.name?.toUpperCase() || 'GUERRERO'}, SIGUE PRACTICANDO, CADA ERROR TE ACERCA A LA EXCELENCIA.`
-                    }
-                  </p>
+        {showFinalCelebration && (() => {
+          const percentage = Math.round((score / shuffledQuestions.length) * 100)
+          const isGold = percentage >= 80
+          const isSilver = percentage >= 60 && percentage < 80
+          const isBronze = percentage < 60
+          
+          // Configuración por medalla
+          const medalConfig = isGold ? {
+            emoji: '🏆',
+            medal: '🏆 MEDALLA DE ORO',
+            gradient: 'from-yellow-400 via-yellow-500 to-orange-500',
+            bgGradient: 'from-yellow-50 to-orange-50',
+            borderColor: 'border-yellow-300',
+            textColor: 'text-yellow-900',
+            message: '¡APOTEÓSICO!',
+            nameClass: 'animate-neon',
+            textShadow: ''
+          } : isSilver ? {
+            emoji: '🥈',
+            medal: '🥈 MEDALLA DE PLATA',
+            gradient: 'from-gray-300 via-gray-400 to-gray-500',
+            bgGradient: 'from-gray-50 to-gray-100',
+            borderColor: 'border-gray-300',
+            textColor: 'text-gray-700',
+            message: '¡MUY BIEN!',
+            nameClass: '',
+            textShadow: ''
+          } : {
+            emoji: '🥉',
+            medal: '🥉 MEDALLA DE BRONCE',
+            gradient: 'from-orange-300 via-orange-400 to-orange-500',
+            bgGradient: 'from-orange-50 to-amber-50',
+            borderColor: 'border-orange-300',
+            textColor: 'text-orange-900',
+            message: '¡SIGUE ADELANTE!',
+            nameClass: '',
+            textShadow: ''
+          }
+          
+          return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn relative">
+                
+                {/* Icono de medalla flotante grande en el fondo */}
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none z-0">
+                  <div className="text-[250px]">{medalConfig.emoji}</div>
+                </div>
+                
+                {/* Header con gradiente según medalla */}
+                <div className={`bg-gradient-to-r ${medalConfig.gradient} px-8 py-6 text-center relative z-10`}>
+                  <div className="text-6xl mb-3">{medalConfig.emoji}</div>
+                  <h2 className="text-2xl font-bold text-white mb-2 drop-shadow-lg">💪 ¡FUERZA GUERRERO!</h2>
+                  <p className="text-white/90 text-xl font-bold drop-shadow-lg">TEST COMPLETADO</p>
                 </div>
 
-                {/* Botón continuar */}
-                <button
-                  onClick={() => {
-                    setShowFinalCelebration(false)
-                    setTestCompleted(true)
-                  }}
-                  className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center gap-2"
-                >
-                  <span>VER RESULTADOS DETALLADOS</span>
-                </button>
+                {/* Body */}
+                <div className="px-8 py-8 text-center relative z-10">
+                  {/* Puntaje */}
+                  <div className="mb-6">
+                    <p className="text-8xl font-black mb-3 text-gray-700">
+                      {score}/{shuffledQuestions.length}
+                    </p>
+                    <p className="text-3xl font-bold text-gray-600">({percentage}%)</p>
+                  </div>
+
+                  {/* Mensaje */}
+                  <div className="mb-6">
+                    <h3 className={`text-3xl font-bold mb-4 bg-gradient-to-r ${medalConfig.gradient} bg-clip-text text-transparent`}>
+                      {medalConfig.message}
+                    </h3>
+                    <p 
+                      className={`text-4xl font-black mb-2 ${medalConfig.nameClass}`}
+                      style={{
+                        color: isGold ? '#1f2937' : isSilver ? '#1f2937' : '#1f2937',
+                        textShadow: isGold ? '0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(255, 165, 0, 0.6)' : 'none'
+                      }}
+                    >
+                      {user?.name?.toUpperCase() || 'GUERRERO'}
+                    </p>
+                    <p className="text-2xl font-bold text-gray-700 mb-3">
+                      ¡ERES INCREÍBLE!
+                    </p>
+                  </div>
+
+                  {/* Mensaje motivacional personalizado */}
+                  <div className={`bg-gradient-to-r ${medalConfig.bgGradient} border-2 ${medalConfig.borderColor} rounded-lg p-4 mb-6`}>
+                    <p className={`text-sm font-bold ${medalConfig.textColor}`}>
+                      {isGold
+                        ? `¡${score}/${shuffledQuestions.length}! ${user?.name?.toUpperCase() || 'GUERRERO'}, ¡ERES UN CAMPEÓN! DOMINAS EL TEMA A LA PERFECCIÓN.`
+                        : isSilver
+                        ? `¡${score}/${shuffledQuestions.length}! ${user?.name?.toUpperCase() || 'GUERRERO'}, ¡MUY BUEN TRABAJO! ESTÁS EN EL CAMINO CORRECTO.`
+                        : `¡${score}/${shuffledQuestions.length}! ${user?.name?.toUpperCase() || 'GUERRERO'}, SIGUE PRACTICANDO, CADA ERROR TE ACERCA A LA EXCELENCIA.`
+                      }
+                    </p>
+                  </div>
+
+                  {/* Botón continuar */}
+                  <button
+                    onClick={() => {
+                      setShowFinalCelebration(false)
+                      setTestCompleted(true)
+                    }}
+                    className={`w-full px-6 py-4 bg-gradient-to-r ${medalConfig.gradient} text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center justify-center gap-2`}
+                  >
+                    <span>VER RESULTADOS DETALLADOS</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
         
         </div>
       </div>

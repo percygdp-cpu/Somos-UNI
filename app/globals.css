@@ -84,3 +84,16 @@
     transform: translateX(0);
   }
 }
+
+@keyframes flicker {
+  0%, 100% {
+    text-shadow: 0 0 7px #fff, 0 0 42px #FFD700, 0 0 102px #FFD700, 0 0 151px #FFD700;
+  }
+  50% {
+    text-shadow: 0 0 4px #fff, 0 0 21px #FFD700, 0 0 51px #FFD700, 0 0 80px #FFD700;
+  }
+}
+
+.animate-neon {
+  animation: flicker 1.5s infinite alternate;
+}
