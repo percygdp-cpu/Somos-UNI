@@ -190,39 +190,83 @@ export default function AnalyticsPage() {
               </p>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="analytics-card card bg-white border border-gray-200">
-                <div className="text-center py-6">
-                  <p className="text-secondary-600 text-sm font-medium mb-2">Estudiantes Activos</p>
-                  <p className="text-5xl font-bold text-secondary-900">{stats.activeStudents}</p>
-                </div>
-              </div>
-
-              <div className="analytics-card card bg-white border border-gray-200">
-                <div className="text-center py-6">
-                  <p className="text-secondary-600 text-sm font-medium mb-2">Promedio General</p>
-                  <p className="text-5xl font-bold text-secondary-900">{stats.averageScore}%</p>
-                </div>
-              </div>
-
-              <div className="analytics-card card bg-white border border-gray-200">
-                <div className="text-center py-6">
-                  <p className="text-secondary-600 text-sm font-medium mb-2">Módulos Completados por Alumno</p>
-                  <p className="text-5xl font-bold text-secondary-900">{stats.avgModulesPerStudent}</p>
+            {/* Stats Card - Hero Style */}
+            <div className="analytics-card mb-8">
+              <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-600 rounded-xl shadow-xl overflow-hidden">
+                <div className="relative px-6 py-6">
+                  {/* Background Pattern */}
+                  <div className="absolute inset-0 opacity-10">
+                    <div className="absolute top-0 left-0 w-48 h-48 bg-white rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                    <div className="absolute bottom-0 right-0 w-64 h-64 bg-white rounded-full translate-x-1/3 translate-y-1/3"></div>
+                  </div>
+                  
+                  {/* Content */}
+                  <div className="relative z-10 text-center">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 backdrop-blur-sm rounded-xl mb-4">
+                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                    
+                    <h2 className="text-white/90 text-base font-medium mb-2 tracking-wide uppercase">
+                      Estudiantes Activos
+                    </h2>
+                    
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <span className="text-6xl font-black text-white">
+                        {stats.activeStudents}
+                      </span>
+                    </div>
+                    
+                    <p className="text-white/80 text-sm max-w-md mx-auto">
+                      {stats.activeStudents === 1 
+                        ? 'estudiante registrado y activo en la plataforma' 
+                        : `estudiantes registrados y activos en la plataforma`
+                      }
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Tabla de Progreso de Estudiantes */}
             <div className="analytics-card card">
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-secondary-900 mb-2">
-                  Progreso por Estudiante
-                </h2>
-                <p className="text-secondary-600 text-sm">
-                  Rendimiento y actividad de cada estudiante
-                </p>
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-secondary-900 mb-2">
+                    Progreso por Estudiante
+                  </h2>
+                  <p className="text-secondary-600 text-sm">
+                    Rendimiento y actividad de cada estudiante
+                  </p>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (window.confirm('¿Estás seguro de que deseas eliminar todos los resultados de tests? Esta acción no se puede deshacer.')) {
+                      try {
+                        const response = await fetch('/api/test-results', {
+                          method: 'DELETE',
+                        })
+                        
+                        if (response.ok) {
+                          alert('Todos los resultados han sido eliminados exitosamente')
+                          loadAnalyticsData()
+                        } else {
+                          alert('Error al eliminar los resultados')
+                        }
+                      } catch (error) {
+                        console.error('Error:', error)
+                        alert('Error al eliminar los resultados')
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-medium text-sm transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Resetear Todo
+                </button>
               </div>
 
               <div className="overflow-x-auto">

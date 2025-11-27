@@ -128,6 +128,7 @@ export default function TestPage() {
   const [prevProgress, setPrevProgress] = useState(0)
   const [shouldShowConfetti, setShouldShowConfetti] = useState(false)
   const [showMilestoneModal, setShowMilestoneModal] = useState(false)
+  const [showFinalCelebration, setShowFinalCelebration] = useState(false)
   const [milestoneBlockScore, setMilestoneBlockScore] = useState(0)
   const [motivationalPhrase, setMotivationalPhrase] = useState<string>('')
   const questionsPerBlock = 10
@@ -195,6 +196,42 @@ export default function TestPage() {
       }, 400)
     }
   }, [showMilestoneModal])
+
+  // Efecto para lanzar confetti cuando se muestra el modal de celebración final
+  useEffect(() => {
+    if (showFinalCelebration) {
+      const percentage = Math.round((score / shuffledQuestions.length) * 100)
+      const colors = percentage >= 70 
+        ? ['#10b981', '#059669', '#34d399', '#6ee7b7'] // Verde
+        : ['#3b82f6', '#2563eb', '#60a5fa', '#93c5fd'] // Azul
+      
+      // Lanzar confetti inmediatamente
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors
+      })
+      
+      setTimeout(() => {
+        confetti({
+          particleCount: 100,
+          spread: 120,
+          origin: { y: 0.5 },
+          colors
+        })
+      }, 250)
+      
+      setTimeout(() => {
+        confetti({
+          particleCount: 120,
+          spread: 100,
+          origin: { y: 0.7 },
+          colors
+        })
+      }, 500)
+    }
+  }, [showFinalCelebration, score, shuffledQuestions.length])
 
   // Función para mezclar array usando Fisher-Yates (sin repeticiones)
   const shuffleArray = <T,>(array: T[]): T[] => {
@@ -325,7 +362,9 @@ export default function TestPage() {
     const percentage = Math.round((correctAnswers / totalQuestions) * 100)
     
     setScore(correctAnswers)
-    setTestCompleted(true)
+    
+    // Mostrar modal de celebración final primero
+    setShowFinalCelebration(true)
     
     // Activar confetti si aprobó (>= 70%)
     if (percentage >= 70) {
@@ -859,6 +898,53 @@ export default function TestPage() {
                   className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center gap-2"
                 >
                   <span>🚀 CONTINUAR CON LAS SIGUIENTES {questionsPerBlock} PREGUNTAS</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Modal de Celebración Final */}
+        {showFinalCelebration && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn relative">
+              
+              {/* Header con emoji y título */}
+              <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-8 py-6 text-center relative">
+                <div className="text-6xl mb-3">📚</div>
+                <h2 className="text-2xl font-bold text-white mb-2">💪 ¡FUERZA GUERRERO!</h2>
+                <p className="text-white/90 text-xl font-bold">TEST COMPLETADO</p>
+              </div>
+
+              {/* Body */}
+              <div className="px-8 py-8 text-center">
+                {/* Nombre del estudiante */}
+                <p className="text-2xl font-black text-gray-800 mb-2">
+                  {user?.name?.toUpperCase() || 'GUERRERO'}
+                </p>
+                <p className="text-xl font-bold text-purple-600 mb-4">
+                  ¡ERES INCREÍBLE!
+                </p>
+
+                {/* Mensaje motivacional personalizado */}
+                <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-lg p-4 mb-6">
+                  <p className="text-sm font-bold text-purple-900">
+                    {score >= (shuffledQuestions.length * 0.7)
+                      ? `¡${score}/${shuffledQuestions.length}! ${user?.name?.toUpperCase() || 'GUERRERO'}, ¡EXCELENTE TRABAJO! SIGUE ASÍ, ESTÁS DOMINANDO EL TEMA.`
+                      : `¡${score}/${shuffledQuestions.length}! ${user?.name?.toUpperCase() || 'GUERRERO'}, SIGUE PRACTICANDO, CADA ERROR TE ACERCA A LA EXCELENCIA.`
+                    }
+                  </p>
+                </div>
+
+                {/* Botón continuar */}
+                <button
+                  onClick={() => {
+                    setShowFinalCelebration(false)
+                    setTestCompleted(true)
+                  }}
+                  className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center gap-2"
+                >
+                  <span>VER RESULTADOS DETALLADOS</span>
                 </button>
               </div>
             </div>

@@ -91,3 +91,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
+
+// DELETE - Eliminar todos los resultados de tests
+export async function DELETE(request: Request) {
+  try {
+    await client.execute('DELETE FROM test_results')
+    
+    return NextResponse.json(
+      { message: 'Todos los resultados han sido eliminados exitosamente' },
+      { status: 200 }
+    )
+  } catch (error: any) {
+    console.error('Error deleting test results:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
