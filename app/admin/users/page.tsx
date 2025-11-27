@@ -5,6 +5,7 @@ import AdminHeader from '@/components/AdminHeader'
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { User } from '@/types'
+import { validateAndCompressPDF } from '@/lib/pdfCompressor'
 import anime from 'animejs'
 import { useRouter, useSearchParams } from 'next/navigation'
 import React, { useEffect, useState } from 'react'
@@ -3125,19 +3126,19 @@ export default function UserManagementPage() {
                           const file = e.target.files?.[0]
                           if (!file) return
                           
-                          // Validar tamaño del archivo (10MB máximo)
-                          const maxSize = 10 * 1024 * 1024 // 10MB en bytes
-                          if (file.size > maxSize) {
-                            const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
-                            alert(`El archivo es demasiado grande (${sizeMB}MB).\n\nEl tamaño máximo permitido es 10MB.\n\nPor favor, comprime el PDF usando:\nhttps://www.ilovepdf.com/es/comprimir_pdf`)
-                            e.target.value = ''
-                            return
-                          }
-                          
-                          const formData = new FormData()
-                          formData.append('file', file)
+                          // Validar y comprimir PDF si es necesario
+                          showToast('Procesando PDF...', 'info')
                           
                           try {
+                            const result = await validateAndCompressPDF(file, 4)
+                            
+                            if (result.compressed) {
+                              showToast(`PDF comprimido: ${result.originalSize.toFixed(2)}MB → ${result.finalSize.toFixed(2)}MB`, 'success')
+                            }
+                            
+                            const formData = new FormData()
+                            formData.append('file', result.file)
+                            
                             const response = await fetch('/api/upload', {
                               method: 'POST',
                               body: formData
@@ -3152,7 +3153,7 @@ export default function UserManagementPage() {
                               showToast('PDF subido correctamente', 'success')
                             } else {
                               if (response.status === 413) {
-                                alert('El archivo es demasiado grande. El tamaño máximo permitido es 15MB.')
+                                alert('El archivo es demasiado grande incluso después de comprimirlo.\n\nIntenta comprimirlo manualmente: https://www.ilovepdf.com/es/comprimir_pdf')
                               } else {
                                 const error = await response.json()
                                 alert(error.error || 'Error al subir el archivo')
@@ -3168,7 +3169,7 @@ export default function UserManagementPage() {
                         }}
                       />
                     </label>
-                    <p className="text-xs text-secondary-500 mt-2">Archivos PDF hasta 15MB</p>
+                    <p className="text-xs text-secondary-500 mt-2">Archivos PDF (se comprimirán automáticamente si superan 4MB)</p>
                   </div>
                 </>
               )}
@@ -3636,26 +3637,20 @@ export default function UserManagementPage() {
                             const files = Array.from(e.target.files || [])
                             if (files.length === 0) return
                             
-                            // Validar tamaño de cada archivo (10MB máximo)
-                            const maxSize = 10 * 1024 * 1024 // 10MB en bytes
-                            const oversizedFiles = files.filter(file => file.size > maxSize)
-                            
-                            if (oversizedFiles.length > 0) {
-                              const fileNames = oversizedFiles.map(f => {
-                                const sizeMB = (f.size / (1024 * 1024)).toFixed(2)
-                                return `• ${f.name} (${sizeMB}MB)`
-                              }).join('\n')
-                              
-                              alert(`Los siguientes archivos superan el límite de 10MB:\n\n${fileNames}\n\nPor favor, comprime los PDFs usando:\nhttps://www.ilovepdf.com/es/comprimir_pdf`)
-                              e.target.value = ''
-                              return
-                            }
+                            showToast('Procesando PDFs...', 'info')
                             
                             try {
-                              // Subir cada archivo a Vercel Blob
+                              // Comprimir y subir cada archivo
                               const uploadPromises = files.map(async (file) => {
+                                // Comprimir si es necesario
+                                const result = await validateAndCompressPDF(file, 4)
+                                
+                                if (result.compressed) {
+                                  console.log(`${file.name}: ${result.originalSize.toFixed(2)}MB → ${result.finalSize.toFixed(2)}MB`)
+                                }
+                                
                                 const formData = new FormData()
-                                formData.append('file', file)
+                                formData.append('file', result.file)
                                 
                                 const response = await fetch('/api/upload', {
                                   method: 'POST',
@@ -3664,7 +3659,7 @@ export default function UserManagementPage() {
                                 
                                 if (!response.ok) {
                                   if (response.status === 413) {
-                                    throw new Error(`El archivo ${file.name} es demasiado grande (máximo 15MB)`)
+                                    throw new Error(`${file.name} es demasiado grande incluso comprimido. Usa: https://www.ilovepdf.com/es/comprimir_pdf`)
                                   }
                                   const errorData = await response.json()
                                   throw new Error(errorData.error || `Error al subir ${file.name}`)
