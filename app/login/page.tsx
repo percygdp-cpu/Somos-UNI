@@ -51,7 +51,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="rounded-2xl shadow-md overflow-hidden">
           <div className="flex flex-col items-center">
-            <Image src="/logo.jpg" alt="Somos UNI" width={500} height={300} className="w-full h-auto object-cover" />
+            <Image src="/logo.png" alt="Somos UNI" width={500} height={300} className="w-full h-auto object-cover" />
           </div>
           <div className="bg-white dark:bg-[#1a1f2e] p-8 space-y-6">
           <form onSubmit={handleSubmit} className="space-y-6">
