@@ -3151,8 +3151,12 @@ export default function UserManagementPage() {
                               })
                               showToast('PDF subido correctamente', 'success')
                             } else {
-                              const error = await response.json()
-                              alert(error.error || 'Error al subir el archivo')
+                              if (response.status === 413) {
+                                alert('El archivo es demasiado grande. El tamaño máximo permitido es 15MB.')
+                              } else {
+                                const error = await response.json()
+                                alert(error.error || 'Error al subir el archivo')
+                              }
                             }
                           } catch (error: any) {
                             console.error('Error:', error)
@@ -3164,7 +3168,7 @@ export default function UserManagementPage() {
                         }}
                       />
                     </label>
-                    <p className="text-xs text-secondary-500 mt-2">Archivos PDF hasta 10MB</p>
+                    <p className="text-xs text-secondary-500 mt-2">Archivos PDF hasta 15MB</p>
                   </div>
                 </>
               )}
@@ -3659,6 +3663,9 @@ export default function UserManagementPage() {
                                 })
                                 
                                 if (!response.ok) {
+                                  if (response.status === 413) {
+                                    throw new Error(`El archivo ${file.name} es demasiado grande (máximo 15MB)`)
+                                  }
                                   const errorData = await response.json()
                                   throw new Error(errorData.error || `Error al subir ${file.name}`)
                                 }

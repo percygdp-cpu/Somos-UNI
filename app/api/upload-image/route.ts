@@ -1,6 +1,10 @@
 import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
 
+// Aumentar el límite de tamaño para esta ruta
+export const runtime = 'nodejs'
+export const maxDuration = 60 // 60 segundos timeout
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()

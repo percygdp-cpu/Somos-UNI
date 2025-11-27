@@ -1,6 +1,10 @@
 import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
 
+// Aumentar el límite de tamaño para esta ruta
+export const runtime = 'nodejs'
+export const maxDuration = 60 // 60 segundos timeout
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
@@ -21,10 +25,10 @@ export async function POST(request: Request) {
       )
     }
 
-    // Validar tamaño (máximo 10MB)
-    if (file.size > 10 * 1024 * 1024) {
+    // Validar tamaño (máximo 15MB)
+    if (file.size > 15 * 1024 * 1024) {
       return NextResponse.json(
-        { error: 'El archivo no debe superar los 10MB' },
+        { error: 'El archivo no debe superar los 15MB' },
         { status: 400 }
       )
     }
