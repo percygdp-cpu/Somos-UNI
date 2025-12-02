@@ -24,6 +24,7 @@ export default function AnalyticsPage() {
   const [tests, setTests] = useState<any[]>([])
   const [testResults, setTestResults] = useState<any[]>([])
   const [studentProgress, setStudentProgress] = useState<StudentProgress[]>([])
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null)
   
   const [stats, setStats] = useState({
     totalStudents: 0,
@@ -331,6 +332,191 @@ export default function AnalyticsPage() {
                       <tr>
                         <td colSpan={5} className="text-center py-12 text-secondary-500">
                           No hay datos de estudiantes disponibles
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Dashboard de Tests por Estudiante */}
+            <div className="analytics-card card mt-6">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-secondary-900 mb-2">
+                  Dashboard de Tests Recientes
+                </h2>
+                <p className="text-secondary-600 text-sm">
+                  Últimos 10 tests realizados por cada estudiante (1 = más reciente)
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-max">
+                  <thead>
+                    <tr className="border-b-2 border-secondary-200">
+                      <th className="text-left py-3 px-4 text-secondary-700 font-semibold text-sm sticky left-0 bg-white z-10 min-w-[180px]">
+                        Estudiante
+                      </th>
+                      {/* Columnas del 1 al 10 */}
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                        <th key={num} className="text-center py-3 px-2 min-w-[100px]">
+                          <span className="text-secondary-700 font-semibold text-sm">{num}</span>
+                        </th>
+                      ))}
+                      <th className="text-center py-3 px-4 text-secondary-700 font-semibold text-sm min-w-[120px]">
+                        Última Actividad
+                      </th>
+                      <th className="text-center py-3 px-4 text-secondary-700 font-semibold text-sm min-w-[100px]">
+                        Estado
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {studentProgress.length > 0 ? (
+                      studentProgress.map((student) => {
+                        // Obtener los últimos 10 resultados de este estudiante ordenados por fecha
+                        const studentResults = testResults
+                          .filter((r: any) => r.userId === student.id)
+                          .sort((a: any, b: any) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+                          .slice(0, 10)
+                        
+                        return (
+                          <tr key={student.id} className="border-b border-secondary-100 hover:bg-secondary-50 transition-colors">
+                            <td className="py-3 px-4 sticky left-0 bg-white z-10">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-primary-600 font-semibold text-xs">
+                                    {student.name.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <span className="font-medium text-secondary-900 text-sm truncate max-w-[120px]" title={student.name}>
+                                  {student.name}
+                                </span>
+                              </div>
+                            </td>
+                            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((index) => {
+                              const result = studentResults[index]
+                              
+                              if (!result) {
+                                return (
+                                  <td key={index} className="text-center py-3 px-2">
+                                    <span className="text-secondary-300 text-xs">—</span>
+                                  </td>
+                                )
+                              }
+                              
+                              const percentage = result.percentage
+                              const test = tests.find((t: any) => t.id === result.testId)
+                              const testName = test?.title || `Test ${result.testId}`
+                              
+                              // Obtener módulo y curso desde el test
+                              const module = modules.find((m: any) => m.id === test?.moduleId)
+                              const moduleName = module?.title || 'Módulo'
+                              const course = courses.find((c: any) => c.id === test?.courseId)
+                              const courseName = course?.title || 'Curso'
+                              
+                              // Truncar nombre si es muy largo
+                              const shortName = testName.length > 12 ? testName.substring(0, 10) + '...' : testName
+                              
+                              // ID único para el tooltip
+                              const tooltipId = `${student.id}-${index}`
+                              const isActive = activeTooltip === tooltipId
+                              
+                              return (
+                                <td key={index} className="text-center py-2 px-2">
+                                  <div 
+                                    className="flex flex-col items-center gap-1 cursor-pointer hover:scale-105 transition-transform relative"
+                                    onClick={() => setActiveTooltip(isActive ? null : tooltipId)}
+                                    onMouseMove={() => activeTooltip === tooltipId && setActiveTooltip(null)}
+                                  >
+                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
+                                      percentage >= 70 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : percentage >= 50
+                                        ? 'bg-yellow-100 text-yellow-800'
+                                        : 'bg-red-100 text-red-800'
+                                    }`}>
+                                      {percentage}%
+                                    </span>
+                                    <span className="text-xs text-secondary-500 truncate max-w-[90px]">
+                                      {shortName}
+                                    </span>
+                                  </div>
+                                  
+                                  {/* Tooltip personalizado - Modal centrado */}
+                                  {isActive && (
+                                    <div 
+                                      className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-secondary-200 overflow-hidden animate-fadeIn pointer-events-none"
+                                      style={{
+                                        width: '300px',
+                                        left: '50%',
+                                        top: '50%',
+                                        transform: 'translate(-50%, -50%)'
+                                      }}
+                                    >
+                                      {/* Header del tooltip */}
+                                      <div className={`px-4 py-3 ${
+                                        percentage >= 70 
+                                          ? 'bg-gradient-to-r from-green-500 to-green-600' 
+                                          : percentage >= 50
+                                          ? 'bg-gradient-to-r from-yellow-500 to-yellow-600'
+                                          : 'bg-gradient-to-r from-red-500 to-red-600'
+                                      }`}>
+                                        <p className="text-white font-bold text-xl text-center">🎯 {percentage}%</p>
+                                      </div>
+                                      {/* Contenido */}
+                                      <div className="p-4 space-y-3">
+                                        <div className="flex items-start gap-3">
+                                          <span className="text-xl">📚</span>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs text-secondary-500 font-medium uppercase tracking-wide">Curso</p>
+                                            <p className="text-sm font-semibold text-secondary-900 break-words">{courseName}</p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                          <span className="text-xl">📁</span>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs text-secondary-500 font-medium uppercase tracking-wide">Módulo</p>
+                                            <p className="text-sm font-semibold text-secondary-900 break-words">{moduleName}</p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                          <span className="text-xl">📝</span>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs text-secondary-500 font-medium uppercase tracking-wide">Test</p>
+                                            <p className="text-sm font-semibold text-secondary-900 break-words">{testName}</p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+                              )
+                            })}
+                            {/* Última Actividad */}
+                            <td className="text-center py-3 px-4 text-secondary-600 text-sm">
+                              {student.lastActivity}
+                            </td>
+                            {/* Estado */}
+                            <td className="text-center py-3 px-4">
+                              {student.testsCompleted > 0 ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  Activo
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                  Sin actividad
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={13} className="text-center py-12 text-secondary-500">
+                          No hay datos de tests disponibles
                         </td>
                       </tr>
                     )}
