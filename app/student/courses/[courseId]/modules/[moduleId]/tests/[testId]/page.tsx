@@ -131,7 +131,24 @@ export default function TestPage() {
   const [showFinalCelebration, setShowFinalCelebration] = useState(false)
   const [milestoneBlockScore, setMilestoneBlockScore] = useState(0)
   const [motivationalPhrase, setMotivationalPhrase] = useState<string>('')
+  const [modalScale, setModalScale] = useState(1)
   const questionsPerBlock = 10
+
+  // Calcular escala del modal según tamaño de ventana
+  useEffect(() => {
+    const calculateScale = () => {
+      const windowHeight = window.innerHeight
+      const modalBaseHeight = 650 // Altura base del modal en px
+      const padding = 40 // Padding vertical mínimo
+      const availableHeight = windowHeight - padding
+      const scale = Math.min(1, availableHeight / modalBaseHeight)
+      setModalScale(scale)
+    }
+    
+    calculateScale()
+    window.addEventListener('resize', calculateScale)
+    return () => window.removeEventListener('resize', calculateScale)
+  }, [])
 
   useEffect(() => {
     loadTestData()
@@ -976,39 +993,42 @@ export default function TestPage() {
           
           return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn relative">
+              <div 
+                className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-scaleIn relative origin-center"
+                style={{ transform: `scale(${modalScale})` }}
+              >
                 
                 {/* Icono de medalla flotante grande en el fondo */}
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none z-0">
-                  <div className="text-[250px]">{medalConfig.emoji}</div>
+                  <div className="text-[180px]">{medalConfig.emoji}</div>
                 </div>
                 
                 {/* Header con gradiente según medalla */}
-                <div className={`bg-gradient-to-r ${medalConfig.gradient} px-8 py-6 text-center relative z-10`}>
-                  <div className="text-6xl mb-3">{medalConfig.emoji}</div>
-                  <h2 className="text-2xl font-bold text-white mb-2 drop-shadow-lg">💪 ¡FUERZA GUERRERO!</h2>
-                  <p className="text-white/90 text-xl font-bold drop-shadow-lg">BLOQUE {currentBlockIndex + 1} COMPLETADO</p>
+                <div className={`bg-gradient-to-r ${medalConfig.gradient} px-6 py-4 text-center relative z-10`}>
+                  <div className="text-5xl mb-2">{medalConfig.emoji}</div>
+                  <h2 className="text-xl font-bold text-white mb-1 drop-shadow-lg">💪 ¡FUERZA GUERRERO!</h2>
+                  <p className="text-white/90 text-lg font-bold drop-shadow-lg">BLOQUE {currentBlockIndex + 1} COMPLETADO</p>
                 </div>
 
                 {/* Body */}
-                <div className="px-8 py-8 text-center relative z-10">
+                <div className="px-6 py-5 text-center relative z-10">
                   {/* Score grande */}
-                  <div className="mb-6">
-                    <p className="text-8xl font-black mb-3 text-gray-700">
+                  <div className="mb-4">
+                    <p className="text-6xl font-black mb-2 text-gray-700">
                       {milestoneBlockScore}/{questionsPerBlock}
                     </p>
-                    <p className="text-3xl font-bold text-gray-600 mb-4">
+                    <p className="text-2xl font-bold text-gray-600">
                       ({blockPercentage}%)
                     </p>
                   </div>
 
                   {/* Mensaje de felicitaciones épicas */}
-                  <div className="mb-6">
-                    <h3 className={`text-3xl font-bold mb-4 bg-gradient-to-r ${medalConfig.gradient} bg-clip-text text-transparent`}>
+                  <div className="mb-4">
+                    <h3 className={`text-2xl font-bold mb-2 bg-gradient-to-r ${medalConfig.gradient} bg-clip-text text-transparent`}>
                       {medalConfig.message}
                     </h3>
                     <p 
-                      className={`text-4xl font-black mb-2 ${medalConfig.nameClass}`}
+                      className={`text-3xl font-black mb-1 ${medalConfig.nameClass}`}
                       style={{
                         color: isGold ? '#1f2937' : isSilver ? '#1f2937' : '#1f2937',
                         textShadow: isGold ? '0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(255, 165, 0, 0.6)' : 'none'
@@ -1016,13 +1036,13 @@ export default function TestPage() {
                     >
                       {user?.name?.toUpperCase() || 'GUERRERO'}
                     </p>
-                    <p className="text-2xl font-bold text-gray-700 mb-3">
+                    <p className="text-xl font-bold text-gray-700">
                       ¡ERES INCREÍBLE!
                     </p>
                   </div>
 
                   {/* Mensaje motivacional personalizado */}
-                  <div className={`bg-gradient-to-r ${medalConfig.bgGradient} border-2 ${medalConfig.borderColor} rounded-lg p-4 mb-6`}>
+                  <div className={`bg-gradient-to-r ${medalConfig.bgGradient} border-2 ${medalConfig.borderColor} rounded-lg p-3 mb-4`}>
                     <p className={`text-sm font-bold ${medalConfig.textColor}`}>
                       {isGold
                         ? `¡${milestoneBlockScore}/${questionsPerBlock}! ${user?.name?.toUpperCase() || 'GUERRERO'}, ¡ERES UN CAMPEÓN! DOMINAS EL BLOQUE A LA PERFECCIÓN.`
@@ -1034,22 +1054,22 @@ export default function TestPage() {
                   </div>
 
                   {/* Progreso total */}
-                  <div className="bg-gray-50 rounded-lg p-4 mb-6 space-y-3">
+                  <div className="bg-gray-50 rounded-lg p-3 mb-4 space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-semibold text-secondary-700">Preguntas contestadas:</span>
-                      <span className="text-lg font-bold text-secondary-900">
+                      <span className="text-base font-bold text-secondary-900">
                         {(currentBlockIndex + 1) * questionsPerBlock}/{shuffledQuestions.length}
                       </span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
-                        className={`bg-gradient-to-r ${medalConfig.gradient} h-3 rounded-full transition-all duration-500`}
+                        className={`bg-gradient-to-r ${medalConfig.gradient} h-2 rounded-full transition-all duration-500`}
                         style={{ width: `${((currentBlockIndex + 1) * questionsPerBlock / shuffledQuestions.length) * 100}%` }}
                       ></div>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-semibold text-secondary-700">Progreso total:</span>
-                      <span className={`text-lg font-bold bg-gradient-to-r ${medalConfig.gradient} bg-clip-text text-transparent`}>
+                      <span className={`text-base font-bold bg-gradient-to-r ${medalConfig.gradient} bg-clip-text text-transparent`}>
                         {Math.round(((currentBlockIndex + 1) * questionsPerBlock / shuffledQuestions.length) * 100)}%
                       </span>
                     </div>
@@ -1058,9 +1078,9 @@ export default function TestPage() {
                   {/* Botón continuar */}
                   <button
                     onClick={handleContinueToNextBlock}
-                    className={`w-full px-6 py-4 bg-gradient-to-r ${medalConfig.gradient} text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center justify-center gap-2`}
+                    className={`w-full px-5 py-3 bg-gradient-to-r ${medalConfig.gradient} text-white rounded-xl font-bold text-base shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center justify-center gap-2`}
                   >
-                    <span>🚀 CONTINUAR CON LAS SIGUIENTES {questionsPerBlock} PREGUNTAS</span>
+                    <span>🚀 CONTINUAR CON LAS SIGUIENTES 10 PREGUNTAS</span>
                   </button>
                 </div>
               </div>
@@ -1109,38 +1129,41 @@ export default function TestPage() {
           }
           
           return (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn relative">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div 
+                className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-scaleIn relative origin-center"
+                style={{ transform: `scale(${modalScale})` }}
+              >
                 
                 {/* Icono de medalla flotante grande en el fondo */}
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none z-0">
-                  <div className="text-[250px]">{medalConfig.emoji}</div>
+                  <div className="text-[180px]">{medalConfig.emoji}</div>
                 </div>
                 
                 {/* Header con gradiente según medalla */}
-                <div className={`bg-gradient-to-r ${medalConfig.gradient} px-8 py-6 text-center relative z-10`}>
-                  <div className="text-6xl mb-3">{medalConfig.emoji}</div>
-                  <h2 className="text-2xl font-bold text-white mb-2 drop-shadow-lg">💪 ¡FUERZA GUERRERO!</h2>
-                  <p className="text-white/90 text-xl font-bold drop-shadow-lg">TEST COMPLETADO</p>
+                <div className={`bg-gradient-to-r ${medalConfig.gradient} px-6 py-4 text-center relative z-10`}>
+                  <div className="text-5xl mb-2">{medalConfig.emoji}</div>
+                  <h2 className="text-xl font-bold text-white mb-1 drop-shadow-lg">💪 ¡FUERZA GUERRERO!</h2>
+                  <p className="text-white/90 text-lg font-bold drop-shadow-lg">TEST COMPLETADO</p>
                 </div>
 
                 {/* Body */}
-                <div className="px-8 py-8 text-center relative z-10">
+                <div className="px-6 py-5 text-center relative z-10">
                   {/* Puntaje */}
-                  <div className="mb-6">
-                    <p className="text-8xl font-black mb-3 text-gray-700">
+                  <div className="mb-4">
+                    <p className="text-6xl font-black mb-2 text-gray-700">
                       {score}/{shuffledQuestions.length}
                     </p>
-                    <p className="text-3xl font-bold text-gray-600">({percentage}%)</p>
+                    <p className="text-2xl font-bold text-gray-600">({percentage}%)</p>
                   </div>
 
                   {/* Mensaje */}
-                  <div className="mb-6">
-                    <h3 className={`text-3xl font-bold mb-4 bg-gradient-to-r ${medalConfig.gradient} bg-clip-text text-transparent`}>
+                  <div className="mb-4">
+                    <h3 className={`text-2xl font-bold mb-2 bg-gradient-to-r ${medalConfig.gradient} bg-clip-text text-transparent`}>
                       {medalConfig.message}
                     </h3>
                     <p 
-                      className={`text-4xl font-black mb-2 ${medalConfig.nameClass}`}
+                      className={`text-3xl font-black mb-1 ${medalConfig.nameClass}`}
                       style={{
                         color: isGold ? '#1f2937' : isSilver ? '#1f2937' : '#1f2937',
                         textShadow: isGold ? '0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(255, 165, 0, 0.6)' : 'none'
@@ -1148,13 +1171,13 @@ export default function TestPage() {
                     >
                       {user?.name?.toUpperCase() || 'GUERRERO'}
                     </p>
-                    <p className="text-2xl font-bold text-gray-700 mb-3">
+                    <p className="text-xl font-bold text-gray-700">
                       ¡ERES INCREÍBLE!
                     </p>
                   </div>
 
                   {/* Mensaje motivacional personalizado */}
-                  <div className={`bg-gradient-to-r ${medalConfig.bgGradient} border-2 ${medalConfig.borderColor} rounded-lg p-4 mb-6`}>
+                  <div className={`bg-gradient-to-r ${medalConfig.bgGradient} border-2 ${medalConfig.borderColor} rounded-lg p-3 mb-4`}>
                     <p className={`text-sm font-bold ${medalConfig.textColor}`}>
                       {isGold
                         ? `¡${score}/${shuffledQuestions.length}! ${user?.name?.toUpperCase() || 'GUERRERO'}, ¡ERES UN CAMPEÓN! DOMINAS EL TEMA A LA PERFECCIÓN.`
@@ -1171,7 +1194,7 @@ export default function TestPage() {
                       setShowFinalCelebration(false)
                       setTestCompleted(true)
                     }}
-                    className={`w-full px-6 py-4 bg-gradient-to-r ${medalConfig.gradient} text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center justify-center gap-2`}
+                    className={`w-full px-5 py-3 bg-gradient-to-r ${medalConfig.gradient} text-white rounded-xl font-bold text-base shadow-lg hover:shadow-xl transform hover:scale-105 transition-all flex items-center justify-center gap-2`}
                   >
                     <span>VER RESULTADOS DETALLADOS</span>
                   </button>

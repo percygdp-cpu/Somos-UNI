@@ -51,7 +51,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="rounded-2xl shadow-md overflow-hidden">
           <div className="flex flex-col items-center">
-            <Image src="/logo.png" alt="Somos UNI" width={500} height={300} className="w-full h-auto object-cover" />
+            <Image src="/logo.png" alt="Somos UNI" width={500} height={200} className="w-full h-auto max-h-80 object-cover" priority />
           </div>
           <div className="bg-white dark:bg-[#1a1f2e] p-8 space-y-6">
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -175,7 +175,7 @@ export default function LoginPage() {
           {/* Engineer Credit */}
           <div className="mt-6 text-center">
             <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-              Ingeniero - Percy Romeo Gonzales Tarazona
+              INGENIERO Y MATEMÁTICO - PERCY ROMEO GONZALES TARAZONA
             </p>
           </div>
         </div>
