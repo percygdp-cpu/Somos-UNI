@@ -4,7 +4,241 @@ import AdminHeader from '@/components/AdminHeader'
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import anime from 'animejs'
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
+
+// Tipos de filtro disponibles
+type FilterType = 'all' | 'today' | 'week' | 'month' | 'custom'
+
+// Componente de filtros con dropdown
+const DateFilter = memo(function DateFilter({ 
+  onApplyFilter, 
+  onClearFilter,
+  isFilterActive,
+  appliedFromDate,
+  appliedToDate,
+  activeFilterType,
+  setActiveFilterType
+}: {
+  onApplyFilter: (from: string, to: string) => void
+  onClearFilter: () => void
+  isFilterActive: boolean
+  appliedFromDate: string
+  appliedToDate: string
+  activeFilterType: FilterType
+  setActiveFilterType: (type: FilterType) => void
+}) {
+  const [showCustomModal, setShowCustomModal] = useState(false)
+  const [customFromDate, setCustomFromDate] = useState('')
+  const [customFromTime, setCustomFromTime] = useState('00:00')
+  const [customToDate, setCustomToDate] = useState('')
+  const [customToTime, setCustomToTime] = useState('23:59')
+  
+  // Manejar cambio en el select
+  const handleSelectChange = (value: string) => {
+    const type = value as FilterType
+    
+    if (type === 'custom') {
+      // Por defecto, la fecha fin es hoy
+      const today = new Date().toISOString().split('T')[0]
+      setCustomToDate(today)
+      setShowCustomModal(true)
+      return
+    }
+    
+    const now = new Date()
+    const today = now.toISOString().split('T')[0]
+    
+    let fromDate = ''
+    let toDate = `${today}T23:59`
+    
+    switch (type) {
+      case 'today':
+        fromDate = `${today}T00:00`
+        break
+      case 'week':
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        fromDate = `${weekAgo.toISOString().split('T')[0]}T00:00`
+        break
+      case 'month':
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        fromDate = `${monthAgo.toISOString().split('T')[0]}T00:00`
+        break
+      case 'all':
+        onClearFilter()
+        setActiveFilterType('all')
+        return
+    }
+    
+    setActiveFilterType(type)
+    onApplyFilter(fromDate, toDate)
+  }
+  
+  // Aplicar filtro personalizado
+  const applyCustomFilter = () => {
+    if (!customFromDate && !customToDate) return
+    
+    const fromDateTime = customFromDate ? `${customFromDate}T${customFromTime}` : ''
+    const toDateTime = customToDate ? `${customToDate}T${customToTime}` : ''
+    
+    setActiveFilterType('custom')
+    onApplyFilter(fromDateTime, toDateTime)
+    setShowCustomModal(false)
+  }
+  
+  // Obtener label para el filtro personalizado
+  const getCustomLabel = () => {
+    if (activeFilterType !== 'custom') return ''
+    const from = appliedFromDate ? new Date(appliedFromDate).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
+    const to = appliedToDate ? new Date(appliedToDate).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
+    return `${from}${from && to ? ' - ' : ''}${to}`
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <label className="text-sm font-medium text-secondary-600">Mostrar:</label>
+        
+        {/* Select Dropdown */}
+        <div className="relative">
+          <select
+            value={activeFilterType}
+            onChange={(e) => handleSelectChange(e.target.value)}
+            className="appearance-none bg-white border-2 border-secondary-200 rounded-xl px-4 py-2.5 pr-10 text-sm font-medium text-secondary-700 cursor-pointer hover:border-primary-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all min-w-[180px]"
+          >
+            <option value="all">Todo</option>
+            <option value="today">Hoy</option>
+            <option value="week">Esta Semana</option>
+            <option value="month">Este Mes</option>
+            <option value="custom">Rango Personalizado</option>
+          </select>
+          
+          {/* Flecha del dropdown */}
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+            <svg className="w-4 h-4 text-secondary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+        
+        {/* Indicador de rango personalizado */}
+        {activeFilterType === 'custom' && isFilterActive && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-lg">
+            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+            <span className="text-sm font-medium text-orange-700">{getCustomLabel()}</span>
+            <button
+              onClick={() => setShowCustomModal(true)}
+              className="ml-1 text-orange-600 hover:text-orange-800 transition-colors"
+              title="Editar fechas"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
+      
+      {/* Modal de Fecha Personalizada */}
+      {showCustomModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-scaleIn">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                    <span className="text-2xl">📅</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Rango Personalizado</h3>
+                    <p className="text-primary-100 text-sm">Selecciona las fechas del filtro</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCustomModal(false)}
+                  className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            
+            {/* Body */}
+            <div className="p-6 space-y-5">
+              {/* Campo Desde */}
+              <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-secondary-700 mb-2">
+                  <span className="w-6 h-6 rounded-lg bg-green-100 text-green-600 flex items-center justify-center text-xs">▶</span>
+                  Fecha de Inicio
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={customFromDate}
+                    onChange={(e) => setCustomFromDate(e.target.value)}
+                    className="flex-1 px-4 py-3 bg-secondary-50 border-2 border-secondary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                  />
+                  <input
+                    type="time"
+                    value={customFromTime}
+                    onChange={(e) => setCustomFromTime(e.target.value)}
+                    className="w-28 px-3 py-3 bg-secondary-50 border-2 border-secondary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                  />
+                </div>
+              </div>
+              
+              {/* Separador visual */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-secondary-200"></div>
+                <span className="text-secondary-400 text-sm">hasta</span>
+                <div className="flex-1 h-px bg-secondary-200"></div>
+              </div>
+              
+              {/* Campo Hasta */}
+              <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-secondary-700 mb-2">
+                  <span className="w-6 h-6 rounded-lg bg-red-100 text-red-600 flex items-center justify-center text-xs">■</span>
+                  Fecha de Fin
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={customToDate}
+                    onChange={(e) => setCustomToDate(e.target.value)}
+                    className="flex-1 px-4 py-3 bg-secondary-50 border-2 border-secondary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                  />
+                  <input
+                    type="time"
+                    value={customToTime}
+                    onChange={(e) => setCustomToTime(e.target.value)}
+                    className="w-28 px-3 py-3 bg-secondary-50 border-2 border-secondary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="px-6 py-4 bg-secondary-50 border-t border-secondary-200 flex gap-3">
+              <button
+                onClick={() => setShowCustomModal(false)}
+                className="flex-1 px-4 py-2.5 bg-white border-2 border-secondary-300 text-secondary-700 rounded-xl font-semibold text-sm hover:bg-secondary-100 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={applyCustomFilter}
+                disabled={!customFromDate && !customToDate}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg hover:from-primary-700 hover:to-primary-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Aplicar Filtro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+})
 
 interface StudentProgress {
   id: number
@@ -25,6 +259,26 @@ export default function AnalyticsPage() {
   const [testResults, setTestResults] = useState<any[]>([])
   const [studentProgress, setStudentProgress] = useState<StudentProgress[]>([])
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null)
+  
+  // Filtros aplicados (solo se actualizan al hacer click en Filtrar)
+  const [appliedFromDate, setAppliedFromDate] = useState<string>('')
+  const [appliedToDate, setAppliedToDate] = useState<string>('')
+  const [isFilterActive, setIsFilterActive] = useState(false)
+  const [activeFilterType, setActiveFilterType] = useState<FilterType>('all')
+  
+  // Handlers para el filtro - memorizados para evitar re-renders
+  const handleApplyFilter = (from: string, to: string) => {
+    setAppliedFromDate(from)
+    setAppliedToDate(to)
+    setIsFilterActive(from !== '' || to !== '')
+  }
+  
+  const handleClearFilter = () => {
+    setAppliedFromDate('')
+    setAppliedToDate('')
+    setIsFilterActive(false)
+    setActiveFilterType('all')
+  }
   
   const [stats, setStats] = useState({
     totalStudents: 0,
@@ -343,12 +597,27 @@ export default function AnalyticsPage() {
             {/* Dashboard de Tests por Estudiante */}
             <div className="analytics-card card mt-6">
               <div className="mb-6">
-                <h2 className="text-xl font-bold text-secondary-900 mb-2">
-                  Dashboard de Tests Recientes
-                </h2>
-                <p className="text-secondary-600 text-sm">
-                  Últimos 10 tests realizados por cada estudiante (1 = más reciente)
-                </p>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-secondary-900 mb-1">
+                      Dashboard de Tests Recientes
+                    </h2>
+                    <p className="text-secondary-600 text-sm">
+                      Últimos 10 tests realizados por cada estudiante (1 = más reciente)
+                    </p>
+                  </div>
+                  
+                  {/* Panel de Filtros - Componente separado para optimización */}
+                  <DateFilter
+                    onApplyFilter={handleApplyFilter}
+                    onClearFilter={handleClearFilter}
+                    isFilterActive={isFilterActive}
+                    appliedFromDate={appliedFromDate}
+                    appliedToDate={appliedToDate}
+                    activeFilterType={activeFilterType}
+                    setActiveFilterType={setActiveFilterType}
+                  />
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -376,8 +645,30 @@ export default function AnalyticsPage() {
                     {studentProgress.length > 0 ? (
                       studentProgress.map((student) => {
                         // Obtener los últimos 10 resultados de este estudiante ordenados por fecha
+                        // Aplicar filtros de fecha solo si están aplicados (no en vivo)
                         const studentResults = testResults
-                          .filter((r: any) => r.userId === student.id)
+                          .filter((r: any) => {
+                            if (r.userId !== student.id) return false
+                            
+                            // Solo filtrar si hay filtros aplicados
+                            if (isFilterActive) {
+                              const resultDate = new Date(r.completedAt)
+                              
+                              // Filtro Desde (usando valores aplicados)
+                              if (appliedFromDate) {
+                                const fromDate = new Date(appliedFromDate)
+                                if (resultDate < fromDate) return false
+                              }
+                              
+                              // Filtro Hasta (usando valores aplicados)
+                              if (appliedToDate) {
+                                const toDate = new Date(appliedToDate)
+                                if (resultDate > toDate) return false
+                              }
+                            }
+                            
+                            return true
+                          })
                           .sort((a: any, b: any) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
                           .slice(0, 10)
                         
@@ -486,6 +777,22 @@ export default function AnalyticsPage() {
                                           <div className="flex-1 min-w-0">
                                             <p className="text-xs text-secondary-500 font-medium uppercase tracking-wide">Test</p>
                                             <p className="text-sm font-semibold text-secondary-900 break-words">{testName}</p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-start gap-3 pt-2 border-t border-secondary-100 mt-2">
+                                          <span className="text-xl">🕐</span>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs text-secondary-500 font-medium uppercase tracking-wide">Completado</p>
+                                            <p className="text-sm font-semibold text-secondary-900 break-words">
+                                              {new Date(result.completedAt).toLocaleDateString('es-ES', {
+                                                day: '2-digit',
+                                                month: '2-digit',
+                                                year: 'numeric'
+                                              })} a las {new Date(result.completedAt).toLocaleTimeString('es-ES', {
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                              })}
+                                            </p>
                                           </div>
                                         </div>
                                       </div>
