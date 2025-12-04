@@ -266,6 +266,184 @@ export default function AnalyticsPage() {
   const [isFilterActive, setIsFilterActive] = useState(false)
   const [activeFilterType, setActiveFilterType] = useState<FilterType>('all')
   
+  // Estado para búsqueda avanzada
+  const [advancedFilters, setAdvancedFilters] = useState({
+    studentId: '',
+    courseId: '',
+    moduleId: '',
+    dateRange: 'all',
+    customFromDate: '',
+    customToDate: ''
+  })
+  const [showAdvancedDateModal, setShowAdvancedDateModal] = useState(false)
+  const [filteredAdvancedResults, setFilteredAdvancedResults] = useState<any[]>([])
+  const [hasSearched, setHasSearched] = useState(false)
+  const [advancedCurrentPage, setAdvancedCurrentPage] = useState(1)
+  const [advancedItemsPerPage, setAdvancedItemsPerPage] = useState(50)
+  const [advancedSortConfig, setAdvancedSortConfig] = useState<{
+    key: string
+    direction: 'asc' | 'desc'
+  } | null>(null)
+  
+  // Función de ordenamiento para búsqueda avanzada
+  const handleAdvancedSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc'
+    if (advancedSortConfig && advancedSortConfig.key === key && advancedSortConfig.direction === 'asc') {
+      direction = 'desc'
+    }
+    setAdvancedSortConfig({ key, direction })
+  }
+  
+  // Obtener datos ordenados para la búsqueda avanzada
+  const getSortedAdvancedResults = () => {
+    if (!advancedSortConfig) return filteredAdvancedResults
+    
+    return [...filteredAdvancedResults].sort((a, b) => {
+      const { key, direction } = advancedSortConfig
+      
+      let aValue: any
+      let bValue: any
+      
+      // Obtener valores según la columna
+      switch (key) {
+        case 'student':
+          const studentA = students.find((s) => s.id === a.userId)
+          const studentB = students.find((s) => s.id === b.userId)
+          aValue = studentA?.name || studentA?.username || ''
+          bValue = studentB?.name || studentB?.username || ''
+          break
+        case 'course':
+          const testA = tests.find((t: any) => t.id === a.testId)
+          const testB = tests.find((t: any) => t.id === b.testId)
+          const courseA = courses.find((c: any) => c.id === testA?.courseId)
+          const courseB = courses.find((c: any) => c.id === testB?.courseId)
+          aValue = courseA?.title || ''
+          bValue = courseB?.title || ''
+          break
+        case 'module':
+          const testA2 = tests.find((t: any) => t.id === a.testId)
+          const testB2 = tests.find((t: any) => t.id === b.testId)
+          const moduleA = modules.find((m: any) => m.id === testA2?.moduleId)
+          const moduleB = modules.find((m: any) => m.id === testB2?.moduleId)
+          aValue = moduleA?.title || ''
+          bValue = moduleB?.title || ''
+          break
+        case 'test':
+          const testNameA = tests.find((t: any) => t.id === a.testId)
+          const testNameB = tests.find((t: any) => t.id === b.testId)
+          aValue = testNameA?.title || ''
+          bValue = testNameB?.title || ''
+          break
+        case 'percentage':
+          aValue = a.percentage
+          bValue = b.percentage
+          break
+        case 'date':
+          aValue = new Date(a.completedAt).getTime()
+          bValue = new Date(b.completedAt).getTime()
+          break
+        default:
+          return 0
+      }
+      
+      // Comparar valores
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return direction === 'asc' ? aValue - bValue : bValue - aValue
+      }
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return direction === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue)
+      }
+      
+      return 0
+    })
+  }
+  
+  // Aplicar filtros avanzados
+  const applyAdvancedFilters = () => {
+    setHasSearched(true)
+    setAdvancedCurrentPage(1) // Resetear a la primera página
+    let results = [...testResults]
+    
+    // Filtrar por alumno
+    if (advancedFilters.studentId) {
+      results = results.filter(r => r.userId === parseInt(advancedFilters.studentId))
+    }
+    
+    // Filtrar por curso
+    if (advancedFilters.courseId) {
+      const courseTestIds = tests
+        .filter((t: any) => t.courseId === parseInt(advancedFilters.courseId))
+        .map((t: any) => t.id)
+      results = results.filter(r => courseTestIds.includes(r.testId))
+    }
+    
+    // Filtrar por módulo
+    if (advancedFilters.moduleId) {
+      const moduleTestIds = tests
+        .filter((t: any) => t.moduleId === parseInt(advancedFilters.moduleId))
+        .map((t: any) => t.id)
+      results = results.filter(r => moduleTestIds.includes(r.testId))
+    }
+    
+    // Filtrar por fecha
+    if (advancedFilters.dateRange !== 'all') {
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      
+      let fromDate: Date | null = null
+      let toDate: Date = new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1) // Fin de hoy
+      
+      switch (advancedFilters.dateRange) {
+        case 'today':
+          fromDate = today
+          break
+        case 'week':
+          fromDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+          break
+        case 'month':
+          fromDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+          break
+        case 'custom':
+          if (advancedFilters.customFromDate) {
+            fromDate = new Date(advancedFilters.customFromDate)
+          }
+          if (advancedFilters.customToDate) {
+            toDate = new Date(advancedFilters.customToDate + 'T23:59:59')
+          }
+          break
+      }
+      
+      if (fromDate) {
+        results = results.filter(r => {
+          const resultDate = new Date(r.completedAt)
+          return resultDate >= fromDate! && resultDate <= toDate
+        })
+      }
+    }
+    
+    // Ordenar por fecha más reciente
+    results.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+    
+    setFilteredAdvancedResults(results)
+  }
+  
+  // Limpiar filtros avanzados
+  const clearAdvancedFilters = () => {
+    setAdvancedFilters({
+      studentId: '',
+      courseId: '',
+      moduleId: '',
+      dateRange: 'all',
+      customFromDate: '',
+      customToDate: ''
+    })
+    setFilteredAdvancedResults([])
+    setHasSearched(false)
+  }
+  
   // Handlers para el filtro - memorizados para evitar re-renders
   const handleApplyFilter = (from: string, to: string) => {
     setAppliedFromDate(from)
@@ -831,6 +1009,427 @@ export default function AnalyticsPage() {
                 </table>
               </div>
             </div>
+
+            {/* Búsqueda Avanzada de Tests */}
+            <div className="analytics-card card mt-6">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-secondary-900 mb-1">
+                  Búsqueda Avanzada de Tests
+                </h2>
+                <p className="text-secondary-600 text-sm">
+                  Filtra resultados por alumno, curso, módulo y fechas
+                </p>
+              </div>
+
+              {/* Filtros */}
+              <div className="bg-gradient-to-r from-primary-50 via-white to-primary-50 p-5 rounded-xl border border-primary-100 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                  {/* Filtro por Alumno */}
+                  <div>
+                    <label className="text-sm font-medium text-secondary-700 mb-2 block">
+                      Alumno
+                    </label>
+                    <select
+                      value={advancedFilters.studentId}
+                      onChange={(e) => setAdvancedFilters({...advancedFilters, studentId: e.target.value})}
+                      className="w-full px-3 py-2.5 bg-white border-2 border-secondary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    >
+                      <option value="">Todos los alumnos</option>
+                      {students.map((student) => (
+                        <option key={student.id} value={student.id}>{student.name || student.username}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Filtro por Curso */}
+                  <div>
+                    <label className="text-sm font-medium text-secondary-700 mb-2 block">
+                      Curso
+                    </label>
+                    <select
+                      value={advancedFilters.courseId}
+                      onChange={(e) => setAdvancedFilters({...advancedFilters, courseId: e.target.value, moduleId: ''})}
+                      className="w-full px-3 py-2.5 bg-white border-2 border-secondary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    >
+                      <option value="">Todos los cursos</option>
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id}>{course.title}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Filtro por Módulo */}
+                  <div>
+                    <label className="text-sm font-medium text-secondary-700 mb-2 block">
+                      Módulo
+                    </label>
+                    <select
+                      value={advancedFilters.moduleId}
+                      onChange={(e) => setAdvancedFilters({...advancedFilters, moduleId: e.target.value})}
+                      disabled={!advancedFilters.courseId}
+                      className="w-full px-3 py-2.5 bg-white border-2 border-secondary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all disabled:bg-secondary-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Todos los módulos</option>
+                      {modules
+                        .filter((m) => !advancedFilters.courseId || m.courseId === parseInt(advancedFilters.courseId))
+                        .map((module) => (
+                          <option key={module.id} value={module.id}>{module.title}</option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* Filtro por Fecha */}
+                  <div>
+                    <label className="text-sm font-medium text-secondary-700 mb-2 block">
+                      Período
+                    </label>
+                    <select
+                      value={advancedFilters.dateRange}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        if (value === 'custom') {
+                          setShowAdvancedDateModal(true)
+                        } else {
+                          setAdvancedFilters({...advancedFilters, dateRange: value, customFromDate: '', customToDate: ''})
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 bg-white border-2 border-secondary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                    >
+                      <option value="all">Todo el tiempo</option>
+                      <option value="today">Hoy</option>
+                      <option value="week">Esta semana</option>
+                      <option value="month">Este mes</option>
+                      <option value="custom">Personalizado...</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Mostrar rango personalizado si está seleccionado */}
+                {advancedFilters.dateRange === 'custom' && advancedFilters.customFromDate && (
+                  <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-primary-50 border border-primary-200 rounded-lg w-fit">
+                    <span className="text-sm text-primary-700">
+                      {new Date(advancedFilters.customFromDate).toLocaleDateString('es-ES')} - {new Date(advancedFilters.customToDate).toLocaleDateString('es-ES')}
+                    </span>
+                    <button
+                      onClick={() => setShowAdvancedDateModal(true)}
+                      className="text-primary-600 hover:text-primary-800"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {/* Botones de acción */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={applyAdvancedFilters}
+                    className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg hover:from-primary-700 hover:to-primary-800 transition-all"
+                  >
+                    Buscar
+                  </button>
+                  {(advancedFilters.studentId || advancedFilters.courseId || advancedFilters.moduleId || advancedFilters.dateRange !== 'all') && (
+                    <button
+                      onClick={clearAdvancedFilters}
+                      className="px-4 py-2.5 bg-white border-2 border-secondary-300 text-secondary-700 rounded-xl font-semibold text-sm hover:bg-secondary-50 transition-all"
+                    >
+                      Limpiar filtros
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Resultados */}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b-2 border-secondary-200 bg-secondary-50">
+                      <th onClick={() => handleAdvancedSort('student')} className="text-left py-3 px-4 text-secondary-700 font-semibold text-sm cursor-pointer hover:bg-secondary-100 select-none transition-colors">
+                        <div className="flex items-center gap-1">
+                          Alumno
+                          {advancedSortConfig?.key === 'student' && (
+                            <span className="text-primary-600">{advancedSortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                          )}
+                        </div>
+                      </th>
+                      <th onClick={() => handleAdvancedSort('course')} className="text-left py-3 px-4 text-secondary-700 font-semibold text-sm cursor-pointer hover:bg-secondary-100 select-none transition-colors">
+                        <div className="flex items-center gap-1">
+                          Curso
+                          {advancedSortConfig?.key === 'course' && (
+                            <span className="text-primary-600">{advancedSortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                          )}
+                        </div>
+                      </th>
+                      <th onClick={() => handleAdvancedSort('module')} className="text-left py-3 px-4 text-secondary-700 font-semibold text-sm cursor-pointer hover:bg-secondary-100 select-none transition-colors">
+                        <div className="flex items-center gap-1">
+                          Módulo
+                          {advancedSortConfig?.key === 'module' && (
+                            <span className="text-primary-600">{advancedSortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                          )}
+                        </div>
+                      </th>
+                      <th onClick={() => handleAdvancedSort('test')} className="text-left py-3 px-4 text-secondary-700 font-semibold text-sm cursor-pointer hover:bg-secondary-100 select-none transition-colors">
+                        <div className="flex items-center gap-1">
+                          Test
+                          {advancedSortConfig?.key === 'test' && (
+                            <span className="text-primary-600">{advancedSortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                          )}
+                        </div>
+                      </th>
+                      <th onClick={() => handleAdvancedSort('percentage')} className="text-center py-3 px-4 text-secondary-700 font-semibold text-sm cursor-pointer hover:bg-secondary-100 select-none transition-colors">
+                        <div className="flex items-center justify-center gap-1">
+                          Puntaje
+                          {advancedSortConfig?.key === 'percentage' && (
+                            <span className="text-primary-600">{advancedSortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                          )}
+                        </div>
+                      </th>
+                      <th onClick={() => handleAdvancedSort('date')} className="text-center py-3 px-4 text-secondary-700 font-semibold text-sm cursor-pointer hover:bg-secondary-100 select-none transition-colors">
+                        <div className="flex items-center justify-center gap-1">
+                          Fecha y Hora
+                          {advancedSortConfig?.key === 'date' && (
+                            <span className="text-primary-600">{advancedSortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                          )}
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const sortedResults = getSortedAdvancedResults()
+                      const totalItems = sortedResults.length
+                      const totalPages = Math.ceil(totalItems / advancedItemsPerPage)
+                      const startIndex = (advancedCurrentPage - 1) * advancedItemsPerPage
+                      const endIndex = startIndex + advancedItemsPerPage
+                      const paginatedResults = sortedResults.slice(startIndex, endIndex)
+                      
+                      if (paginatedResults.length > 0) {
+                        return paginatedResults.map((result: any, index: number) => {
+                        const student = students.find((s) => s.id === result.userId)
+                        const test = tests.find((t: any) => t.id === result.testId)
+                        const module = modules.find((m: any) => m.id === test?.moduleId)
+                        const course = courses.find((c: any) => c.id === test?.courseId)
+                        
+                        return (
+                          <tr key={index} className="border-b border-secondary-100 hover:bg-secondary-50 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-primary-600 font-semibold text-xs">
+                                    {(student?.name || student?.username || '?').charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <span className="font-medium text-secondary-900 text-sm">
+                                  {student?.name || student?.username || 'Desconocido'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-sm text-secondary-700">
+                              {course?.title || '-'}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-secondary-700">
+                              {module?.title || '-'}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-secondary-700">
+                              {test?.title || '-'}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
+                                result.percentage >= 70 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : result.percentage >= 50
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {result.percentage}%
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center text-sm text-secondary-600">
+                              {new Date(result.completedAt).toLocaleString('es-ES', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </td>
+                          </tr>
+                        )
+                      })
+                      } else {
+                        return (
+                          <tr>
+                            <td colSpan={6} className="text-center py-12 text-secondary-500">
+                              <p>
+                                {hasSearched 
+                                  ? 'No se encontraron resultados con los filtros seleccionados'
+                                  : 'Selecciona los filtros y haz clic en "Buscar" para ver resultados'
+                                }
+                              </p>
+                            </td>
+                          </tr>
+                        )
+                      }
+                    })()}
+                  </tbody>
+                </table>
+                
+                {/* Paginación */}
+                {getSortedAdvancedResults().length > 0 && (
+                  <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-white border border-gray-200 rounded-lg">
+                    <div className="flex items-center gap-4">
+                      <div className="text-sm text-secondary-700">
+                        Mostrando <span className="font-medium">{Math.min((advancedCurrentPage - 1) * advancedItemsPerPage + 1, getSortedAdvancedResults().length)}</span> a <span className="font-medium">{Math.min(advancedCurrentPage * advancedItemsPerPage, getSortedAdvancedResults().length)}</span> de{' '}
+                        <span className="font-medium">{getSortedAdvancedResults().length}</span> resultados
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-secondary-600">Mostrar:</span>
+                        <select
+                          value={advancedItemsPerPage}
+                          onChange={(e) => {
+                            setAdvancedItemsPerPage(Number(e.target.value))
+                            setAdvancedCurrentPage(1)
+                          }}
+                          className="pl-3 pr-8 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500 appearance-none bg-white bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%236b7280%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.293%207.293a1%201%200%20011.414%200L10%2010.586l3.293-3.293a1%201%200%20111.414%201.414l-4%204a1%201%200%2001-1.414%200l-4-4a1%201%200%20010-1.414z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:20px_20px] bg-[right_4px_center] bg-no-repeat"
+                        >
+                          <option value="50">50</option>
+                          <option value="100">100</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setAdvancedCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={advancedCurrentPage === 1}
+                        className="px-3 py-1.5 text-sm font-medium text-secondary-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Anterior
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {(() => {
+                          const totalPages = Math.ceil(getSortedAdvancedResults().length / advancedItemsPerPage)
+                          return Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                            if (
+                              page === 1 ||
+                              page === totalPages ||
+                              (page >= advancedCurrentPage - 1 && page <= advancedCurrentPage + 1)
+                            ) {
+                              return (
+                                <button
+                                  key={page}
+                                  onClick={() => setAdvancedCurrentPage(page)}
+                                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                    advancedCurrentPage === page
+                                      ? 'bg-primary-600 text-white'
+                                      : 'text-secondary-700 bg-white border border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              )
+                            } else if (page === advancedCurrentPage - 2 || page === advancedCurrentPage + 2) {
+                              return <span key={page} className="px-2 text-secondary-500">...</span>
+                            }
+                            return null
+                          })
+                        })()}
+                      </div>
+                      <button
+                        onClick={() => setAdvancedCurrentPage(prev => Math.min(prev + 1, Math.ceil(getSortedAdvancedResults().length / advancedItemsPerPage)))}
+                        disabled={advancedCurrentPage === Math.ceil(getSortedAdvancedResults().length / advancedItemsPerPage)}
+                        className="px-3 py-1.5 text-sm font-medium text-secondary-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal de fecha personalizada para búsqueda avanzada */}
+            {showAdvancedDateModal && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-scaleIn">
+                  <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                          <span className="text-2xl">📅</span>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-white">Rango de Fechas</h3>
+                          <p className="text-primary-100 text-sm">Selecciona el período a buscar</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShowAdvancedDateModal(false)}
+                        className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="p-6 space-y-5">
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold text-secondary-700 mb-2">
+                        <span className="w-6 h-6 rounded-lg bg-green-100 text-green-600 flex items-center justify-center text-xs">▶</span>
+                        Fecha de Inicio
+                      </label>
+                      <input
+                        type="date"
+                        value={advancedFilters.customFromDate}
+                        onChange={(e) => setAdvancedFilters({...advancedFilters, customFromDate: e.target.value})}
+                        className="w-full px-4 py-3 bg-secondary-50 border-2 border-secondary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-px bg-secondary-200"></div>
+                      <span className="text-secondary-400 text-sm">hasta</span>
+                      <div className="flex-1 h-px bg-secondary-200"></div>
+                    </div>
+                    
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold text-secondary-700 mb-2">
+                        <span className="w-6 h-6 rounded-lg bg-red-100 text-red-600 flex items-center justify-center text-xs">■</span>
+                        Fecha de Fin
+                      </label>
+                      <input
+                        type="date"
+                        value={advancedFilters.customToDate || new Date().toISOString().split('T')[0]}
+                        onChange={(e) => setAdvancedFilters({...advancedFilters, customToDate: e.target.value})}
+                        className="w-full px-4 py-3 bg-secondary-50 border-2 border-secondary-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="px-6 py-4 bg-secondary-50 border-t border-secondary-200 flex gap-3">
+                    <button
+                      onClick={() => setShowAdvancedDateModal(false)}
+                      className="flex-1 px-4 py-2.5 bg-white border-2 border-secondary-300 text-secondary-700 rounded-xl font-semibold text-sm hover:bg-secondary-100 transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!advancedFilters.customToDate) {
+                          setAdvancedFilters({...advancedFilters, customToDate: new Date().toISOString().split('T')[0]})
+                        }
+                        setAdvancedFilters(prev => ({...prev, dateRange: 'custom'}))
+                        setShowAdvancedDateModal(false)
+                      }}
+                      disabled={!advancedFilters.customFromDate}
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Avance por Curso */}
             <div className="analytics-card card mt-6">

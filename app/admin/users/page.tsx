@@ -140,7 +140,7 @@ export default function UserManagementPage() {
   const [visiblePasswords, setVisiblePasswords] = useState<string[]>([])
   const [pendingChanges, setPendingChanges] = useState<Map<string, any>>(new Map())
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [itemsPerPage, setItemsPerPage] = useState(50)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [pendingTab, setPendingTab] = useState<'students' | 'courses' | 'modules' | 'tests' | 'phrases' | null>(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
