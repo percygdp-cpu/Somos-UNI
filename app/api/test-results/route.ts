@@ -39,7 +39,8 @@ export async function GET(request: Request) {
       totalQuestions: row.total_questions,
       percentage: row.percentage,
       answers: JSON.parse(String(row.answers || '[]')),
-      completedAt: row.completed_at
+      // Agregar 'Z' para indicar que la fecha de SQLite está en UTC
+      completedAt: row.completed_at ? row.completed_at.replace(' ', 'T') + 'Z' : null
     }))
     
     return NextResponse.json(results)
