@@ -88,8 +88,8 @@ const DateFilter = memo(function DateFilter({
   // Obtener label para el filtro personalizado
   const getCustomLabel = () => {
     if (activeFilterType !== 'custom') return ''
-    const from = appliedFromDate ? new Date(appliedFromDate).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
-    const to = appliedToDate ? new Date(appliedToDate).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
+    const from = appliedFromDate ? new Date(appliedFromDate).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' }) : ''
+    const to = appliedToDate ? new Date(appliedToDate).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' }) : ''
     return `${from}${from && to ? ' - ' : ''}${to}`
   }
 
@@ -564,7 +564,7 @@ export default function AnalyticsPage() {
         )[0]
         
         const lastActivity = lastResult 
-          ? new Date(lastResult.completedAt).toLocaleDateString('es-ES')
+          ? new Date(lastResult.completedAt).toLocaleDateString('es-PE', { timeZone: 'America/Lima' })
           : 'Sin actividad'
         
         return {
@@ -962,13 +962,15 @@ export default function AnalyticsPage() {
                                           <div className="flex-1 min-w-0">
                                             <p className="text-xs text-secondary-500 font-medium uppercase tracking-wide">Completado</p>
                                             <p className="text-sm font-semibold text-secondary-900 break-words">
-                                              {new Date(result.completedAt).toLocaleDateString('es-ES', {
+                                              {new Date(result.completedAt).toLocaleDateString('es-PE', {
                                                 day: '2-digit',
                                                 month: '2-digit',
-                                                year: 'numeric'
-                                              })} a las {new Date(result.completedAt).toLocaleTimeString('es-ES', {
+                                                year: 'numeric',
+                                                timeZone: 'America/Lima'
+                                              })} a las {new Date(result.completedAt).toLocaleTimeString('es-PE', {
                                                 hour: '2-digit',
-                                                minute: '2-digit'
+                                                minute: '2-digit',
+                                                timeZone: 'America/Lima'
                                               })}
                                             </p>
                                           </div>
@@ -1108,7 +1110,7 @@ export default function AnalyticsPage() {
                 {advancedFilters.dateRange === 'custom' && advancedFilters.customFromDate && (
                   <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-primary-50 border border-primary-200 rounded-lg w-fit">
                     <span className="text-sm text-primary-700">
-                      {new Date(advancedFilters.customFromDate).toLocaleDateString('es-ES')} - {new Date(advancedFilters.customToDate).toLocaleDateString('es-ES')}
+                      {new Date(advancedFilters.customFromDate).toLocaleDateString('es-PE', { timeZone: 'America/Lima' })} - {new Date(advancedFilters.customToDate).toLocaleDateString('es-PE', { timeZone: 'America/Lima' })}
                     </span>
                     <button
                       onClick={() => setShowAdvancedDateModal(true)}
@@ -1246,12 +1248,13 @@ export default function AnalyticsPage() {
                               </span>
                             </td>
                             <td className="py-3 px-4 text-center text-sm text-secondary-600">
-                              {new Date(result.completedAt).toLocaleString('es-ES', {
+                              {new Date(result.completedAt).toLocaleString('es-PE', {
                                 day: '2-digit',
                                 month: 'short',
                                 year: 'numeric',
                                 hour: '2-digit',
-                                minute: '2-digit'
+                                minute: '2-digit',
+                                timeZone: 'America/Lima'
                               })}
                             </td>
                           </tr>
