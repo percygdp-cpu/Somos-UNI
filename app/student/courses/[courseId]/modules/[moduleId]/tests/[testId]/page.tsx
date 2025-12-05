@@ -462,6 +462,8 @@ export default function TestPage() {
     setShowMilestoneModal(false)
     setCurrentBlockIndex(currentBlockIndex + 1)
     setBlockAnswers({})
+    // Scroll al inicio de la página para ver las nuevas preguntas
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const completeTest = async (finalAnswers: Answer[]) => {
