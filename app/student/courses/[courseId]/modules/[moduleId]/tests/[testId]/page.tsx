@@ -1,102 +1,119 @@
 'use client'
 
+import React, { useEffect, useState } from 'react'
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import StudentHeader from '@/components/StudentHeader'
 import anime from 'animejs'
 import confetti from 'canvas-confetti'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
 
 // Función para renderizar texto con subíndices, superíndices e imágenes
 const renderFormattedText = (text: string) => {
   if (!text) return null
   
-  const parts: any[] = []
+  // Dividir por saltos de línea y procesar cada línea
+  const lines = text.split('\n')
   
-  // Regex para detectar imágenes markdown: ![alt](url) o ![alt](url){width}
-  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)(?:\s*\{(\d+)\})?/g
-  const formatRegex = /([_^])(\{([^}]+)\}|(\d+)|([a-zA-Z]))/g
-  
-  // Primero procesar imágenes
-  let imageMatch
-  const segments: any[] = []
-  let lastIndex = 0
-  
-  while ((imageMatch = imageRegex.exec(text)) !== null) {
-    // Agregar texto antes de la imagen
-    if (imageMatch.index > lastIndex) {
-      segments.push({ type: 'text', content: text.substring(lastIndex, imageMatch.index), index: lastIndex })
+  const processLine = (lineText: string, lineIndex: number) => {
+    const parts: any[] = []
+    
+    // Regex para detectar imágenes markdown: ![alt](url) o ![alt](url){width}
+    const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)(?:\s*\{(\d+)\})?/g
+    const formatRegex = /([_^])(\{([^}]+)\}|(\d+)|([a-zA-Z]))/g
+    
+    // Primero procesar imágenes
+    let imageMatch
+    const segments: any[] = []
+    let lastIndex = 0
+    
+    while ((imageMatch = imageRegex.exec(lineText)) !== null) {
+      // Agregar texto antes de la imagen
+      if (imageMatch.index > lastIndex) {
+        segments.push({ type: 'text', content: lineText.substring(lastIndex, imageMatch.index), index: lastIndex })
+      }
+      
+      // Agregar imagen
+      segments.push({ 
+        type: 'image', 
+        alt: imageMatch[1] || 'imagen',
+        url: imageMatch[2],
+        width: imageMatch[3] ? parseInt(imageMatch[3]) : 300,
+        index: imageMatch.index
+      })
+      
+      lastIndex = imageMatch.index + imageMatch[0].length
     }
     
-    // Agregar imagen
-    segments.push({ 
-      type: 'image', 
-      alt: imageMatch[1] || 'imagen',
-      url: imageMatch[2],
-      width: imageMatch[3] ? parseInt(imageMatch[3]) : 300,
-      index: imageMatch.index
+    // Agregar texto restante
+    if (lastIndex < lineText.length) {
+      segments.push({ type: 'text', content: lineText.substring(lastIndex), index: lastIndex })
+    }
+    
+    // Si no hay imágenes, procesar todo como texto
+    if (segments.length === 0) {
+      segments.push({ type: 'text', content: lineText, index: 0 })
+    }
+    
+    // Procesar cada segmento
+    segments.forEach((segment, segIndex) => {
+      if (segment.type === 'image') {
+        parts.push(
+          <img 
+            key={`img-${lineIndex}-${segment.index}`}
+            src={segment.url} 
+            alt={segment.alt}
+            style={{ maxWidth: `${segment.width}px`, width: '100%', height: 'auto', display: 'block', margin: '8px 0' }}
+            className="rounded border border-gray-300"
+          />
+        )
+      } else {
+        // Procesar formato de texto (sub/superíndices)
+        const textParts: any[] = []
+        let textIndex = 0
+        let match
+        formatRegex.lastIndex = 0
+        
+        while ((match = formatRegex.exec(segment.content)) !== null) {
+          if (match.index > textIndex) {
+            textParts.push(segment.content.substring(textIndex, match.index))
+          }
+          
+          const type = match[1]
+          const content = match[3] || match[4] || match[5]
+          
+          if (type === '_') {
+            textParts.push(<sub key={`sub-${lineIndex}-${segment.index}-${match.index}`}>{content}</sub>)
+          } else if (type === '^') {
+            textParts.push(<sup key={`sup-${lineIndex}-${segment.index}-${match.index}`}>{content}</sup>)
+          }
+          
+          textIndex = match.index + match[0].length
+        }
+        
+        if (textIndex < segment.content.length) {
+          textParts.push(segment.content.substring(textIndex))
+        }
+        
+        // Agregar las partes de texto procesadas
+        textParts.forEach(part => parts.push(part))
+      }
     })
     
-    lastIndex = imageMatch.index + imageMatch[0].length
+    return parts
   }
   
-  // Agregar texto restante
-  if (lastIndex < text.length) {
-    segments.push({ type: 'text', content: text.substring(lastIndex), index: lastIndex })
-  }
-  
-  // Si no hay imágenes, procesar todo como texto
-  if (segments.length === 0) {
-    segments.push({ type: 'text', content: text, index: 0 })
-  }
-  
-  // Procesar cada segmento
-  segments.forEach((segment, segIndex) => {
-    if (segment.type === 'image') {
-      parts.push(
-        <img 
-          key={`img-${segment.index}`}
-          src={segment.url} 
-          alt={segment.alt}
-          style={{ maxWidth: `${segment.width}px`, width: '100%', height: 'auto', display: 'block', margin: '8px 0' }}
-          className="rounded border border-gray-300"
-        />
-      )
-    } else {
-      // Procesar formato de texto (sub/superíndices)
-      const textParts: any[] = []
-      let textIndex = 0
-      let match
-      formatRegex.lastIndex = 0
-      
-      while ((match = formatRegex.exec(segment.content)) !== null) {
-        if (match.index > textIndex) {
-          textParts.push(segment.content.substring(textIndex, match.index))
-        }
-        
-        const type = match[1]
-        const content = match[3] || match[4] || match[5]
-        
-        if (type === '_') {
-          textParts.push(<sub key={`sub-${segment.index}-${match.index}`}>{content}</sub>)
-        } else if (type === '^') {
-          textParts.push(<sup key={`sup-${segment.index}-${match.index}`}>{content}</sup>)
-        }
-        
-        textIndex = match.index + match[0].length
-      }
-      
-      if (textIndex < segment.content.length) {
-        textParts.push(segment.content.substring(textIndex))
-      }
-      
-      // Agregar las partes de texto procesadas
-      textParts.forEach(part => parts.push(part))
-    }
-  })
-  
-  return parts.length > 0 ? <>{parts}</> : text
+  // Procesar cada línea y agregar saltos de línea entre ellas
+  return (
+    <>
+      {lines.map((line, idx) => (
+        <React.Fragment key={`line-${idx}`}>
+          {processLine(line, idx)}
+          {idx < lines.length - 1 && <br />}
+        </React.Fragment>
+      ))}
+    </>
+  )
 }
 
 interface Question {

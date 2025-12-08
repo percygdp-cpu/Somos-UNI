@@ -93,6 +93,38 @@ CREATE TABLE IF NOT EXISTS user_phrase_history (
   FOREIGN KEY (phrase_id) REFERENCES motivational_phrases(id) ON DELETE CASCADE
 );
 
+-- Tabla de metas semanales (no ligada a un curso específico)
+CREATE TABLE IF NOT EXISTS weekly_goals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  week_number INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Tabla de tests asociados a metas semanales
+CREATE TABLE IF NOT EXISTS weekly_goal_tests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  weekly_goal_id INTEGER NOT NULL,
+  test_id INTEGER NOT NULL,
+  FOREIGN KEY (weekly_goal_id) REFERENCES weekly_goals(id) ON DELETE CASCADE,
+  FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE,
+  UNIQUE(weekly_goal_id, test_id)
+);
+
+-- Tabla de asignación de metas semanales a usuarios
+CREATE TABLE IF NOT EXISTS user_weekly_goals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  weekly_goal_id INTEGER NOT NULL,
+  assigned_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (weekly_goal_id) REFERENCES weekly_goals(id) ON DELETE CASCADE,
+  UNIQUE(user_id, weekly_goal_id)
+);
+
 -- Índices para mejorar el rendimiento
 CREATE INDEX IF NOT EXISTS idx_modules_course_id ON modules(course_id);
 CREATE INDEX IF NOT EXISTS idx_tests_course_id ON tests(course_id);
@@ -105,6 +137,10 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_motivational_phrases_range ON motivational_phrases(range_type);
 CREATE INDEX IF NOT EXISTS idx_user_phrase_history_user ON user_phrase_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_phrase_history_phrase ON user_phrase_history(phrase_id);
+CREATE INDEX IF NOT EXISTS idx_weekly_goal_tests_goal ON weekly_goal_tests(weekly_goal_id);
+CREATE INDEX IF NOT EXISTS idx_weekly_goal_tests_test ON weekly_goal_tests(test_id);
+CREATE INDEX IF NOT EXISTS idx_user_weekly_goals_user ON user_weekly_goals(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_weekly_goals_goal ON user_weekly_goals(weekly_goal_id);
 
 -- Datos iniciales (admin y algunos datos de prueba)
 INSERT OR IGNORE INTO users (name, username, password, role, status) 

@@ -31,6 +31,12 @@ export default function AdminHeader() {
             Gestión
           </button>
           <button
+            onClick={() => router.push('/admin/goals')}
+            className="text-sm text-secondary-600 hover:text-primary-600 transition-colors"
+          >
+            Metas
+          </button>
+          <button
             onClick={() => router.push('/admin/analytics')}
             className="text-sm text-secondary-600 hover:text-primary-600 transition-colors"
           >

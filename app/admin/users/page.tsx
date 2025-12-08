@@ -15,44 +15,48 @@ import * as XLSX from 'xlsx'
 const renderFormattedText = (text: string) => {
   if (!text) return null
   
-  const parts: any[] = []
+  // Dividir por saltos de línea y procesar cada línea
+  const lines = text.split('\n')
   
-  // Regex para detectar imágenes markdown: ![alt](url) o ![alt](url){width}
-  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)(?:\s*\{(\d+)\})?/g
-  const formatRegex = /([_^])(\{([^}]+)\}|(\d+)|([a-zA-Z]))/g
-  
-  // Primero procesar imágenes
-  let imageMatch
-  const segments: any[] = []
-  let lastIndex = 0
-  
-  while ((imageMatch = imageRegex.exec(text)) !== null) {
-    // Agregar texto antes de la imagen
-    if (imageMatch.index > lastIndex) {
-      segments.push({ type: 'text', content: text.substring(lastIndex, imageMatch.index), index: lastIndex })
+  const processLine = (lineText: string, lineIndex: number) => {
+    const parts: any[] = []
+    
+    // Regex para detectar imágenes markdown: ![alt](url) o ![alt](url){width}
+    const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)(?:\s*\{(\d+)\})?/g
+    const formatRegex = /([_^])(\{([^}]+)\}|(\d+)|([a-zA-Z]))/g
+    
+    // Primero procesar imágenes
+    let imageMatch
+    const segments: any[] = []
+    let lastIndex = 0
+    
+    while ((imageMatch = imageRegex.exec(lineText)) !== null) {
+      // Agregar texto antes de la imagen
+      if (imageMatch.index > lastIndex) {
+        segments.push({ type: 'text', content: lineText.substring(lastIndex, imageMatch.index), index: lastIndex })
+      }
+      
+      // Agregar imagen
+      segments.push({ 
+        type: 'image', 
+        alt: imageMatch[1] || 'imagen',
+        url: imageMatch[2],
+        width: imageMatch[3] ? parseInt(imageMatch[3]) : 300,
+        index: imageMatch.index
+      })
+      
+      lastIndex = imageMatch.index + imageMatch[0].length
     }
     
-    // Agregar imagen
-    segments.push({ 
-      type: 'image', 
-      alt: imageMatch[1] || 'imagen',
-      url: imageMatch[2],
-      width: imageMatch[3] ? parseInt(imageMatch[3]) : 300,
-      index: imageMatch.index
-    })
+    // Agregar texto restante
+    if (lastIndex < lineText.length) {
+      segments.push({ type: 'text', content: lineText.substring(lastIndex), index: lastIndex })
+    }
     
-    lastIndex = imageMatch.index + imageMatch[0].length
-  }
-  
-  // Agregar texto restante
-  if (lastIndex < text.length) {
-    segments.push({ type: 'text', content: text.substring(lastIndex), index: lastIndex })
-  }
-  
-  // Si no hay imágenes, procesar todo como texto
-  if (segments.length === 0) {
-    segments.push({ type: 'text', content: text, index: 0 })
-  }
+    // Si no hay imágenes, procesar todo como texto
+    if (segments.length === 0) {
+      segments.push({ type: 'text', content: lineText, index: 0 })
+    }
   
   // Procesar cada segmento
   segments.forEach((segment, segIndex) => {
@@ -99,7 +103,20 @@ const renderFormattedText = (text: string) => {
     }
   })
   
-  return parts.length > 0 ? <>{parts}</> : text
+    return parts
+  }
+  
+  // Procesar cada línea y agregar saltos de línea entre ellas
+  return (
+    <>
+      {lines.map((line, idx) => (
+        <React.Fragment key={`line-${idx}`}>
+          {processLine(line, idx)}
+          {idx < lines.length - 1 && <br />}
+        </React.Fragment>
+      ))}
+    </>
+  )
 }
 
 export default function UserManagementPage() {
@@ -4043,10 +4060,18 @@ export default function UserManagementPage() {
                                 const newQuestions = [...editingItem.questions]
                                 newQuestions[index] = { ...question, explanation: e.target.value }
                                 setEditingItem({ ...editingItem, questions: newQuestions })
+                                // Auto-ajustar altura
+                                e.target.style.height = 'auto'
+                                e.target.style.height = e.target.scrollHeight + 'px'
                               }}
-                              rows={2}
-                              placeholder="Explicación de por qué es incorrecta..."
-                              className="w-full px-3 py-2 border border-secondary-300 rounded text-sm focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                              onFocus={(e) => {
+                                // Ajustar altura al enfocar
+                                e.target.style.height = 'auto'
+                                e.target.style.height = e.target.scrollHeight + 'px'
+                              }}
+                              placeholder="Explicación de por qué es incorrecta...&#10;(Puedes usar saltos de línea)"
+                              className="w-full px-3 py-2 border border-secondary-300 rounded text-sm focus:ring-1 focus:ring-primary-500 focus:border-primary-500 resize-none overflow-hidden"
+                              style={{ minHeight: '60px' }}
                             />
                           </div>
                         </div>
