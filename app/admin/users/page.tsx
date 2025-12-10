@@ -3914,15 +3914,19 @@ export default function UserManagementPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                const textarea = document.getElementById(`option-${index}-focused`) as HTMLInputElement
-                                if (!textarea) return
+                                const focused = (window as any)[`lastFocusedOption_${index}`]
+                                if (!focused || !focused.element) {
+                                  alert('Primero haz clic en una opción y selecciona el texto')
+                                  return
+                                }
+                                const textarea = focused.element as HTMLInputElement
+                                const optIndex = focused.optIndex
                                 
                                 const start = textarea.selectionStart || 0
                                 const end = textarea.selectionEnd || 0
                                 const selectedText = textarea.value.substring(start, end)
                                 
                                 if (selectedText) {
-                                  const optIndex = parseInt(textarea.dataset.optionIndex || '0')
                                   const newText = textarea.value.substring(0, start) + 
                                     `_{${selectedText}}` + 
                                     textarea.value.substring(end)
@@ -3932,6 +3936,8 @@ export default function UserManagementPage() {
                                   newOptions[optIndex] = newText
                                   newQuestions[index] = { ...question, options: newOptions }
                                   setEditingItem({ ...editingItem, questions: newQuestions })
+                                } else {
+                                  alert('Selecciona el texto que quieres convertir a subíndice')
                                 }
                               }}
                               className="px-2 py-0.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
@@ -3942,15 +3948,19 @@ export default function UserManagementPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                const textarea = document.getElementById(`option-${index}-focused`) as HTMLInputElement
-                                if (!textarea) return
+                                const focused = (window as any)[`lastFocusedOption_${index}`]
+                                if (!focused || !focused.element) {
+                                  alert('Primero haz clic en una opción y selecciona el texto')
+                                  return
+                                }
+                                const textarea = focused.element as HTMLInputElement
+                                const optIndex = focused.optIndex
                                 
                                 const start = textarea.selectionStart || 0
                                 const end = textarea.selectionEnd || 0
                                 const selectedText = textarea.value.substring(start, end)
                                 
                                 if (selectedText) {
-                                  const optIndex = parseInt(textarea.dataset.optionIndex || '0')
                                   const newText = textarea.value.substring(0, start) + 
                                     `^{${selectedText}}` + 
                                     textarea.value.substring(end)
@@ -3960,6 +3970,8 @@ export default function UserManagementPage() {
                                   newOptions[optIndex] = newText
                                   newQuestions[index] = { ...question, options: newOptions }
                                   setEditingItem({ ...editingItem, questions: newQuestions })
+                                } else {
+                                  alert('Selecciona el texto que quieres convertir a superíndice')
                                 }
                               }}
                               className="px-2 py-0.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
@@ -3967,7 +3979,7 @@ export default function UserManagementPage() {
                             >
                               X<sup>2</sup>
                             </button>
-                            <span className="text-xs text-gray-500 self-center ml-1">Para opciones</span>
+                            <span className="text-xs text-gray-500 self-center ml-1">Clic en opción, seleccionar texto, clic aquí</span>
                           </div>
                           <div className="space-y-1">
                             {question.options?.map((option: string, optIndex: number) => (
@@ -3986,8 +3998,7 @@ export default function UserManagementPage() {
                                 />
                                 <input
                                   type="text"
-                                  id={`option-${index}-focused`}
-                                  data-option-index={optIndex}
+                                  id={`option-${index}-${optIndex}`}
                                   value={typeof option === 'string' ? option : option.text || ''}
                                   onChange={(e) => {
                                     const newQuestions = [...editingItem.questions]
@@ -3997,11 +4008,8 @@ export default function UserManagementPage() {
                                     setEditingItem({ ...editingItem, questions: newQuestions })
                                   }}
                                   onFocus={(e) => {
-                                    // Actualizar el id del input enfocado
-                                    document.querySelectorAll(`[id^="option-${index}-"]`).forEach(el => {
-                                      if (el.id !== e.target.id) el.removeAttribute('id')
-                                    })
-                                    e.target.id = `option-${index}-focused`
+                                    // Guardar referencia al input enfocado para esta pregunta
+                                    (window as any)[`lastFocusedOption_${index}`] = { element: e.target, optIndex }
                                   }}
                                   className="flex-1 px-3 py-1.5 border border-secondary-300 rounded text-sm focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
                                   placeholder={`Opción ${optIndex + 1}`}
@@ -4041,7 +4049,7 @@ export default function UserManagementPage() {
                             onClick={() => {
                               const newQuestions = [...editingItem.questions]
                               const newOptions = [...question.options, '']
-                              newQuestions[index] = { ...question, options: newOptions }
+                              newQuestions[index] = { ...question, options: newOptions, optionExplanations: [...(question.optionExplanations || []), ''] }
                               setEditingItem({ ...editingItem, questions: newQuestions })
                             }}
                             className="mt-2 w-full px-3 py-1.5 border border-dashed border-gray-300 rounded text-xs text-secondary-600 hover:border-primary-400 hover:text-primary-600 transition-colors"
@@ -4051,28 +4059,200 @@ export default function UserManagementPage() {
                           
                           {/* Campo de Explicación */}
                           <div className="mt-3">
-                            <label className="block text-xs font-medium text-secondary-700 mb-1">
-                              Explicación (opcional - se muestra al errar)
-                            </label>
-                            <textarea
-                              value={question.explanation || ''}
-                              onChange={(e) => {
-                                const newQuestions = [...editingItem.questions]
-                                newQuestions[index] = { ...question, explanation: e.target.value }
-                                setEditingItem({ ...editingItem, questions: newQuestions })
-                                // Auto-ajustar altura
-                                e.target.style.height = 'auto'
-                                e.target.style.height = e.target.scrollHeight + 'px'
-                              }}
-                              onFocus={(e) => {
-                                // Ajustar altura al enfocar
-                                e.target.style.height = 'auto'
-                                e.target.style.height = e.target.scrollHeight + 'px'
-                              }}
-                              placeholder="Explicación de por qué es incorrecta...&#10;(Puedes usar saltos de línea)"
-                              className="w-full px-3 py-2 border border-secondary-300 rounded text-sm focus:ring-1 focus:ring-primary-500 focus:border-primary-500 resize-none overflow-hidden"
-                              style={{ minHeight: '60px' }}
-                            />
+                            {/* Toggle para tipo de explicación */}
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="block text-xs font-medium text-secondary-700">
+                                Explicación (opcional - se muestra al errar)
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <span className="text-xs text-secondary-500">Por alternativa</span>
+                                <div 
+                                  className={`relative w-10 h-5 rounded-full transition-colors ${question.useOptionExplanations ? 'bg-primary-500' : 'bg-gray-300'}`}
+                                  onClick={() => {
+                                    const newQuestions = [...editingItem.questions]
+                                    newQuestions[index] = { 
+                                      ...question, 
+                                      useOptionExplanations: !question.useOptionExplanations,
+                                      optionExplanations: question.optionExplanations || question.options?.map(() => '') || []
+                                    }
+                                    setEditingItem({ ...editingItem, questions: newQuestions })
+                                  }}
+                                >
+                                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${question.useOptionExplanations ? 'translate-x-5' : 'translate-x-0.5'}`}></div>
+                                </div>
+                              </label>
+                            </div>
+                            
+                            {/* Explicación normal (bloque) */}
+                            {!question.useOptionExplanations && (
+                              <>
+                                <div className="flex gap-1 mb-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const textarea = document.getElementById(`explanation-${index}`) as HTMLTextAreaElement
+                                      if (!textarea) return
+                                      const start = textarea.selectionStart || 0
+                                      const end = textarea.selectionEnd || 0
+                                      const selectedText = textarea.value.substring(start, end)
+                                      if (selectedText) {
+                                        const newText = textarea.value.substring(0, start) + `_{${selectedText}}` + textarea.value.substring(end)
+                                        const newQuestions = [...editingItem.questions]
+                                        newQuestions[index] = { ...question, explanation: newText }
+                                        setEditingItem({ ...editingItem, questions: newQuestions })
+                                      } else {
+                                        alert('Selecciona el texto primero')
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                                    title="Subíndice"
+                                  >
+                                    X<sub>2</sub>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const textarea = document.getElementById(`explanation-${index}`) as HTMLTextAreaElement
+                                      if (!textarea) return
+                                      const start = textarea.selectionStart || 0
+                                      const end = textarea.selectionEnd || 0
+                                      const selectedText = textarea.value.substring(start, end)
+                                      if (selectedText) {
+                                        const newText = textarea.value.substring(0, start) + `^{${selectedText}}` + textarea.value.substring(end)
+                                        const newQuestions = [...editingItem.questions]
+                                        newQuestions[index] = { ...question, explanation: newText }
+                                        setEditingItem({ ...editingItem, questions: newQuestions })
+                                      } else {
+                                        alert('Selecciona el texto primero')
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                                    title="Superíndice"
+                                  >
+                                    X<sup>2</sup>
+                                  </button>
+                                  <span className="text-xs text-gray-400 self-center ml-1">Selecciona texto y clic</span>
+                                </div>
+                                <textarea
+                                  id={`explanation-${index}`}
+                                  value={question.explanation || ''}
+                                  onChange={(e) => {
+                                    const newQuestions = [...editingItem.questions]
+                                    newQuestions[index] = { ...question, explanation: e.target.value }
+                                    setEditingItem({ ...editingItem, questions: newQuestions })
+                                    e.target.style.height = 'auto'
+                                    e.target.style.height = e.target.scrollHeight + 'px'
+                                  }}
+                                  onFocus={(e) => {
+                                    e.target.style.height = 'auto'
+                                    e.target.style.height = e.target.scrollHeight + 'px'
+                                  }}
+                                  placeholder="Explicación general de la pregunta...&#10;(Puedes usar saltos de línea)"
+                                  className="w-full px-3 py-2 border border-secondary-300 rounded text-sm focus:ring-1 focus:ring-primary-500 focus:border-primary-500 resize-none overflow-hidden"
+                                  style={{ minHeight: '60px' }}
+                                />
+                              </>
+                            )}
+                            
+                            {/* Explicación por alternativa */}
+                            {question.useOptionExplanations && (
+                              <div className="space-y-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs text-blue-700">Cada alternativa tendrá su propia explicación:</p>
+                                  <div className="flex gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const focused = (window as any)[`lastFocusedExplanation_${index}`]
+                                        if (!focused || !focused.element) {
+                                          alert('Primero haz clic en una explicación y selecciona el texto')
+                                          return
+                                        }
+                                        const textarea = focused.element as HTMLTextAreaElement
+                                        const optIdx = focused.optIdx
+                                        const start = textarea.selectionStart || 0
+                                        const end = textarea.selectionEnd || 0
+                                        const selectedText = textarea.value.substring(start, end)
+                                        if (selectedText) {
+                                          const newText = textarea.value.substring(0, start) + `_{${selectedText}}` + textarea.value.substring(end)
+                                          const newQuestions = [...editingItem.questions]
+                                          const newExplanations = [...(question.optionExplanations || question.options?.map(() => '') || [])]
+                                          newExplanations[optIdx] = newText
+                                          newQuestions[index] = { ...question, optionExplanations: newExplanations }
+                                          setEditingItem({ ...editingItem, questions: newQuestions })
+                                        } else {
+                                          alert('Selecciona el texto primero')
+                                        }
+                                      }}
+                                      className="px-2 py-0.5 text-xs font-medium bg-white border border-blue-300 rounded hover:bg-blue-100"
+                                      title="Subíndice"
+                                    >
+                                      X<sub>2</sub>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const focused = (window as any)[`lastFocusedExplanation_${index}`]
+                                        if (!focused || !focused.element) {
+                                          alert('Primero haz clic en una explicación y selecciona el texto')
+                                          return
+                                        }
+                                        const textarea = focused.element as HTMLTextAreaElement
+                                        const optIdx = focused.optIdx
+                                        const start = textarea.selectionStart || 0
+                                        const end = textarea.selectionEnd || 0
+                                        const selectedText = textarea.value.substring(start, end)
+                                        if (selectedText) {
+                                          const newText = textarea.value.substring(0, start) + `^{${selectedText}}` + textarea.value.substring(end)
+                                          const newQuestions = [...editingItem.questions]
+                                          const newExplanations = [...(question.optionExplanations || question.options?.map(() => '') || [])]
+                                          newExplanations[optIdx] = newText
+                                          newQuestions[index] = { ...question, optionExplanations: newExplanations }
+                                          setEditingItem({ ...editingItem, questions: newQuestions })
+                                        } else {
+                                          alert('Selecciona el texto primero')
+                                        }
+                                      }}
+                                      className="px-2 py-0.5 text-xs font-medium bg-white border border-blue-300 rounded hover:bg-blue-100"
+                                      title="Superíndice"
+                                    >
+                                      X<sup>2</sup>
+                                    </button>
+                                  </div>
+                                </div>
+                                {question.options?.map((option: string, optIdx: number) => (
+                                  <div key={optIdx} className="flex gap-2">
+                                    <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${question.correctAnswer === optIdx ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                      {String.fromCharCode(65 + optIdx)}
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className="text-xs text-gray-500 mb-1 truncate max-w-xs">
+                                        {typeof option === 'string' ? option.substring(0, 40) : (option as any).text?.substring(0, 40)}...
+                                      </div>
+                                      <textarea
+                                        id={`explanation-${index}-${optIdx}`}
+                                        value={(question.optionExplanations || [])[optIdx] || ''}
+                                        onChange={(e) => {
+                                          const newQuestions = [...editingItem.questions]
+                                          const newExplanations = [...(question.optionExplanations || question.options?.map(() => '') || [])]
+                                          newExplanations[optIdx] = e.target.value
+                                          newQuestions[index] = { ...question, optionExplanations: newExplanations }
+                                          setEditingItem({ ...editingItem, questions: newQuestions })
+                                          e.target.style.height = 'auto'
+                                          e.target.style.height = e.target.scrollHeight + 'px'
+                                        }}
+                                        onFocus={(e) => {
+                                          (window as any)[`lastFocusedExplanation_${index}`] = { element: e.target, optIdx }
+                                        }}
+                                        placeholder={question.correctAnswer === optIdx ? "¿Por qué es correcta?" : "¿Por qué es incorrecta?"}
+                                        className="w-full px-2 py-1.5 border border-secondary-300 rounded text-xs focus:ring-1 focus:ring-primary-500 focus:border-primary-500 resize-none overflow-hidden"
+                                        style={{ minHeight: '40px' }}
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}

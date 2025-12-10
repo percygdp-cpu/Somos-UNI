@@ -56,6 +56,8 @@ export async function GET(request: Request) {
           text: q.question,
           options: formattedOptions,
           explanation: q.explanation || undefined,
+          useOptionExplanations: formattedOptions.some((opt: any) => opt.explanation && opt.explanation.trim() !== ''),
+          optionExplanations: formattedOptions.map((opt: any) => opt.explanation || ''),
           order: q.order
         }
       })
@@ -105,6 +107,8 @@ export async function GET(request: Request) {
             text: q.question, // Usar 'text' en lugar de 'question' para consistencia
             options: formattedOptions,
             explanation: q.explanation || undefined,
+            useOptionExplanations: formattedOptions.some((opt: any) => opt.explanation && opt.explanation.trim() !== ''),
+            optionExplanations: formattedOptions.map((opt: any) => opt.explanation || ''),
             order: q.order
           }
         })
@@ -149,12 +153,20 @@ export async function POST(request: Request) {
     if (questions && questions.length > 0) {
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i]
+        // Si hay explicaciones por opción, agregarlas al JSON de opciones
+        let optionsToSave = q.options
+        if (q.useOptionExplanations && q.optionExplanations) {
+          optionsToSave = q.options.map((opt: any, idx: number) => ({
+            ...(typeof opt === 'string' ? { text: opt } : opt),
+            explanation: q.optionExplanations[idx] || ''
+          }))
+        }
         const qResult = await client.execute({
           sql: 'INSERT INTO questions (test_id, question, options, correct_answer, explanation, "order") VALUES (?, ?, ?, ?, ?, ?) RETURNING id, test_id as testId, question, options, correct_answer as correctAnswer, explanation, "order"',
           args: [
             test.id,
             q.question,
-            JSON.stringify(q.options),
+            JSON.stringify(optionsToSave),
             q.correctAnswer,
             q.explanation || null,
             i
@@ -263,8 +275,16 @@ export async function PUT(request: Request) {
         const q = questions[i]
         
         // Validar que options sea un array
-        const options = Array.isArray(q.options) ? q.options : []
+        let options = Array.isArray(q.options) ? q.options : []
         const correctAnswer = typeof q.correctAnswer === 'number' ? q.correctAnswer : (typeof q.correct_answer === 'number' ? q.correct_answer : 0)
+        
+        // Si hay explicaciones por opción, agregarlas al JSON de opciones
+        if (q.useOptionExplanations && q.optionExplanations) {
+          options = options.map((opt: any, idx: number) => ({
+            ...(typeof opt === 'string' ? { text: opt } : opt),
+            explanation: q.optionExplanations[idx] || ''
+          }))
+        }
         
         const qResult = await client.execute({
           sql: 'INSERT INTO questions (test_id, question, options, correct_answer, explanation, "order") VALUES (?, ?, ?, ?, ?, ?) RETURNING id, test_id as testId, question, options, correct_answer as correctAnswer, explanation, "order"',

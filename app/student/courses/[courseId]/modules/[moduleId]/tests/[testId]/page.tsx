@@ -1,12 +1,12 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import StudentHeader from '@/components/StudentHeader'
 import anime from 'animejs'
 import confetti from 'canvas-confetti'
 import { useParams, useRouter } from 'next/navigation'
+import React, { useEffect, useState } from 'react'
 
 // Función para renderizar texto con subíndices, superíndices e imágenes
 const renderFormattedText = (text: string) => {
@@ -119,8 +119,10 @@ const renderFormattedText = (text: string) => {
 interface Question {
   id: string
   text: string
-  options: Array<{ text: string; isCorrect: boolean }>
+  options: Array<{ text: string; isCorrect: boolean; explanation?: string }>
   explanation?: string
+  useOptionExplanations?: boolean
+  optionExplanations?: string[]
 }
 
 interface Answer {
@@ -735,14 +737,73 @@ export default function TestPage() {
                           <p className="text-sm text-yellow-700 mb-2">
                             <strong>Respuesta correcta:</strong> {question.options.find((opt: any) => opt.isCorrect)?.text}
                           </p>
-                          {question.explanation && (
-                            <div className="mt-3 pt-3 border-t border-yellow-200">
-                              <p className="text-xs font-semibold text-yellow-800 mb-2">💡 EXPLICACIÓN</p>
-                              <p className="text-sm text-yellow-900">
-                                {renderFormattedText(question.explanation)}
-                              </p>
-                            </div>
-                          )}
+                          
+                          {/* Determinar si hay explicaciones por opción */}
+                          {(() => {
+                            const hasOptionExplanations = question.useOptionExplanations || 
+                              question.options.some((opt: any) => opt.explanation && opt.explanation.trim() !== '')
+                            
+                            if (hasOptionExplanations) {
+                              const selectedIdx = answers.find(a => a.questionId === question.id)?.selectedAnswer
+                              const hasAnyExplanation = question.options.some((opt: any) => opt.explanation && opt.explanation.trim() !== '')
+                              
+                              if (hasAnyExplanation) {
+                                return (
+                                  <div className="mt-3 pt-3 border-t border-yellow-200">
+                                    <p className="text-xs font-semibold text-yellow-800 mb-2">💡 EXPLICACIÓN</p>
+                                    <div className="text-sm text-yellow-900 space-y-2">
+                                      {/* Mostrar explicación de TODAS las opciones */}
+                                      {question.options.map((opt: any, optIdx: number) => {
+                                        if (!opt.explanation || opt.explanation.trim() === '') return null
+                                        
+                                        const isSelected = optIdx === selectedIdx
+                                        const isCorrectOpt = opt.isCorrect
+                                        
+                                        let letterBg = 'bg-yellow-600 text-white'
+                                        let tag = ''
+                                        
+                                        if (isCorrectOpt) {
+                                          letterBg = 'bg-green-500 text-white'
+                                          tag = ' (Correcta)'
+                                        } else if (isSelected) {
+                                          letterBg = 'bg-red-500 text-white'
+                                          tag = ' (Tu respuesta)'
+                                        }
+                                        
+                                        return (
+                                          <div key={optIdx} className="flex gap-2 items-start">
+                                            <div className={`flex-shrink-0 w-6 h-6 rounded-full ${letterBg} flex items-center justify-center text-xs font-bold`}>
+                                              {String.fromCharCode(65 + optIdx)}
+                                            </div>
+                                            <div className="flex-1">
+                                              <span className={`${isCorrectOpt ? 'text-green-700 font-semibold' : isSelected ? 'text-red-700 font-semibold' : ''}`}>
+                                                {tag && <span className="text-xs">{tag}</span>}
+                                              </span>
+                                              <span> {renderFormattedText(opt.explanation)}</span>
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )
+                              }
+                            }
+                            
+                            // Explicación normal (bloque)
+                            if (question.explanation) {
+                              return (
+                                <div className="mt-3 pt-3 border-t border-yellow-200">
+                                  <p className="text-xs font-semibold text-yellow-800 mb-2">💡 EXPLICACIÓN</p>
+                                  <p className="text-sm text-yellow-900">
+                                    {renderFormattedText(question.explanation)}
+                                  </p>
+                                </div>
+                              )
+                            }
+                            
+                            return null
+                          })()}
                         </div>
                       )}
                     </div>
@@ -920,14 +981,71 @@ export default function TestPage() {
                                 </p>
                               </div>
                               
-                              {question.explanation && (
-                                <div className="p-3 rounded-md bg-blue-50 border border-blue-200">
-                                  <p className="text-xs font-semibold text-blue-800 mb-1">💡 Explicación:</p>
-                                  <p className="text-sm text-blue-900">
-                                    {renderFormattedText(question.explanation)}
-                                  </p>
-                                </div>
-                              )}
+                              {/* Determinar si hay explicaciones por opción */}
+                              {(() => {
+                                const hasOptionExplanations = question.useOptionExplanations || 
+                                  question.options.some((opt: any) => opt.explanation && opt.explanation.trim() !== '')
+                                
+                                if (hasOptionExplanations) {
+                                  const hasAnyExplanation = question.options.some((opt: any) => opt.explanation && opt.explanation.trim() !== '')
+                                  
+                                  if (hasAnyExplanation) {
+                                    return (
+                                      <div className="p-3 rounded-md bg-blue-50 border border-blue-200">
+                                        <p className="text-xs font-semibold text-blue-800 mb-2">💡 Explicación:</p>
+                                        <div className="text-sm text-blue-900 space-y-2">
+                                          {/* Mostrar explicación de TODAS las opciones */}
+                                          {question.options.map((opt: any, optIdx: number) => {
+                                            if (!opt.explanation || opt.explanation.trim() === '') return null
+                                            
+                                            const isSelected = optIdx === answer?.selectedAnswer
+                                            const isCorrectOpt = opt.isCorrect
+                                            
+                                            let letterBg = 'bg-blue-600 text-white'
+                                            let tag = ''
+                                            
+                                            if (isCorrectOpt) {
+                                              letterBg = 'bg-green-500 text-white'
+                                              tag = ' (Correcta)'
+                                            } else if (isSelected) {
+                                              letterBg = 'bg-red-500 text-white'
+                                              tag = ' (Tu respuesta)'
+                                            }
+                                            
+                                            return (
+                                              <div key={optIdx} className="flex gap-2 items-start">
+                                                <div className={`flex-shrink-0 w-6 h-6 rounded-full ${letterBg} flex items-center justify-center text-xs font-bold`}>
+                                                  {String.fromCharCode(65 + optIdx)}
+                                                </div>
+                                                <div className="flex-1">
+                                                  <span className={`${isCorrectOpt ? 'text-green-700 font-semibold' : isSelected ? 'text-red-700 font-semibold' : ''}`}>
+                                                    {tag && <span className="text-xs">{tag}</span>}
+                                                  </span>
+                                                  <span> {renderFormattedText(opt.explanation)}</span>
+                                                </div>
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )
+                                  }
+                                }
+                                
+                                // Explicación normal
+                                if (question.explanation) {
+                                  return (
+                                    <div className="p-3 rounded-md bg-blue-50 border border-blue-200">
+                                      <p className="text-xs font-semibold text-blue-800 mb-1">💡 Explicación:</p>
+                                      <p className="text-sm text-blue-900">
+                                        {renderFormattedText(question.explanation)}
+                                      </p>
+                                    </div>
+                                  )
+                                }
+                                
+                                return null
+                              })()}
                             </div>
                           )}
                         </div>
