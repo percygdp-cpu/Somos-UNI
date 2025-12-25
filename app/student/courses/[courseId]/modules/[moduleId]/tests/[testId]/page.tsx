@@ -5,10 +5,27 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import StudentHeader from '@/components/StudentHeader'
 import anime from 'animejs'
 import confetti from 'canvas-confetti'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import { useParams, useRouter } from 'next/navigation'
 import React, { useEffect, useState } from 'react'
 
-// Función para renderizar texto con subíndices, superíndices e imágenes
+// Función para renderizar LaTeX con KaTeX
+const renderKaTeX = (latex: string, displayMode: boolean = false): string => {
+  try {
+    return katex.renderToString(latex, {
+      throwOnError: false,
+      displayMode,
+      trust: true,
+      strict: false
+    })
+  } catch (e) {
+    console.error('KaTeX error:', e)
+    return latex
+  }
+}
+
+// Función para renderizar texto con LaTeX, subíndices, superíndices e imágenes
 const renderFormattedText = (text: string) => {
   if (!text) return null
   
@@ -20,6 +37,10 @@ const renderFormattedText = (text: string) => {
     
     // Regex para detectar imágenes markdown: ![alt](url) o ![alt](url){width}
     const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)(?:\s*\{(\d+)\})?/g
+    // Regex para LaTeX: $...$ (inline) o $$...$$ (block)
+    const latexBlockRegex = /\$\$([^$]+)\$\$/g
+    const latexInlineRegex = /\$([^$]+)\$/g
+    // Regex para formato legacy (sub/superíndices simples)
     const formatRegex = /([_^])(\{([^}]+)\}|(\d+)|([a-zA-Z]))/g
     
     // Primero procesar imágenes
@@ -28,12 +49,9 @@ const renderFormattedText = (text: string) => {
     let lastIndex = 0
     
     while ((imageMatch = imageRegex.exec(lineText)) !== null) {
-      // Agregar texto antes de la imagen
       if (imageMatch.index > lastIndex) {
         segments.push({ type: 'text', content: lineText.substring(lastIndex, imageMatch.index), index: lastIndex })
       }
-      
-      // Agregar imagen
       segments.push({ 
         type: 'image', 
         alt: imageMatch[1] || 'imagen',
@@ -41,16 +59,13 @@ const renderFormattedText = (text: string) => {
         width: imageMatch[3] ? parseInt(imageMatch[3]) : 300,
         index: imageMatch.index
       })
-      
       lastIndex = imageMatch.index + imageMatch[0].length
     }
     
-    // Agregar texto restante
     if (lastIndex < lineText.length) {
       segments.push({ type: 'text', content: lineText.substring(lastIndex), index: lastIndex })
     }
     
-    // Si no hay imágenes, procesar todo como texto
     if (segments.length === 0) {
       segments.push({ type: 'text', content: lineText, index: 0 })
     }
@@ -68,34 +83,105 @@ const renderFormattedText = (text: string) => {
           />
         )
       } else {
-        // Procesar formato de texto (sub/superíndices)
+        // Procesar LaTeX y formato de texto
+        let content = segment.content
         const textParts: any[] = []
-        let textIndex = 0
-        let match
+        let currentIndex = 0
+        
+        // Combinar procesamiento de LaTeX block, inline y formato legacy
+        const allMatches: Array<{start: number, end: number, type: string, content: string, displayMode?: boolean}> = []
+        
+        // Encontrar LaTeX block $$...$$
+        let blockMatch: RegExpExecArray | null
+        latexBlockRegex.lastIndex = 0
+        while ((blockMatch = latexBlockRegex.exec(content)) !== null) {
+          allMatches.push({
+            start: blockMatch.index,
+            end: blockMatch.index + blockMatch[0].length,
+            type: 'latex',
+            content: blockMatch[1],
+            displayMode: true
+          })
+        }
+        
+        // Encontrar LaTeX inline $...$
+        let inlineMatch: RegExpExecArray | null
+        latexInlineRegex.lastIndex = 0
+        while ((inlineMatch = latexInlineRegex.exec(content)) !== null) {
+          // Verificar que no está dentro de un bloque $$
+          const isInsideBlock = allMatches.some(m => 
+            m.displayMode && inlineMatch!.index >= m.start && inlineMatch!.index < m.end
+          )
+          if (!isInsideBlock) {
+            allMatches.push({
+              start: inlineMatch.index,
+              end: inlineMatch.index + inlineMatch[0].length,
+              type: 'latex',
+              content: inlineMatch[1],
+              displayMode: false
+            })
+          }
+        }
+        
+        // Encontrar formato legacy _{ } y ^{ }
+        let legacyMatch: RegExpExecArray | null
         formatRegex.lastIndex = 0
-        
-        while ((match = formatRegex.exec(segment.content)) !== null) {
-          if (match.index > textIndex) {
-            textParts.push(segment.content.substring(textIndex, match.index))
+        while ((legacyMatch = formatRegex.exec(content)) !== null) {
+          // Verificar que no está dentro de LaTeX
+          const isInsideLatex = allMatches.some(m => 
+            legacyMatch!.index >= m.start && legacyMatch!.index < m.end
+          )
+          if (!isInsideLatex) {
+            const matchType = legacyMatch[1]
+            const matchContent = legacyMatch[3] || legacyMatch[4] || legacyMatch[5]
+            allMatches.push({
+              start: legacyMatch.index,
+              end: legacyMatch.index + legacyMatch[0].length,
+              type: matchType === '_' ? 'sub' : 'sup',
+              content: matchContent
+            })
           }
-          
-          const type = match[1]
-          const content = match[3] || match[4] || match[5]
-          
-          if (type === '_') {
-            textParts.push(<sub key={`sub-${lineIndex}-${segment.index}-${match.index}`}>{content}</sub>)
-          } else if (type === '^') {
-            textParts.push(<sup key={`sup-${lineIndex}-${segment.index}-${match.index}`}>{content}</sup>)
-          }
-          
-          textIndex = match.index + match[0].length
         }
         
-        if (textIndex < segment.content.length) {
-          textParts.push(segment.content.substring(textIndex))
+        // Si no hay matches, agregar todo el contenido y salir
+        if (allMatches.length === 0) {
+          parts.push(content)
+          return
         }
         
-        // Agregar las partes de texto procesadas
+        // Ordenar por posición
+        allMatches.sort((a, b) => a.start - b.start)
+        
+        // Procesar en orden
+        allMatches.forEach((match, idx) => {
+          // Texto antes del match
+          if (match.start > currentIndex) {
+            textParts.push(content.substring(currentIndex, match.start))
+          }
+          
+          // El match
+          if (match.type === 'latex') {
+            textParts.push(
+              <span 
+                key={`latex-${lineIndex}-${segment.index}-${idx}`}
+                dangerouslySetInnerHTML={{ __html: renderKaTeX(match.content, match.displayMode) }}
+                style={match.displayMode ? { display: 'block', textAlign: 'center', margin: '8px 0' } : { display: 'inline' }}
+              />
+            )
+          } else if (match.type === 'sub') {
+            textParts.push(<sub key={`sub-${lineIndex}-${segment.index}-${idx}`}>{match.content}</sub>)
+          } else if (match.type === 'sup') {
+            textParts.push(<sup key={`sup-${lineIndex}-${segment.index}-${idx}`}>{match.content}</sup>)
+          }
+          
+          currentIndex = match.end
+        })
+        
+        // Texto restante después del último match
+        if (currentIndex < content.length) {
+          textParts.push(content.substring(currentIndex))
+        }
+        
         textParts.forEach(part => parts.push(part))
       }
     })

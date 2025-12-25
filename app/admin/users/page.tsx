@@ -7,11 +7,28 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { validateAndCompressPDF } from '@/lib/pdfCompressor'
 import { User } from '@/types'
 import anime from 'animejs'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import { useRouter, useSearchParams } from 'next/navigation'
 import React, { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
 
-// Función para renderizar texto con subíndices, superíndices e imágenes
+// Función para renderizar LaTeX con KaTeX
+const renderKaTeX = (latex: string, displayMode: boolean = false): string => {
+  try {
+    return katex.renderToString(latex, {
+      throwOnError: false,
+      displayMode,
+      trust: true,
+      strict: false
+    })
+  } catch (e) {
+    console.error('KaTeX error:', e)
+    return latex
+  }
+}
+
+// Función para renderizar texto con LaTeX, subíndices, superíndices e imágenes
 const renderFormattedText = (text: string) => {
   if (!text) return null
   
@@ -23,6 +40,10 @@ const renderFormattedText = (text: string) => {
     
     // Regex para detectar imágenes markdown: ![alt](url) o ![alt](url){width}
     const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)(?:\s*\{(\d+)\})?/g
+    // Regex para LaTeX: $...$ (inline) o $$...$$ (block)
+    const latexBlockRegex = /\$\$([^$]+)\$\$/g
+    const latexInlineRegex = /\$([^$]+)\$/g
+    // Regex para formato legacy (sub/superíndices simples)
     const formatRegex = /([_^])(\{([^}]+)\}|(\d+)|([a-zA-Z]))/g
     
     // Primero procesar imágenes
@@ -31,12 +52,9 @@ const renderFormattedText = (text: string) => {
     let lastIndex = 0
     
     while ((imageMatch = imageRegex.exec(lineText)) !== null) {
-      // Agregar texto antes de la imagen
       if (imageMatch.index > lastIndex) {
         segments.push({ type: 'text', content: lineText.substring(lastIndex, imageMatch.index), index: lastIndex })
       }
-      
-      // Agregar imagen
       segments.push({ 
         type: 'image', 
         alt: imageMatch[1] || 'imagen',
@@ -44,64 +62,132 @@ const renderFormattedText = (text: string) => {
         width: imageMatch[3] ? parseInt(imageMatch[3]) : 300,
         index: imageMatch.index
       })
-      
       lastIndex = imageMatch.index + imageMatch[0].length
     }
     
-    // Agregar texto restante
     if (lastIndex < lineText.length) {
       segments.push({ type: 'text', content: lineText.substring(lastIndex), index: lastIndex })
     }
     
-    // Si no hay imágenes, procesar todo como texto
     if (segments.length === 0) {
       segments.push({ type: 'text', content: lineText, index: 0 })
     }
   
-  // Procesar cada segmento
-  segments.forEach((segment, segIndex) => {
-    if (segment.type === 'image') {
-      parts.push(
-        <img 
-          key={`img-${segment.index}`}
-          src={segment.url} 
-          alt={segment.alt}
-          style={{ maxWidth: `${segment.width}px`, height: 'auto', display: 'inline-block', margin: '0 4px', verticalAlign: 'middle' }}
-          className="rounded border border-gray-300"
-        />
-      )
-    } else {
-      // Procesar formato de texto (sub/superíndices)
-      const textParts: any[] = []
-      let textIndex = 0
-      let match
-      formatRegex.lastIndex = 0
-      
-      while ((match = formatRegex.exec(segment.content)) !== null) {
-        if (match.index > textIndex) {
-          textParts.push(segment.content.substring(textIndex, match.index))
+    // Procesar cada segmento
+    segments.forEach((segment, segIndex) => {
+      if (segment.type === 'image') {
+        parts.push(
+          <img 
+            key={`img-${lineIndex}-${segment.index}`}
+            src={segment.url} 
+            alt={segment.alt}
+            style={{ maxWidth: `${segment.width}px`, height: 'auto', display: 'inline-block', margin: '0 4px', verticalAlign: 'middle' }}
+            className="rounded border border-gray-300"
+          />
+        )
+      } else {
+        // Procesar LaTeX y formato de texto
+        const content = segment.content
+        const textParts: any[] = []
+        let currentIndex = 0
+        
+        // Combinar procesamiento de LaTeX block, inline y formato legacy
+        const allMatches: Array<{start: number, end: number, type: string, content: string, displayMode?: boolean}> = []
+        
+        // Encontrar LaTeX block $$...$$
+        let blockMatch
+        latexBlockRegex.lastIndex = 0
+        while ((blockMatch = latexBlockRegex.exec(content)) !== null) {
+          allMatches.push({
+            start: blockMatch.index,
+            end: blockMatch.index + blockMatch[0].length,
+            type: 'latex',
+            content: blockMatch[1],
+            displayMode: true
+          })
         }
         
-        const type = match[1]
-        const content = match[3] || match[4] || match[5]
-        
-        if (type === '_') {
-          textParts.push(<sub key={`sub-${segment.index}-${match.index}`}>{content}</sub>)
-        } else if (type === '^') {
-          textParts.push(<sup key={`sup-${segment.index}-${match.index}`}>{content}</sup>)
+        // Encontrar LaTeX inline $...$
+        let inlineMatch
+        latexInlineRegex.lastIndex = 0
+        while ((inlineMatch = latexInlineRegex.exec(content)) !== null) {
+          // Verificar que no está dentro de un bloque $$
+          const isInsideBlock = allMatches.some(m => 
+            m.displayMode && inlineMatch.index >= m.start && inlineMatch.index < m.end
+          )
+          if (!isInsideBlock) {
+            allMatches.push({
+              start: inlineMatch.index,
+              end: inlineMatch.index + inlineMatch[0].length,
+              type: 'latex',
+              content: inlineMatch[1],
+              displayMode: false
+            })
+          }
         }
         
-        textIndex = match.index + match[0].length
+        // Encontrar formato legacy _{ } y ^{ }
+        let legacyMatch
+        formatRegex.lastIndex = 0
+        while ((legacyMatch = formatRegex.exec(content)) !== null) {
+          // Verificar que no está dentro de LaTeX
+          const isInsideLatex = allMatches.some(m => 
+            legacyMatch.index >= m.start && legacyMatch.index < m.end
+          )
+          if (!isInsideLatex) {
+            const matchType = legacyMatch[1]
+            const matchContent = legacyMatch[3] || legacyMatch[4] || legacyMatch[5]
+            allMatches.push({
+              start: legacyMatch.index,
+              end: legacyMatch.index + legacyMatch[0].length,
+              type: matchType === '_' ? 'sub' : 'sup',
+              content: matchContent
+            })
+          }
+        }
+        
+        // Si no hay matches, agregar todo el contenido y salir
+        if (allMatches.length === 0) {
+          parts.push(content)
+          return
+        }
+        
+        // Ordenar por posición
+        allMatches.sort((a, b) => a.start - b.start)
+        
+        // Procesar en orden
+        allMatches.forEach((match, idx) => {
+          // Texto antes del match
+          if (match.start > currentIndex) {
+            textParts.push(content.substring(currentIndex, match.start))
+          }
+          
+          // El match
+          if (match.type === 'latex') {
+            textParts.push(
+              <span 
+                key={`latex-${lineIndex}-${segment.index}-${idx}`}
+                dangerouslySetInnerHTML={{ __html: renderKaTeX(match.content, match.displayMode) }}
+                style={match.displayMode ? { display: 'block', textAlign: 'center', margin: '8px 0' } : { display: 'inline' }}
+              />
+            )
+          } else if (match.type === 'sub') {
+            textParts.push(<sub key={`sub-${lineIndex}-${segment.index}-${idx}`}>{match.content}</sub>)
+          } else if (match.type === 'sup') {
+            textParts.push(<sup key={`sup-${lineIndex}-${segment.index}-${idx}`}>{match.content}</sup>)
+          }
+          
+          currentIndex = match.end
+        })
+        
+        // Texto restante después del último match
+        if (currentIndex < content.length) {
+          textParts.push(content.substring(currentIndex))
+        }
+        
+        textParts.forEach(part => parts.push(part))
       }
-      
-      if (textIndex < segment.content.length) {
-        textParts.push(segment.content.substring(textIndex))
-      }
-      
-      // Agregar las partes de texto procesadas
-      textParts.forEach(part => parts.push(part))
-    }
-  })
+    })
   
     return parts
   }
@@ -116,6 +202,426 @@ const renderFormattedText = (text: string) => {
         </React.Fragment>
       ))}
     </>
+  )
+}
+
+// Componente de barra de herramientas matemáticas
+interface MathToolbarProps {
+  textareaId: string
+  onInsert: (newText: string) => void
+  currentValue: string
+}
+
+const MathToolbar: React.FC<MathToolbarProps> = ({ textareaId, onInsert, currentValue }) => {
+  const [showChemistryModal, setShowChemistryModal] = useState(false)
+  const [showMathMenu, setShowMathMenu] = useState(false)
+  const [chemistryData, setChemistryData] = useState({
+    massNumber: '',
+    atomicNumber: '',
+    symbol: '',
+    charge: '',
+    atoms: ''
+  })
+
+  const insertAtCursor = (before: string, after: string = '', placeholder: string = '') => {
+    const textarea = document.getElementById(textareaId) as HTMLTextAreaElement
+    if (!textarea) return
+    
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const selectedText = textarea.value.substring(start, end) || placeholder
+    
+    const newText = textarea.value.substring(0, start) + 
+      before + selectedText + after + 
+      textarea.value.substring(end)
+    
+    onInsert(newText)
+    
+    // Restaurar foco y posición
+    setTimeout(() => {
+      textarea.focus()
+      const newPos = start + before.length + selectedText.length + after.length
+      textarea.setSelectionRange(newPos, newPos)
+    }, 10)
+  }
+
+  const insertChemistry = () => {
+    const { massNumber, atomicNumber, symbol, charge, atoms } = chemistryData
+    if (!symbol) {
+      alert('El símbolo del elemento es requerido')
+      return
+    }
+    
+    let latex = '$'
+    
+    // Números a la izquierda (masa arriba, atómico abajo)
+    if (massNumber || atomicNumber) {
+      latex += `{}^{${massNumber}}_{${atomicNumber}}`
+    }
+    
+    // Símbolo del elemento
+    latex += `\\text{${symbol}}`
+    
+    // Número de átomos (subíndice derecha)
+    if (atoms) {
+      latex += `_{${atoms}}`
+    }
+    
+    // Carga (superíndice derecha)
+    if (charge) {
+      latex += `^{${charge}}`
+    }
+    
+    latex += '$'
+    
+    insertAtCursor(latex)
+    setShowChemistryModal(false)
+    setChemistryData({ massNumber: '', atomicNumber: '', symbol: '', charge: '', atoms: '' })
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1 mb-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
+      {/* Básicos */}
+      <div className="flex gap-1 border-r border-gray-300 pr-2 mr-1">
+        <button
+          type="button"
+          onClick={() => insertAtCursor('$', '$', 'x')}
+          className="px-2 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-blue-50 hover:border-blue-300 transition-colors"
+          title="Insertar fórmula LaTeX inline"
+        >
+          <span className="italic">f(x)</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => insertAtCursor('_{', '}', '2')}
+          className="px-2 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-blue-50 hover:border-blue-300 transition-colors"
+          title="Subíndice"
+        >
+          X<sub>2</sub>
+        </button>
+        <button
+          type="button"
+          onClick={() => insertAtCursor('^{', '}', '2')}
+          className="px-2 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-blue-50 hover:border-blue-300 transition-colors"
+          title="Superíndice"
+        >
+          X<sup>2</sup>
+        </button>
+      </div>
+
+      {/* Matemáticas */}
+      <div className="relative flex gap-1 border-r border-gray-300 pr-2 mr-1">
+        <button
+          type="button"
+          onClick={() => insertAtCursor('$\\frac{', '}{b}$', 'a')}
+          className="px-2 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-green-50 hover:border-green-300 transition-colors"
+          title="Fracción"
+        >
+          <span style={{display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1}}>
+            <span style={{borderBottom: '1px solid black', fontSize: '9px'}}>a</span>
+            <span style={{fontSize: '9px'}}>b</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => insertAtCursor('$\\sqrt{', '}$', 'x')}
+          className="px-2 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-green-50 hover:border-green-300 transition-colors"
+          title="Raíz cuadrada"
+        >
+          √x
+        </button>
+        <button
+          type="button"
+          onClick={() => insertAtCursor('$\\sqrt[', ']{x}$', 'n')}
+          className="px-2 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-green-50 hover:border-green-300 transition-colors"
+          title="Raíz n-ésima"
+        >
+          <sup>n</sup>√x
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowMathMenu(!showMathMenu)}
+          className="px-2 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-green-50 hover:border-green-300 transition-colors"
+          title="Más símbolos matemáticos"
+        >
+          ∑∫
+        </button>
+        
+        {showMathMenu && (
+          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 p-2 min-w-[320px]">
+            {/* Combinatoria y Probabilidad */}
+            <div className="mb-2 pb-2 border-b border-gray-200">
+              <p className="text-xs text-gray-500 font-medium mb-1 px-1">Combinatoria</p>
+              <div className="grid grid-cols-4 gap-1 text-sm">
+                <button onClick={() => { insertAtCursor('$\\binom{n}{k}$'); setShowMathMenu(false) }} className="p-2 hover:bg-purple-100 rounded text-xs" title="Combinación C(n,k)">C(n,k)</button>
+                <button onClick={() => { insertAtCursor('$P_{n}^{k}$'); setShowMathMenu(false) }} className="p-2 hover:bg-purple-100 rounded text-xs" title="Permutación P(n,k)">P(n,k)</button>
+                <button onClick={() => { insertAtCursor('$n!$'); setShowMathMenu(false) }} className="p-2 hover:bg-purple-100 rounded" title="Factorial">n!</button>
+                <button onClick={() => { insertAtCursor('$\\binom{n}{r}$'); setShowMathMenu(false) }} className="p-2 hover:bg-purple-100 rounded text-xs" title="Coeficiente binomial">(<sup>n</sup><sub>r</sub>)</button>
+                <button onClick={() => { insertAtCursor('$\\frac{n!}{(n-k)!}$'); setShowMathMenu(false) }} className="p-2 hover:bg-purple-100 rounded text-xs" title="Variaciones V(n,k)">V(n,k)</button>
+                <button onClick={() => { insertAtCursor('$\\frac{n!}{k!(n-k)!}$'); setShowMathMenu(false) }} className="p-2 hover:bg-purple-100 rounded text-xs" title="Fórmula combinación">C fórm</button>
+                <button onClick={() => { insertAtCursor('$n^k$'); setShowMathMenu(false) }} className="p-2 hover:bg-purple-100 rounded" title="Variaciones con repetición">VR</button>
+                <button onClick={() => { insertAtCursor('$\\binom{n+k-1}{k}$'); setShowMathMenu(false) }} className="p-2 hover:bg-purple-100 rounded text-xs" title="Combinación con repetición">CR</button>
+              </div>
+            </div>
+            
+            {/* Operadores y Cálculo */}
+            <div className="mb-2 pb-2 border-b border-gray-200">
+              <p className="text-xs text-gray-500 font-medium mb-1 px-1">Cálculo</p>
+              <div className="grid grid-cols-4 gap-1 text-sm">
+                <button onClick={() => { insertAtCursor('$\\sum_{i=1}^{n}$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Sumatoria">∑</button>
+                <button onClick={() => { insertAtCursor('$\\prod_{i=1}^{n}$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Productoria">∏</button>
+                <button onClick={() => { insertAtCursor('$\\int_{a}^{b}$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Integral">∫</button>
+                <button onClick={() => { insertAtCursor('$\\lim_{x \\to \\infty}$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Límite">lim</button>
+                <button onClick={() => { insertAtCursor('$\\frac{d}{dx}$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded text-xs" title="Derivada">d/dx</button>
+                <button onClick={() => { insertAtCursor('$\\partial$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Derivada parcial">∂</button>
+                <button onClick={() => { insertAtCursor('$\\infty$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Infinito">∞</button>
+                <button onClick={() => { insertAtCursor('$\\log_{b}$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded text-xs" title="Logaritmo">log</button>
+              </div>
+            </div>
+            
+            {/* Operadores */}
+            <div className="mb-2 pb-2 border-b border-gray-200">
+              <p className="text-xs text-gray-500 font-medium mb-1 px-1">Operadores</p>
+              <div className="grid grid-cols-4 gap-1 text-sm">
+                <button onClick={() => { insertAtCursor('$\\pm$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Más menos">±</button>
+                <button onClick={() => { insertAtCursor('$\\times$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Multiplicación">×</button>
+                <button onClick={() => { insertAtCursor('$\\div$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="División">÷</button>
+                <button onClick={() => { insertAtCursor('$\\cdot$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Punto medio">·</button>
+                <button onClick={() => { insertAtCursor('$\\neq$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Diferente">≠</button>
+                <button onClick={() => { insertAtCursor('$\\leq$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Menor o igual">≤</button>
+                <button onClick={() => { insertAtCursor('$\\geq$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Mayor o igual">≥</button>
+                <button onClick={() => { insertAtCursor('$\\approx$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Aproximado">≈</button>
+              </div>
+            </div>
+            
+            {/* Letras griegas */}
+            <div className="mb-2 pb-2 border-b border-gray-200">
+              <p className="text-xs text-gray-500 font-medium mb-1 px-1">Letras griegas</p>
+              <div className="grid grid-cols-6 gap-1 text-sm">
+                <button onClick={() => { insertAtCursor('$\\alpha$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Alpha">α</button>
+                <button onClick={() => { insertAtCursor('$\\beta$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Beta">β</button>
+                <button onClick={() => { insertAtCursor('$\\gamma$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Gamma">γ</button>
+                <button onClick={() => { insertAtCursor('$\\delta$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Delta">δ</button>
+                <button onClick={() => { insertAtCursor('$\\epsilon$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Epsilon">ε</button>
+                <button onClick={() => { insertAtCursor('$\\theta$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Theta">θ</button>
+                <button onClick={() => { insertAtCursor('$\\lambda$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Lambda">λ</button>
+                <button onClick={() => { insertAtCursor('$\\mu$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Mu">μ</button>
+                <button onClick={() => { insertAtCursor('$\\pi$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Pi">π</button>
+                <button onClick={() => { insertAtCursor('$\\sigma$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Sigma">σ</button>
+                <button onClick={() => { insertAtCursor('$\\phi$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Phi">φ</button>
+                <button onClick={() => { insertAtCursor('$\\omega$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Omega">ω</button>
+                <button onClick={() => { insertAtCursor('$\\Delta$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Delta mayúscula">Δ</button>
+                <button onClick={() => { insertAtCursor('$\\Sigma$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Sigma mayúscula">Σ</button>
+                <button onClick={() => { insertAtCursor('$\\Omega$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Omega mayúscula">Ω</button>
+                <button onClick={() => { insertAtCursor('$\\Pi$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Pi mayúscula">Π</button>
+                <button onClick={() => { insertAtCursor('$\\Phi$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Phi mayúscula">Φ</button>
+                <button onClick={() => { insertAtCursor('$\\Gamma$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Gamma mayúscula">Γ</button>
+              </div>
+            </div>
+            
+            {/* Flechas y otros */}
+            <div>
+              <p className="text-xs text-gray-500 font-medium mb-1 px-1">Flechas y conjuntos</p>
+              <div className="grid grid-cols-6 gap-1 text-sm">
+                <button onClick={() => { insertAtCursor('$\\rightarrow$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Flecha derecha">→</button>
+                <button onClick={() => { insertAtCursor('$\\leftarrow$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Flecha izquierda">←</button>
+                <button onClick={() => { insertAtCursor('$\\Rightarrow$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Implica">⇒</button>
+                <button onClick={() => { insertAtCursor('$\\Leftrightarrow$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Si y solo si">⇔</button>
+                <button onClick={() => { insertAtCursor('$\\in$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Pertenece">∈</button>
+                <button onClick={() => { insertAtCursor('$\\notin$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="No pertenece">∉</button>
+                <button onClick={() => { insertAtCursor('$\\subset$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Subconjunto">⊂</button>
+                <button onClick={() => { insertAtCursor('$\\cup$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Unión">∪</button>
+                <button onClick={() => { insertAtCursor('$\\cap$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Intersección">∩</button>
+                <button onClick={() => { insertAtCursor('$\\emptyset$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Conjunto vacío">∅</button>
+                <button onClick={() => { insertAtCursor('$\\forall$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Para todo">∀</button>
+                <button onClick={() => { insertAtCursor('$\\exists$'); setShowMathMenu(false) }} className="p-2 hover:bg-gray-100 rounded" title="Existe">∃</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Química */}
+      <div className="flex gap-1">
+        <button
+          type="button"
+          onClick={() => setShowChemistryModal(true)}
+          className="px-2 py-1 text-xs font-medium bg-purple-100 border border-purple-300 rounded hover:bg-purple-200 transition-colors flex items-center gap-1"
+          title="Notación química (isótopos, iones)"
+        >
+          <span>⚗️</span>
+          <span className="hidden sm:inline">Química</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => insertAtCursor('$\\rightarrow$')}
+          className="px-2 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-purple-50 hover:border-purple-300 transition-colors"
+          title="Flecha de reacción"
+        >
+          →
+        </button>
+        <button
+          type="button"
+          onClick={() => insertAtCursor('$\\rightleftharpoons$')}
+          className="px-2 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-purple-50 hover:border-purple-300 transition-colors"
+          title="Equilibrio químico"
+        >
+          ⇌
+        </button>
+      </div>
+
+      {/* Modal de Química */}
+      {showChemistryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4" onClick={() => setShowChemistryModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <span>⚗️</span> Notación Química
+            </h3>
+            
+            {/* Vista previa */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-4 text-center">
+              <span className="text-sm text-gray-500 block mb-2">Vista previa:</span>
+              <div className="text-2xl" dangerouslySetInnerHTML={{ 
+                __html: renderKaTeX(
+                  `{}^{${chemistryData.massNumber || 'A'}}_{${chemistryData.atomicNumber || 'Z'}}\\text{${chemistryData.symbol || 'X'}}${chemistryData.atoms ? `_{${chemistryData.atoms}}` : ''}${chemistryData.charge ? `^{${chemistryData.charge}}` : ''}`,
+                  false
+                )
+              }} />
+            </div>
+
+            {/* Diagrama visual */}
+            <div className="grid grid-cols-3 gap-2 mb-4 text-center text-xs text-gray-500">
+              <div className="col-span-1">
+                <div className="border border-dashed border-gray-300 rounded p-2 mb-1">
+                  <div className="text-purple-600 font-medium">↑ Masa (A)</div>
+                  <div className="text-blue-600 font-medium">↓ Atómico (Z)</div>
+                </div>
+              </div>
+              <div className="col-span-1">
+                <div className="border border-dashed border-gray-300 rounded p-2 mb-1">
+                  <div className="font-bold text-lg">Símbolo</div>
+                </div>
+              </div>
+              <div className="col-span-1">
+                <div className="border border-dashed border-gray-300 rounded p-2 mb-1">
+                  <div className="text-red-600 font-medium">↑ Carga</div>
+                  <div className="text-green-600 font-medium">↓ Átomos</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Número másico (A) <span className="text-purple-600">↖</span>
+                </label>
+                <input
+                  type="text"
+                  value={chemistryData.massNumber}
+                  onChange={(e) => setChemistryData({...chemistryData, massNumber: e.target.value})}
+                  placeholder="ej: 238"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Número atómico (Z) <span className="text-blue-600">↙</span>
+                </label>
+                <input
+                  type="text"
+                  value={chemistryData.atomicNumber}
+                  onChange={(e) => setChemistryData({...chemistryData, atomicNumber: e.target.value})}
+                  placeholder="ej: 92"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Símbolo del elemento *
+                </label>
+                <input
+                  type="text"
+                  value={chemistryData.symbol}
+                  onChange={(e) => setChemistryData({...chemistryData, symbol: e.target.value})}
+                  placeholder="ej: U, Fe, Na"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Carga (ión) <span className="text-red-600">↗</span>
+                </label>
+                <input
+                  type="text"
+                  value={chemistryData.charge}
+                  onChange={(e) => setChemistryData({...chemistryData, charge: e.target.value})}
+                  placeholder="ej: 2+, 3-, +"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Número de átomos <span className="text-green-600">↘</span>
+                </label>
+                <input
+                  type="text"
+                  value={chemistryData.atoms}
+                  onChange={(e) => setChemistryData({...chemistryData, atoms: e.target.value})}
+                  placeholder="ej: 2, 4 (para H₂O sería 2)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Ejemplos rápidos */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mb-2">Ejemplos rápidos:</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setChemistryData({ massNumber: '238', atomicNumber: '92', symbol: 'U', charge: '', atoms: '' })}
+                  className="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
+                >
+                  ²³⁸₉₂U
+                </button>
+                <button
+                  onClick={() => setChemistryData({ massNumber: '14', atomicNumber: '6', symbol: 'C', charge: '', atoms: '' })}
+                  className="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
+                >
+                  ¹⁴₆C
+                </button>
+                <button
+                  onClick={() => setChemistryData({ massNumber: '', atomicNumber: '', symbol: 'Fe', charge: '3+', atoms: '' })}
+                  className="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
+                >
+                  Fe³⁺
+                </button>
+                <button
+                  onClick={() => setChemistryData({ massNumber: '', atomicNumber: '', symbol: 'SO', charge: '2-', atoms: '4' })}
+                  className="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
+                >
+                  SO₄²⁻
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setShowChemistryModal(false)}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={insertChemistry}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
+              >
+                Insertar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -3786,57 +4292,17 @@ export default function UserManagementPage() {
                             <label className="block text-xs font-medium text-secondary-700 mb-1">
                               Texto de la pregunta
                             </label>
-                            <div className="flex gap-1 mb-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const textarea = document.getElementById(`question-${index}`) as HTMLTextAreaElement
-                                  if (!textarea) return
-                                  
-                                  const start = textarea.selectionStart
-                                  const end = textarea.selectionEnd
-                                  const selectedText = textarea.value.substring(start, end)
-                                  
-                                  if (selectedText) {
-                                    const newText = textarea.value.substring(0, start) + 
-                                      `_{${selectedText}}` + 
-                                      textarea.value.substring(end)
-                                    
-                                    const newQuestions = [...editingItem.questions]
-                                    newQuestions[index] = { ...question, question: newText }
-                                    setEditingItem({ ...editingItem, questions: newQuestions })
-                                  }
-                                }}
-                                className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-                                title="Subíndice (selecciona texto primero)"
-                              >
-                                X<sub>2</sub>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const textarea = document.getElementById(`question-${index}`) as HTMLTextAreaElement
-                                  if (!textarea) return
-                                  
-                                  const start = textarea.selectionStart
-                                  const end = textarea.selectionEnd
-                                  const selectedText = textarea.value.substring(start, end)
-                                  
-                                  if (selectedText) {
-                                    const newText = textarea.value.substring(0, start) + 
-                                      `^{${selectedText}}` + 
-                                      textarea.value.substring(end)
-                                    
-                                    const newQuestions = [...editingItem.questions]
-                                    newQuestions[index] = { ...question, question: newText }
-                                    setEditingItem({ ...editingItem, questions: newQuestions })
-                                  }
-                                }}
-                                className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-                                title="Superíndice (selecciona texto primero)"
-                              >
-                                X<sup>2</sup>
-                              </button>
+                            <MathToolbar
+                              textareaId={`question-${index}`}
+                              currentValue={question.question}
+                              onInsert={(newText) => {
+                                const newQuestions = [...editingItem.questions]
+                                newQuestions[index] = { ...question, question: newText }
+                                setEditingItem({ ...editingItem, questions: newQuestions })
+                              }}
+                            />
+                            {/* Botón de imagen separado */}
+                            <div className="flex gap-1 mb-2 -mt-1">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -3848,7 +4314,6 @@ export default function UserManagementPage() {
                                     if (!file) return
                                     
                                     try {
-                                      // Subir imagen a Vercel Blob
                                       const formData = new FormData()
                                       formData.append('file', file)
                                       
@@ -3861,7 +4326,6 @@ export default function UserManagementPage() {
                                       
                                       const { url } = await response.json()
                                       
-                                      // Insertar sintaxis de imagen en el cursor
                                       const textarea = document.getElementById(`question-${index}`) as HTMLTextAreaElement
                                       if (!textarea) return
                                       
@@ -3880,12 +4344,11 @@ export default function UserManagementPage() {
                                   }
                                   input.click()
                                 }}
-                                className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                                className="px-3 py-1 text-xs font-medium bg-orange-100 border border-orange-300 rounded hover:bg-orange-200 transition-colors"
                                 title="Subir imagen"
                               >
                                 📷 Imagen
                               </button>
-                              <span className="text-xs text-gray-500 self-center ml-2">Selecciona texto y haz clic</span>
                             </div>
                             <textarea
                               id={`question-${index}`}
@@ -3910,77 +4373,23 @@ export default function UserManagementPage() {
                           <label className="block text-xs font-medium text-secondary-600 mb-1 mt-3">
                             Opciones
                           </label>
-                          <div className="flex gap-1 mb-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const focused = (window as any)[`lastFocusedOption_${index}`]
-                                if (!focused || !focused.element) {
-                                  alert('Primero haz clic en una opción y selecciona el texto')
-                                  return
-                                }
-                                const textarea = focused.element as HTMLInputElement
-                                const optIndex = focused.optIndex
-                                
-                                const start = textarea.selectionStart || 0
-                                const end = textarea.selectionEnd || 0
-                                const selectedText = textarea.value.substring(start, end)
-                                
-                                if (selectedText) {
-                                  const newText = textarea.value.substring(0, start) + 
-                                    `_{${selectedText}}` + 
-                                    textarea.value.substring(end)
-                                  
-                                  const newQuestions = [...editingItem.questions]
-                                  const newOptions = [...question.options]
-                                  newOptions[optIndex] = newText
-                                  newQuestions[index] = { ...question, options: newOptions }
-                                  setEditingItem({ ...editingItem, questions: newQuestions })
-                                } else {
-                                  alert('Selecciona el texto que quieres convertir a subíndice')
-                                }
-                              }}
-                              className="px-2 py-0.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
-                              title="Subíndice para opción (selecciona texto primero)"
-                            >
-                              X<sub>2</sub>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const focused = (window as any)[`lastFocusedOption_${index}`]
-                                if (!focused || !focused.element) {
-                                  alert('Primero haz clic en una opción y selecciona el texto')
-                                  return
-                                }
-                                const textarea = focused.element as HTMLInputElement
-                                const optIndex = focused.optIndex
-                                
-                                const start = textarea.selectionStart || 0
-                                const end = textarea.selectionEnd || 0
-                                const selectedText = textarea.value.substring(start, end)
-                                
-                                if (selectedText) {
-                                  const newText = textarea.value.substring(0, start) + 
-                                    `^{${selectedText}}` + 
-                                    textarea.value.substring(end)
-                                  
-                                  const newQuestions = [...editingItem.questions]
-                                  const newOptions = [...question.options]
-                                  newOptions[optIndex] = newText
-                                  newQuestions[index] = { ...question, options: newOptions }
-                                  setEditingItem({ ...editingItem, questions: newQuestions })
-                                } else {
-                                  alert('Selecciona el texto que quieres convertir a superíndice')
-                                }
-                              }}
-                              className="px-2 py-0.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
-                              title="Superíndice para opción (selecciona texto primero)"
-                            >
-                              X<sup>2</sup>
-                            </button>
-                            <span className="text-xs text-gray-500 self-center ml-1">Clic en opción, seleccionar texto, clic aquí</span>
-                          </div>
+                          <MathToolbar
+                            textareaId={`option-${index}-0`}
+                            currentValue=""
+                            onInsert={(newText) => {
+                              const focused = (window as any)[`lastFocusedOption_${index}`]
+                              if (!focused || !focused.element) {
+                                alert('Primero haz clic en una opción')
+                                return
+                              }
+                              const optIndex = focused.optIndex
+                              const newQuestions = [...editingItem.questions]
+                              const newOptions = [...question.options]
+                              newOptions[optIndex] = newText
+                              newQuestions[index] = { ...question, options: newOptions }
+                              setEditingItem({ ...editingItem, questions: newQuestions })
+                            }}
+                          />
                           <div className="space-y-1">
                             {question.options?.map((option: string, optIndex: number) => (
                               <div key={optIndex}>
@@ -4086,53 +4495,15 @@ export default function UserManagementPage() {
                             {/* Explicación normal (bloque) */}
                             {!question.useOptionExplanations && (
                               <>
-                                <div className="flex gap-1 mb-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const textarea = document.getElementById(`explanation-${index}`) as HTMLTextAreaElement
-                                      if (!textarea) return
-                                      const start = textarea.selectionStart || 0
-                                      const end = textarea.selectionEnd || 0
-                                      const selectedText = textarea.value.substring(start, end)
-                                      if (selectedText) {
-                                        const newText = textarea.value.substring(0, start) + `_{${selectedText}}` + textarea.value.substring(end)
-                                        const newQuestions = [...editingItem.questions]
-                                        newQuestions[index] = { ...question, explanation: newText }
-                                        setEditingItem({ ...editingItem, questions: newQuestions })
-                                      } else {
-                                        alert('Selecciona el texto primero')
-                                      }
-                                    }}
-                                    className="px-2 py-0.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
-                                    title="Subíndice"
-                                  >
-                                    X<sub>2</sub>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const textarea = document.getElementById(`explanation-${index}`) as HTMLTextAreaElement
-                                      if (!textarea) return
-                                      const start = textarea.selectionStart || 0
-                                      const end = textarea.selectionEnd || 0
-                                      const selectedText = textarea.value.substring(start, end)
-                                      if (selectedText) {
-                                        const newText = textarea.value.substring(0, start) + `^{${selectedText}}` + textarea.value.substring(end)
-                                        const newQuestions = [...editingItem.questions]
-                                        newQuestions[index] = { ...question, explanation: newText }
-                                        setEditingItem({ ...editingItem, questions: newQuestions })
-                                      } else {
-                                        alert('Selecciona el texto primero')
-                                      }
-                                    }}
-                                    className="px-2 py-0.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
-                                    title="Superíndice"
-                                  >
-                                    X<sup>2</sup>
-                                  </button>
-                                  <span className="text-xs text-gray-400 self-center ml-1">Selecciona texto y clic</span>
-                                </div>
+                                <MathToolbar
+                                  textareaId={`explanation-${index}`}
+                                  currentValue={question.explanation || ''}
+                                  onInsert={(newText) => {
+                                    const newQuestions = [...editingItem.questions]
+                                    newQuestions[index] = { ...question, explanation: newText }
+                                    setEditingItem({ ...editingItem, questions: newQuestions })
+                                  }}
+                                />
                                 <textarea
                                   id={`explanation-${index}`}
                                   value={question.explanation || ''}
@@ -4159,67 +4530,24 @@ export default function UserManagementPage() {
                               <div className="space-y-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
                                 <div className="flex items-center justify-between">
                                   <p className="text-xs text-blue-700">Cada alternativa tendrá su propia explicación:</p>
-                                  <div className="flex gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const focused = (window as any)[`lastFocusedExplanation_${index}`]
-                                        if (!focused || !focused.element) {
-                                          alert('Primero haz clic en una explicación y selecciona el texto')
-                                          return
-                                        }
-                                        const textarea = focused.element as HTMLTextAreaElement
-                                        const optIdx = focused.optIdx
-                                        const start = textarea.selectionStart || 0
-                                        const end = textarea.selectionEnd || 0
-                                        const selectedText = textarea.value.substring(start, end)
-                                        if (selectedText) {
-                                          const newText = textarea.value.substring(0, start) + `_{${selectedText}}` + textarea.value.substring(end)
-                                          const newQuestions = [...editingItem.questions]
-                                          const newExplanations = [...(question.optionExplanations || question.options?.map(() => '') || [])]
-                                          newExplanations[optIdx] = newText
-                                          newQuestions[index] = { ...question, optionExplanations: newExplanations }
-                                          setEditingItem({ ...editingItem, questions: newQuestions })
-                                        } else {
-                                          alert('Selecciona el texto primero')
-                                        }
-                                      }}
-                                      className="px-2 py-0.5 text-xs font-medium bg-white border border-blue-300 rounded hover:bg-blue-100"
-                                      title="Subíndice"
-                                    >
-                                      X<sub>2</sub>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const focused = (window as any)[`lastFocusedExplanation_${index}`]
-                                        if (!focused || !focused.element) {
-                                          alert('Primero haz clic en una explicación y selecciona el texto')
-                                          return
-                                        }
-                                        const textarea = focused.element as HTMLTextAreaElement
-                                        const optIdx = focused.optIdx
-                                        const start = textarea.selectionStart || 0
-                                        const end = textarea.selectionEnd || 0
-                                        const selectedText = textarea.value.substring(start, end)
-                                        if (selectedText) {
-                                          const newText = textarea.value.substring(0, start) + `^{${selectedText}}` + textarea.value.substring(end)
-                                          const newQuestions = [...editingItem.questions]
-                                          const newExplanations = [...(question.optionExplanations || question.options?.map(() => '') || [])]
-                                          newExplanations[optIdx] = newText
-                                          newQuestions[index] = { ...question, optionExplanations: newExplanations }
-                                          setEditingItem({ ...editingItem, questions: newQuestions })
-                                        } else {
-                                          alert('Selecciona el texto primero')
-                                        }
-                                      }}
-                                      className="px-2 py-0.5 text-xs font-medium bg-white border border-blue-300 rounded hover:bg-blue-100"
-                                      title="Superíndice"
-                                    >
-                                      X<sup>2</sup>
-                                    </button>
-                                  </div>
                                 </div>
+                                <MathToolbar
+                                  textareaId={`explanation-${index}-0`}
+                                  currentValue=""
+                                  onInsert={(newText) => {
+                                    const focused = (window as any)[`lastFocusedExplanation_${index}`]
+                                    if (!focused || !focused.element) {
+                                      alert('Primero haz clic en una explicación')
+                                      return
+                                    }
+                                    const optIdx = focused.optIdx
+                                    const newQuestions = [...editingItem.questions]
+                                    const newExplanations = [...(question.optionExplanations || question.options?.map(() => '') || [])]
+                                    newExplanations[optIdx] = newText
+                                    newQuestions[index] = { ...question, optionExplanations: newExplanations }
+                                    setEditingItem({ ...editingItem, questions: newQuestions })
+                                  }}
+                                />
                                 {question.options?.map((option: string, optIdx: number) => (
                                   <div key={optIdx} className="flex gap-2">
                                     <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${question.correctAnswer === optIdx ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
