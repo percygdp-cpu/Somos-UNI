@@ -2128,6 +2128,324 @@ export default function UserManagementPage() {
     XLSX.writeFile(workbook, 'tests_template.xlsx')
   }
 
+  // ========== FUNCIONES PARA SUBIDA TIPO ALTERNATIVAS (A/B Test) ==========
+  
+  const downloadTestTemplateAlternativas = () => {
+    // Usar módulos reales del sistema para los ejemplos
+    const exampleModule = modules[0]
+    const exampleCourse = exampleModule ? courses.find(c => c.id === exampleModule.courseId) : null
+    
+    const courseName = exampleCourse?.title || 'Python Básico'
+    const moduleName = exampleModule?.title || 'Introducción'
+
+    // Hoja "Ejemplo" - Datos con explicación por cada alternativa + explicación general
+    // Pregunta 1: Explicación general en TODAS las filas (duplicada) - funciona igual
+    // Pregunta 2: Explicación general solo en UNA fila - también funciona
+    const exampleData = [
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 1, 'Pregunta': '¿Cuál es el tipo de dato para decimales?', 'Opción': 'int', 'Correcta': 'No', 'Explicación': 'int es para números enteros, no puede almacenar decimales', 'Explicación General': 'Los tipos de datos numéricos en Python son: int, float y complex' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 1, 'Pregunta': '¿Cuál es el tipo de dato para decimales?', 'Opción': 'float', 'Correcta': 'Sí', 'Explicación': '¡Correcto! float permite almacenar números con punto decimal', 'Explicación General': 'Los tipos de datos numéricos en Python son: int, float y complex' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 1, 'Pregunta': '¿Cuál es el tipo de dato para decimales?', 'Opción': 'str', 'Correcta': 'No', 'Explicación': 'str es para cadenas de texto, no para valores numéricos', 'Explicación General': 'Los tipos de datos numéricos en Python son: int, float y complex' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 1, 'Pregunta': '¿Cuál es el tipo de dato para decimales?', 'Opción': 'bool', 'Correcta': 'No', 'Explicación': 'bool solo almacena True o False, no números', 'Explicación General': 'Los tipos de datos numéricos en Python son: int, float y complex' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 2, 'Pregunta': '¿Qué palabra clave define una función?', 'Opción': 'function', 'Correcta': 'No', 'Explicación': 'function se usa en JavaScript, no en Python', 'Explicación General': 'En Python, las funciones se definen con "def" seguido del nombre y paréntesis' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 2, 'Pregunta': '¿Qué palabra clave define una función?', 'Opción': 'def', 'Correcta': 'Sí', 'Explicación': '¡Correcto! def es la palabra reservada para definir funciones', 'Explicación General': '' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 2, 'Pregunta': '¿Qué palabra clave define una función?', 'Opción': 'func', 'Correcta': 'No', 'Explicación': 'func no es una palabra reservada en Python', 'Explicación General': '' },
+      { 'Curso': courseName, 'Módulo': moduleName, 'Test': 'Evaluación Inicial', 'N° Pregunta': 2, 'Pregunta': '¿Qué palabra clave define una función?', 'Opción': 'define', 'Correcta': 'No', 'Explicación': 'define no existe como palabra reservada en Python', 'Explicación General': '' }
+    ]
+
+    // Hoja "Input" - Plantilla vacía
+    const inputData = [
+      { 'Curso': '', 'Módulo': '', 'Test': '', 'N° Pregunta': '', 'Pregunta': '', 'Opción': '', 'Correcta': '', 'Explicación': '', 'Explicación General': '' }
+    ]
+    
+    const workbook = XLSX.utils.book_new()
+    
+    const wsExample = XLSX.utils.json_to_sheet(exampleData)
+    XLSX.utils.book_append_sheet(workbook, wsExample, 'Ejemplo')
+    
+    const wsInput = XLSX.utils.json_to_sheet(inputData)
+    XLSX.utils.book_append_sheet(workbook, wsInput, 'Input')
+    
+    XLSX.writeFile(workbook, 'tests_template_alternativas.xlsx')
+  }
+
+  const processExcelDataAlternativas = (jsonData: any[]) => {
+    const testsByModule = new Map()
+    const errors: string[] = []
+
+    // Agrupar preguntas por test - con explicación por alternativa
+    for (const row of jsonData) {
+      const rowData = row as any
+      const courseName = String(rowData['Curso'] || rowData['curso'] || '')
+      const moduleName = String(rowData['Módulo'] || rowData['modulo'] || rowData['Modulo'] || '')
+      const testTitle = String(rowData['Test'] || rowData['test'] || '')
+      const questionNumber = rowData['N° Pregunta'] || rowData['N Pregunta'] || rowData['Numero Pregunta'] || rowData['pregunta'] || ''
+      const questionText = String(rowData['Pregunta'] || rowData['Texto Pregunta'] || '')
+      const option = String(rowData['Opción'] || rowData['opcion'] || rowData['Opcion'] || '')
+      const correctaValue = String(rowData['Correcta'] || rowData['correcta'] || '').toLowerCase()
+      const isCorrect = correctaValue === 'sí' || correctaValue === 'si' || correctaValue === 'x' || correctaValue === '1' || correctaValue === 'true'
+      // Explicación por alternativa
+      const optionExplanation = String(rowData['Explicación'] || rowData['Explicacion'] || rowData['explicacion'] || '')
+      // Explicación general de la pregunta
+      const generalExplanation = String(rowData['Explicación General'] || rowData['Explicacion General'] || rowData['explicacion general'] || '')
+
+      // Validar que no estén vacíos
+      if (!courseName.trim() || !moduleName.trim() || !testTitle.trim() || !questionText.trim() || !option.trim()) continue
+
+      // Buscar el curso
+      const course = courses.find(c => c.title.toLowerCase().trim() === courseName.toLowerCase().trim())
+      if (!course) {
+        if (!errors.includes(`Curso no encontrado: ${courseName}`)) {
+          errors.push(`Curso no encontrado: ${courseName}`)
+        }
+        continue
+      }
+
+      const module = modules.find(m => 
+        m.title.toLowerCase().trim() === moduleName.toLowerCase().trim() && 
+        m.courseId === course.id
+      )
+      if (!module) {
+        if (!errors.includes(`Módulo no encontrado: ${moduleName} en ${courseName}`)) {
+          errors.push(`Módulo no encontrado: ${moduleName} en ${courseName}`)
+        }
+        continue
+      }
+
+      const key = `${module.id}_${testTitle.trim()}`
+      if (!testsByModule.has(key)) {
+        testsByModule.set(key, {
+          moduleId: module.id,
+          moduleName: module.title,
+          courseName: course.title,
+          title: testTitle.trim(),
+          questions: new Map()
+        })
+      }
+
+      const testData = testsByModule.get(key)
+      // Usar el número de pregunta como clave, o el texto de la pregunta si no hay número
+      const questionKey = questionNumber ? String(questionNumber) : questionText
+      
+      if (!testData.questions.has(questionKey)) {
+        testData.questions.set(questionKey, {
+          question: questionText,
+          options: [],
+          optionExplanations: [],
+          correctAnswer: -1,
+          explanation: '', // Explicación general de la pregunta
+          useOptionExplanations: true // Siempre true en este modo
+        })
+      }
+
+      const questionData = testData.questions.get(questionKey)
+      const optionIndex = questionData.options.length
+      questionData.options.push(option)
+      
+      // Agregar explicación de esta alternativa
+      questionData.optionExplanations.push(optionExplanation.trim())
+      
+      // Si hay explicación general y aún no se ha asignado, asignarla
+      if (generalExplanation.trim() && !questionData.explanation) {
+        questionData.explanation = generalExplanation.trim()
+      }
+      
+      if (isCorrect) {
+        questionData.correctAnswer = optionIndex
+      }
+    }
+
+    // Convertir a array para mostrar
+    const testsArray = Array.from(testsByModule.values()).map(testData => ({
+      moduleId: testData.moduleId,
+      moduleName: testData.moduleName,
+      courseName: testData.courseName,
+      title: testData.title,
+      questions: Array.from(testData.questions.values()).map((q: any) => ({
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation || '',
+        useOptionExplanations: q.useOptionExplanations,
+        optionExplanations: q.optionExplanations
+      }))
+    }))
+
+    if (testsArray.length === 0 && errors.length > 0) {
+      alert('No se pudieron procesar tests del archivo.\n\nErrores:\n' + errors.join('\n'))
+      return
+    }
+
+    setPendingTests(testsArray)
+    setShowTestPreviewModal(true)
+    setTempExcelData(null)
+  }
+
+  const handleTestExcelUploadAlternativas = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const reader = new FileReader()
+      
+      reader.onload = async (e) => {
+        const data = e.target?.result
+        const workbook = XLSX.read(data, { type: 'binary' })
+        
+        // Buscar la hoja "Input" o usar la primera hoja que no sea "Instrucciones"
+        let sheetName = workbook.SheetNames.find(name => name === 'Input') 
+          || workbook.SheetNames.find(name => name !== 'Instrucciones')
+          || workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        const jsonData = XLSX.utils.sheet_to_json(worksheet)
+
+        if (jsonData.length === 0) {
+          alert('El archivo está vacío')
+          return
+        }
+
+        // Validar columnas requeridas
+        const firstRow: any = jsonData[0]
+        
+        // Verificar que existan las columnas básicas (permitir variaciones)
+        const hasCurso = firstRow['Curso'] !== undefined || firstRow['curso'] !== undefined
+        const hasModulo = firstRow['Módulo'] !== undefined || firstRow['modulo'] !== undefined || firstRow['Modulo'] !== undefined
+        const hasTest = firstRow['Test'] !== undefined || firstRow['test'] !== undefined
+        const hasPregunta = firstRow['Pregunta'] !== undefined || firstRow['pregunta'] !== undefined || firstRow['Texto Pregunta'] !== undefined
+        const hasOpcion = firstRow['Opción'] !== undefined || firstRow['opcion'] !== undefined || firstRow['Opcion'] !== undefined
+        const hasCorrecta = firstRow['Correcta'] !== undefined || firstRow['correcta'] !== undefined
+        
+        const missingColumns: string[] = []
+        if (!hasCurso) missingColumns.push('Curso')
+        if (!hasModulo) missingColumns.push('Módulo')
+        if (!hasTest) missingColumns.push('Test')
+        if (!hasPregunta) missingColumns.push('Pregunta')
+        if (!hasOpcion) missingColumns.push('Opción')
+        if (!hasCorrecta) missingColumns.push('Correcta')
+        
+        if (missingColumns.length > 0) {
+          const availableColumns = Object.keys(firstRow).join(', ')
+          alert(
+            `❌ Error: Columnas requeridas faltantes\n\n` +
+            `Falta(n): ${missingColumns.join(', ')}\n\n` +
+            `Columnas requeridas:\n` +
+            `• Curso\n` +
+            `• Módulo\n` +
+            `• Test\n` +
+            `• Pregunta\n` +
+            `• Opción\n` +
+            `• Correcta\n\n` +
+            `Columnas opcionales:\n` +
+            `• N° Pregunta\n` +
+            `• Explicación (por alternativa o con #### para general)\n\n` +
+            `Columnas encontradas en tu archivo:\n${availableColumns || 'Ninguna'}\n\n` +
+            `Revisa que las columnas estén escritas correctamente.`
+          )
+          event.target.value = ''
+          return
+        }
+
+        // Detectar cursos y módulos faltantes
+        const courseNamesInExcel = new Set<string>()
+        const modulesByCourse = new Map<string, Set<string>>()
+
+        for (const row of jsonData) {
+          const rowData = row as any
+          const courseName = String(rowData['Curso'] || rowData['curso'] || '').trim()
+          const moduleName = String(rowData['Módulo'] || rowData['modulo'] || rowData['Modulo'] || '').trim()
+          
+          if (courseName && moduleName) {
+            courseNamesInExcel.add(courseName)
+            
+            if (!modulesByCourse.has(courseName)) {
+              modulesByCourse.set(courseName, new Set())
+            }
+            modulesByCourse.get(courseName)!.add(moduleName)
+          }
+        }
+
+        // Verificar cursos faltantes
+        const missingCoursesList: Array<{name: string, description: string}> = []
+        for (const courseName of courseNamesInExcel) {
+          const exists = courses.some(c => c.title.toLowerCase().trim() === courseName.toLowerCase())
+          if (!exists) {
+            missingCoursesList.push({
+              name: courseName,
+              description: ''
+            })
+          }
+        }
+
+        // Verificar módulos faltantes
+        const missingModulesList: Array<{name: string, courseName: string, order: number}> = []
+        for (const [courseName, moduleNames] of modulesByCourse.entries()) {
+          const course = courses.find(c => c.title.toLowerCase().trim() === courseName.toLowerCase())
+          
+          // Calcular el orden base para este curso
+          let orderCounter = 1
+          if (course) {
+            // Si el curso existe, obtener el último orden de sus módulos
+            const courseModules = modules.filter(m => m.courseId === course.id)
+            if (courseModules.length > 0) {
+              const maxOrder = Math.max(...courseModules.map(m => m.order || 0))
+              orderCounter = maxOrder + 1
+            }
+          }
+          
+          for (const moduleName of moduleNames) {
+            // Si el curso existe, verificar si el módulo existe
+            if (course) {
+              const moduleExists = modules.some(m => 
+                m.title.toLowerCase().trim() === moduleName.toLowerCase() && 
+                m.courseId === course.id
+              )
+              if (!moduleExists) {
+                missingModulesList.push({
+                  name: moduleName,
+                  courseName: courseName,
+                  order: orderCounter++
+                })
+              }
+            } else {
+              // Si el curso no existe (pero se va a crear), agregar el módulo a la lista
+              missingModulesList.push({
+                name: moduleName,
+                courseName: courseName,
+                order: orderCounter++
+              })
+            }
+          }
+        }
+
+        // Si hay cursos faltantes, mostrar modal
+        if (missingCoursesList.length > 0) {
+          setMissingCourses(missingCoursesList)
+          setTempExcelData({ jsonData, missingModules: missingModulesList, isAlternativas: true })
+          setShowMissingCoursesModal(true)
+          event.target.value = ''
+          return
+        }
+
+        // Si no hay cursos faltantes pero hay módulos faltantes, mostrar modal
+        if (missingModulesList.length > 0) {
+          setMissingModules(missingModulesList)
+          setTempExcelData({ jsonData, missingModules: [], isAlternativas: true })
+          setShowMissingModulesModal(true)
+          event.target.value = ''
+          return
+        }
+
+        // Si no hay nada faltante, procesar directamente con el procesador de alternativas
+        processExcelDataAlternativas(jsonData)
+        event.target.value = ''
+      }
+
+      reader.readAsBinaryString(file)
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al procesar el archivo Excel')
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -3016,10 +3334,27 @@ export default function UserManagementPage() {
                       className="hidden"
                     />
                   </label>
+                  <label className="flex h-10 min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-green-400 bg-green-50 px-4 text-sm font-bold text-green-700 transition-colors hover:bg-green-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
+                    </svg>
+                    <span className="truncate">Subir Lista tipo Alternativas (.xlsx)</span>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleTestExcelUploadAlternativas}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
-                <button onClick={downloadTestTemplate} className="text-sm font-normal text-primary-600 underline hover:no-underline cursor-pointer">
-                  Descargar plantilla Excel de tests
-                </button>
+                <div className="flex flex-col gap-1 items-end">
+                  <button onClick={downloadTestTemplate} className="text-sm font-normal text-primary-600 underline hover:no-underline cursor-pointer">
+                    Descargar plantilla Excel de tests
+                  </button>
+                  <button onClick={downloadTestTemplateAlternativas} className="text-sm font-normal text-green-600 underline hover:no-underline cursor-pointer">
+                    Descargar plantilla tipo Alternativas
+                  </button>
+                </div>
               </div>
 
               {/* Barra de selección múltiple Tests */}
@@ -4896,8 +5231,12 @@ export default function UserManagementPage() {
                       setMissingModules(tempExcelData.missingModules)
                       setShowMissingModulesModal(true)
                     } else if (tempExcelData) {
-                      // Si no hay módulos faltantes, procesar el Excel
-                      processExcelData(tempExcelData.jsonData)
+                      // Si no hay módulos faltantes, procesar el Excel con el procesador adecuado
+                      if (tempExcelData.isAlternativas) {
+                        processExcelDataAlternativas(tempExcelData.jsonData)
+                      } else {
+                        processExcelData(tempExcelData.jsonData)
+                      }
                     }
                   } finally {
                     setIsCreatingCourses(false)
@@ -5057,9 +5396,13 @@ export default function UserManagementPage() {
                     setShowMissingModulesModal(false)
                     setMissingModules([])
                     
-                    // Procesar el Excel
+                    // Procesar el Excel con el procesador adecuado
                     if (tempExcelData) {
-                      processExcelData(tempExcelData.jsonData)
+                      if (tempExcelData.isAlternativas) {
+                        processExcelDataAlternativas(tempExcelData.jsonData)
+                      } else {
+                        processExcelData(tempExcelData.jsonData)
+                      }
                     }
                   } finally {
                     setIsCreatingModules(false)
