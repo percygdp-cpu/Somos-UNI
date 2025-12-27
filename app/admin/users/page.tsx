@@ -4114,18 +4114,39 @@ export default function UserManagementPage() {
                             className="w-full px-3 py-1.5 text-sm border border-secondary-300 rounded"
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = (editingItem.pdfFiles || []).filter((_: any, i: number) => i !== index)
-                            setEditingItem({...editingItem, pdfFiles: updated})
-                          }}
-                          className="px-3 py-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                          </svg>
-                        </button>
+                        <div className="flex flex-col gap-1">
+                          {/* Botón para ver el adjunto */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (pdf.url) {
+                                window.open(pdf.url, '_blank')
+                              } else {
+                                showToast('No hay URL para este archivo', 'error')
+                              }
+                            }}
+                            className="px-3 py-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Ver adjunto"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                            </svg>
+                          </button>
+                          {/* Botón para eliminar */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = (editingItem.pdfFiles || []).filter((_: any, i: number) => i !== index)
+                              setEditingItem({...editingItem, pdfFiles: updated})
+                            }}
+                            className="px-3 py-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Eliminar adjunto"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
 

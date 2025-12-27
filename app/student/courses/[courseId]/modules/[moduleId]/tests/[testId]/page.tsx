@@ -3,15 +3,38 @@
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import StudentHeader from '@/components/StudentHeader'
-import anime from 'animejs'
-import confetti from 'canvas-confetti'
-import katex from 'katex'
-import 'katex/dist/katex.min.css'
 import { useParams, useRouter } from 'next/navigation'
 import React, { useEffect, useState } from 'react'
 
+// CSS de KaTeX (necesario para renderizado correcto)
+import 'katex/dist/katex.min.css'
+
+// Lazy load de librerías pesadas (solo JS)
+let anime: any = null
+let confettiLib: any = null
+let katex: any = null
+
+// Helper para llamar confetti de forma segura
+const fireConfetti = (options: any) => {
+  if (confettiLib) confettiLib(options)
+}
+
+// Cargar librerías dinámicamente
+const loadLibraries = async () => {
+  if (!anime) {
+    anime = (await import('animejs')).default
+  }
+  if (!confettiLib) {
+    confettiLib = (await import('canvas-confetti')).default
+  }
+  if (!katex) {
+    katex = (await import('katex')).default
+  }
+}
+
 // Función para renderizar LaTeX con KaTeX
 const renderKaTeX = (latex: string, displayMode: boolean = false): string => {
+  if (!katex) return latex
   try {
     return katex.renderToString(latex, {
       throwOnError: false,
@@ -237,7 +260,13 @@ export default function TestPage() {
   const [milestoneBlockScore, setMilestoneBlockScore] = useState(0)
   const [motivationalPhrase, setMotivationalPhrase] = useState<string>('')
   const [modalScale, setModalScale] = useState(1)
+  const [libsLoaded, setLibsLoaded] = useState(false)
   const questionsPerBlock = 10
+
+  // Cargar librerías pesadas al montar el componente
+  useEffect(() => {
+    loadLibraries().then(() => setLibsLoaded(true))
+  }, [])
 
   // Calcular escala del modal según tamaño de ventana
   useEffect(() => {
@@ -261,9 +290,9 @@ export default function TestPage() {
 
   // Efecto para lanzar confetti cuando se aprueba
   useEffect(() => {
-    if (testCompleted && shouldShowConfetti) {
+    if (testCompleted && shouldShowConfetti && confettiLib) {
       // Lanzar confetti inmediatamente
-      confetti({
+      fireConfetti({
         particleCount: 100,
         spread: 70,
         origin: { y: 0.6 }
@@ -271,7 +300,7 @@ export default function TestPage() {
       
       // Lanzar más confetti para que sea más visible
       setTimeout(() => {
-        confetti({
+        fireConfetti({
           particleCount: 50,
           spread: 100,
           origin: { y: 0.7 }
@@ -279,14 +308,14 @@ export default function TestPage() {
       }, 250)
       
       setTimeout(() => {
-        confetti({
+        fireConfetti({
           particleCount: 75,
           spread: 85,
           origin: { y: 0.65 }
         })
       }, 500)
     }
-  }, [testCompleted, shouldShowConfetti])
+  }, [testCompleted, shouldShowConfetti, libsLoaded])
 
   // Efecto para lanzar confetti cuando se muestra el modal motivacional
   useEffect(() => {
@@ -300,7 +329,7 @@ export default function TestPage() {
       
       if (colors.length > 0) {
         // Lanzar confetti inmediatamente
-        confetti({
+        fireConfetti({
           particleCount: blockPercentage >= 80 ? 100 : 80,
           spread: 70,
           origin: { y: 0.6 },
@@ -308,7 +337,7 @@ export default function TestPage() {
         })
         
         setTimeout(() => {
-          confetti({
+          fireConfetti({
             particleCount: blockPercentage >= 80 ? 80 : 60,
             spread: 100,
             origin: { y: 0.5 },
@@ -317,7 +346,7 @@ export default function TestPage() {
         }, 200)
         
         setTimeout(() => {
-          confetti({
+          fireConfetti({
             particleCount: blockPercentage >= 80 ? 60 : 40,
             spread: 80,
             origin: { y: 0.7 },
@@ -329,7 +358,7 @@ export default function TestPage() {
         if (blockPercentage >= 80) {
           const createBalloon = (delay: number) => {
             setTimeout(() => {
-              confetti({
+              fireConfetti({
                 particleCount: 1,
                 startVelocity: 0,
                 ticks: 300,
@@ -370,7 +399,7 @@ export default function TestPage() {
         const goldColors = ['#FFD700', '#FFA500', '#FF8C00', '#FFFF00']
         
         // Confeti intenso
-        confetti({
+        fireConfetti({
           particleCount: 500,
           spread: 90,
           origin: { y: 0.6 },
@@ -379,7 +408,7 @@ export default function TestPage() {
         })
         
         setTimeout(() => {
-          confetti({
+          fireConfetti({
             particleCount: 300,
             spread: 120,
             origin: { y: 0.5 },
@@ -388,7 +417,7 @@ export default function TestPage() {
         }, 250)
         
         setTimeout(() => {
-          confetti({
+          fireConfetti({
             particleCount: 400,
             spread: 100,
             origin: { y: 0.7 },
@@ -399,7 +428,7 @@ export default function TestPage() {
         // Globos flotantes (círculos que suben)
         const createBalloon = (delay: number) => {
           setTimeout(() => {
-            confetti({
+            fireConfetti({
               particleCount: 1,
               startVelocity: 0,
               ticks: 300,
@@ -425,7 +454,7 @@ export default function TestPage() {
         const silverColors = ['#C0C0C0', '#D3D3D3', '#E8E8E8', '#A9A9A9']
         
         // Confeti moderado
-        confetti({
+        fireConfetti({
           particleCount: 300,
           spread: 90,
           origin: { y: 0.6 },
@@ -434,7 +463,7 @@ export default function TestPage() {
         })
         
         setTimeout(() => {
-          confetti({
+          fireConfetti({
             particleCount: 150,
             spread: 100,
             origin: { y: 0.5 },

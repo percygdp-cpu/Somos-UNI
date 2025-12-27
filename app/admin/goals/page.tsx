@@ -5,7 +5,7 @@ import AdminHeader from '@/components/AdminHeader'
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 interface WeeklyGoal {
   id: number
@@ -70,7 +70,7 @@ export default function AdminGoalsPage() {
   const [users, setUsers] = useState<User[]>([])
   const [assignments, setAssignments] = useState<GoalAssignment[]>([])
   
-  const [activeTab, setActiveTab] = useState<'goals' | 'assignments'>('goals')
+  const [activeTab, setActiveTab] = useState<'goals' | 'assignments' | 'progress'>('goals')
   
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -105,6 +105,19 @@ export default function AdminGoalsPage() {
   })
   
   const [isSaving, setIsSaving] = useState(false)
+  
+  // Progress tab state
+  const [progressData, setProgressData] = useState<any[]>([])
+  const [progressSummary, setProgressSummary] = useState<any>(null)
+  const [progressFilter, setProgressFilter] = useState({ goalId: 'all', status: 'all' })
+  const [loadingProgress, setLoadingProgress] = useState(false)
+  const [expandedProgress, setExpandedProgress] = useState<number | null>(null)
+  
+  // Estado para modal de vista de examen
+  const [showExamPreviewModal, setShowExamPreviewModal] = useState(false)
+  const [examPreviewData, setExamPreviewData] = useState<any>(null)
+  const [loadingExamPreview, setLoadingExamPreview] = useState(false)
+  const [examFilter, setExamFilter] = useState<'all' | 'correct' | 'incorrect'>('all')
 
   useEffect(() => {
     loadData()
@@ -165,6 +178,83 @@ export default function AdminGoalsPage() {
       setLoading(false)
     }
   }
+
+  // Cargar progreso cuando cambia el filtro o se activa la pestaña
+  const loadProgress = async (goalIdFilter?: string) => {
+    try {
+      setLoadingProgress(true)
+      const goalParam = goalIdFilter && goalIdFilter !== 'all' ? `?goalId=${goalIdFilter}` : ''
+      const response = await fetch(`/api/goal-progress${goalParam}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        setProgressData(data.progress || [])
+        setProgressSummary(data.summary || null)
+      }
+    } catch (error) {
+      console.error('Error loading progress:', error)
+      setToast({ message: 'Error al cargar progreso', type: 'error' })
+    } finally {
+      setLoadingProgress(false)
+    }
+  }
+  
+  // Cargar vista previa del examen de un estudiante
+  const loadExamPreview = async (userId: number, testId: number, testTitle: string, userName: string) => {
+    try {
+      setLoadingExamPreview(true)
+      setShowExamPreviewModal(true)
+      setExamFilter('all') // Resetear filtro al abrir
+      
+      // Cargar el resultado del test
+      const resultRes = await fetch(`/api/test-results?userId=${userId}&testId=${testId}`)
+      const resultData = await resultRes.json()
+      
+      // Cargar las preguntas del test
+      const testRes = await fetch(`/api/tests?id=${testId}`)
+      const testData = await testRes.json()
+      
+      if (resultData.length > 0 && testData) {
+        const result = resultData[0]
+        const test = Array.isArray(testData) ? testData[0] : testData
+        
+        setExamPreviewData({
+          userName,
+          testTitle,
+          testId,
+          score: result.score,
+          totalQuestions: result.totalQuestions,
+          percentage: result.percentage,
+          completedAt: result.completedAt,
+          answers: result.answers,
+          questions: test.questions || []
+        })
+      } else {
+        setToast({ message: 'No se encontraron datos del examen', type: 'error' })
+        setShowExamPreviewModal(false)
+      }
+    } catch (error) {
+      console.error('Error loading exam preview:', error)
+      setToast({ message: 'Error al cargar el examen', type: 'error' })
+      setShowExamPreviewModal(false)
+    } finally {
+      setLoadingExamPreview(false)
+    }
+  }
+  
+  // Cargar progreso cuando se activa la pestaña
+  useEffect(() => {
+    if (activeTab === 'progress') {
+      loadProgress(progressFilter.goalId)
+    }
+  }, [activeTab])
+  
+  // Recargar cuando cambia el filtro de meta
+  useEffect(() => {
+    if (activeTab === 'progress') {
+      loadProgress(progressFilter.goalId)
+    }
+  }, [progressFilter.goalId])
 
   const resetForm = () => {
     setFormData({
@@ -493,6 +583,21 @@ export default function AdminGoalsPage() {
                 >
                   <p className="text-sm font-bold">Asignaciones ({assignments.length})</p>
                 </button>
+                <button
+                  onClick={() => setActiveTab('progress')}
+                  className={`flex flex-col items-center justify-center border-b-[3px] pb-3 pt-4 transition-colors ${
+                    activeTab === 'progress'
+                      ? 'border-primary-600 text-primary-600'
+                      : 'border-transparent text-secondary-500 hover:text-secondary-800'
+                  }`}
+                >
+                  <p className="text-sm font-bold flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                    </svg>
+                    Progreso
+                  </p>
+                </button>
               </div>
             </div>
 
@@ -758,6 +863,314 @@ export default function AdminGoalsPage() {
                 <span>Estudiantes con metas: <strong className="text-secondary-900">{new Set(assignments.map(a => a.userId)).size}</strong></span>
                 <span>Metas en uso: <strong className="text-secondary-900">{new Set(assignments.map(a => a.weeklyGoalId)).size}</strong></span>
               </div>
+            </div>
+          </>
+        )}
+
+        {/* Tab: Progreso */}
+        {activeTab === 'progress' && (
+          <>
+            {/* Filtros de Progreso */}
+            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-sm font-medium text-secondary-700 mb-1">
+                    Filtrar por Meta
+                  </label>
+                  <select
+                    value={progressFilter.goalId}
+                    onChange={(e) => setProgressFilter({ ...progressFilter, goalId: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="all">Todas las metas</option>
+                    {goals.map(goal => (
+                      <option key={goal.id} value={goal.id}>
+                        Semana {goal.weekNumber}: {goal.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-[180px]">
+                  <label className="block text-sm font-medium text-secondary-700 mb-1">
+                    Estado
+                  </label>
+                  <select
+                    value={progressFilter.status}
+                    onChange={(e) => setProgressFilter({ ...progressFilter, status: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="all">Todos</option>
+                    <option value="completed">✅ Completado</option>
+                    <option value="in-progress">🔄 En progreso</option>
+                    <option value="not-started">⏳ Sin iniciar</option>
+                  </select>
+                </div>
+                <button
+                  onClick={() => loadProgress(progressFilter.goalId)}
+                  disabled={loadingProgress}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {loadingProgress ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                    </svg>
+                  )}
+                  Actualizar
+                </button>
+              </div>
+            </div>
+
+            {/* Resumen de Progreso */}
+            {progressSummary && (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500">
+                  <p className="text-xs text-secondary-500 uppercase font-medium">Total</p>
+                  <p className="text-2xl font-bold text-secondary-900">{progressSummary.totalAssignments}</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
+                  <p className="text-xs text-secondary-500 uppercase font-medium">Completados</p>
+                  <p className="text-2xl font-bold text-green-600">{progressSummary.completed}</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-yellow-500">
+                  <p className="text-xs text-secondary-500 uppercase font-medium">En progreso</p>
+                  <p className="text-2xl font-bold text-yellow-600">{progressSummary.inProgress}</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-gray-400">
+                  <p className="text-xs text-secondary-500 uppercase font-medium">Sin iniciar</p>
+                  <p className="text-2xl font-bold text-gray-500">{progressSummary.notStarted}</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-purple-500">
+                  <p className="text-xs text-secondary-500 uppercase font-medium">% Avance</p>
+                  <p className="text-2xl font-bold text-purple-600">{progressSummary.averageCompletion}%</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-orange-500">
+                  <p className="text-xs text-secondary-500 uppercase font-medium">Nota Prom.</p>
+                  <p className="text-2xl font-bold text-orange-600">{progressSummary.averageScore}%</p>
+                </div>
+              </div>
+            )}
+
+            {/* Tabla de Progreso */}
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              {loadingProgress ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
+                </div>
+              ) : progressData.length === 0 ? (
+                <div className="p-12 text-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 mx-auto text-secondary-300 mb-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                  </svg>
+                  <h3 className="text-lg font-semibold text-secondary-900 mb-2">No hay datos de progreso</h3>
+                  <p className="text-secondary-600">
+                    {progressFilter.goalId !== 'all' 
+                      ? 'No hay estudiantes asignados a esta meta'
+                      : 'Asigna metas a estudiantes para ver su progreso'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-secondary-50 border-b border-secondary-200">
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-secondary-700">Estudiante</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-secondary-700">Meta</th>
+                        <th className="text-center py-3 px-4 text-sm font-semibold text-secondary-700">Tests</th>
+                        <th className="text-center py-3 px-4 text-sm font-semibold text-secondary-700">Promedio</th>
+                        <th className="text-center py-3 px-4 text-sm font-semibold text-secondary-700">Estado</th>
+                        <th className="text-center py-3 px-4 text-sm font-semibold text-secondary-700">Última actividad</th>
+                        <th className="text-center py-3 px-4 text-sm font-semibold text-secondary-700">Detalle</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {progressData
+                        .filter(p => progressFilter.status === 'all' || p.status === progressFilter.status)
+                        .map((progress: any) => (
+                        <React.Fragment key={progress.assignmentId}>
+                          <tr className="border-b border-secondary-100 hover:bg-secondary-50 transition-colors">
+                            <td className="py-3 px-4">
+                              <div>
+                                <span className="font-medium text-secondary-900">{progress.userName}</span>
+                                <p className="text-xs text-secondary-500">@{progress.username}</p>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-primary-100 text-primary-700 font-bold text-xs">
+                                  S{progress.weekNumber}
+                                </span>
+                                <span className="text-sm text-secondary-800">{progress.goalTitle}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <span className={`font-bold ${progress.completedTests === progress.totalTests && progress.totalTests > 0 ? 'text-green-600' : 'text-secondary-700'}`}>
+                                  {progress.completedTests}
+                                </span>
+                                <span className="text-secondary-400">/</span>
+                                <span className="text-secondary-500">{progress.totalTests}</span>
+                              </div>
+                              {progress.totalTests > 0 && (
+                                <div className="mt-1 w-full bg-gray-200 rounded-full h-1.5">
+                                  <div 
+                                    className={`h-1.5 rounded-full transition-all ${
+                                      progress.completedTests === progress.totalTests ? 'bg-green-500' :
+                                      progress.completedTests > 0 ? 'bg-yellow-500' : 'bg-gray-300'
+                                    }`}
+                                    style={{ width: `${(progress.completedTests / progress.totalTests) * 100}%` }}
+                                  ></div>
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {progress.completedTests > 0 ? (
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-bold ${
+                                  progress.averagePercentage >= 90 ? 'bg-green-100 text-green-700' :
+                                  progress.averagePercentage >= 70 ? 'bg-blue-100 text-blue-700' :
+                                  progress.averagePercentage >= 50 ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {progress.averagePercentage}%
+                                </span>
+                              ) : (
+                                <span className="text-secondary-400 text-sm">-</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {progress.status === 'completed' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                  </svg>
+                                  Completado
+                                </span>
+                              )}
+                              {progress.status === 'in-progress' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 text-xs font-medium">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                                  </svg>
+                                  En progreso
+                                </span>
+                              )}
+                              {progress.status === 'not-started' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
+                                    <path d="M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                                  </svg>
+                                  Sin iniciar
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center text-sm text-secondary-600">
+                              {progress.lastActivity ? (
+                                new Date(progress.lastActivity).toLocaleDateString('es-PE', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })
+                              ) : (
+                                <span className="text-secondary-400">-</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                onClick={() => setExpandedProgress(expandedProgress === progress.assignmentId ? null : progress.assignmentId)}
+                                className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                title="Ver detalle"
+                              >
+                                <svg 
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  className={`w-5 h-5 transition-transform ${expandedProgress === progress.assignmentId ? 'rotate-180' : ''}`} 
+                                  viewBox="0 0 24 24" 
+                                  fill="currentColor"
+                                >
+                                  <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+                                </svg>
+                              </button>
+                            </td>
+                          </tr>
+                          {/* Fila expandida con detalle de tests */}
+                          {expandedProgress === progress.assignmentId && progress.testDetails.length > 0 && (
+                            <tr>
+                              <td colSpan={7} className="bg-secondary-50 px-4 py-3">
+                                <div className="ml-4">
+                                  <p className="text-sm font-medium text-secondary-700 mb-2">Detalle de tests:</p>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                    {progress.testDetails.map((test: any, idx: number) => (
+                                      <div 
+                                        key={idx}
+                                        className={`flex items-center gap-2 p-2 rounded-lg border ${
+                                          test.completed 
+                                            ? 'bg-white border-green-200' 
+                                            : 'bg-gray-50 border-gray-200'
+                                        }`}
+                                      >
+                                        {test.completed ? (
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-green-500 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                          </svg>
+                                        ) : (
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
+                                          </svg>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <p className={`text-sm truncate ${test.completed ? 'text-secondary-900' : 'text-secondary-500'}`}>
+                                            {test.testTitle || `Test ${test.testId}`}
+                                          </p>
+                                          {test.completed ? (
+                                            <p className="text-xs text-secondary-500">
+                                              {test.score}/{test.totalQuestions} ({test.percentage}%)
+                                            </p>
+                                          ) : (
+                                            <p className="text-xs text-orange-500 font-medium">
+                                              Pendiente
+                                            </p>
+                                          )}
+                                        </div>
+                                        {test.completed ? (
+                                          <div className="flex items-center gap-1">
+                                            <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${
+                                              test.percentage >= 90 ? 'bg-green-100 text-green-700' :
+                                              test.percentage >= 70 ? 'bg-blue-100 text-blue-700' :
+                                              test.percentage >= 50 ? 'bg-yellow-100 text-yellow-700' :
+                                              'bg-red-100 text-red-700'
+                                            }`}>
+                                              {test.percentage}%
+                                            </span>
+                                            <button
+                                              onClick={() => loadExamPreview(progress.userId, test.testId, test.testTitle || `Test ${test.testId}`, progress.userName)}
+                                              className="p-1 rounded-full hover:bg-blue-100 text-blue-600 transition-colors"
+                                              title="Ver examen"
+                                            >
+                                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                                              </svg>
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-600">
+                                            ⏳
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -1284,6 +1697,261 @@ export default function AdminGoalsPage() {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Vista Previa del Examen */}
+        {showExamPreviewModal && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Vista del Examen</h3>
+                    {examPreviewData && (
+                      <p className="text-blue-100 text-sm">{examPreviewData.userName} - {examPreviewData.testTitle}</p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowExamPreviewModal(false)
+                    setExamPreviewData(null)
+                  }}
+                  className="text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                  </svg>
+                </button>
+              </div>
+
+              {/* Loading */}
+              {loadingExamPreview && (
+                <div className="flex-1 flex items-center justify-center py-20">
+                  <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-secondary-600">Cargando examen...</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Contenido */}
+              {!loadingExamPreview && examPreviewData && (
+                <>
+                  {/* Resumen */}
+                  <div className="px-6 py-4 bg-secondary-50 border-b">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div className="flex items-center gap-6">
+                        <div className="text-center">
+                          <p className="text-xs text-secondary-500 uppercase tracking-wide">Resultado</p>
+                          <p className={`text-2xl font-bold ${
+                            examPreviewData.percentage >= 70 ? 'text-green-600' :
+                            examPreviewData.percentage >= 50 ? 'text-yellow-600' :
+                            'text-red-600'
+                          }`}>
+                            {examPreviewData.score}/{examPreviewData.totalQuestions}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-secondary-500 uppercase tracking-wide">Porcentaje</p>
+                          <p className={`text-2xl font-bold ${
+                            examPreviewData.percentage >= 70 ? 'text-green-600' :
+                            examPreviewData.percentage >= 50 ? 'text-yellow-600' :
+                            'text-red-600'
+                          }`}>
+                            {examPreviewData.percentage}%
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-secondary-500 uppercase tracking-wide">Fecha</p>
+                          <p className="text-sm font-medium text-secondary-700">
+                            {examPreviewData.completedAt ? new Date(examPreviewData.completedAt).toLocaleDateString('es-ES', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            }) : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setExamFilter(examFilter === 'correct' ? 'all' : 'correct')}
+                          className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
+                            examFilter === 'correct' 
+                              ? 'bg-green-500 text-white ring-2 ring-green-300' 
+                              : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                          </svg>
+                          Correctas: {examPreviewData.score}
+                        </button>
+                        <button
+                          onClick={() => setExamFilter(examFilter === 'incorrect' ? 'all' : 'incorrect')}
+                          className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
+                            examFilter === 'incorrect' 
+                              ? 'bg-red-500 text-white ring-2 ring-red-300' 
+                              : 'bg-red-100 text-red-700 hover:bg-red-200'
+                          }`}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                          </svg>
+                          Incorrectas: {examPreviewData.totalQuestions - examPreviewData.score}
+                        </button>
+                        {examFilter !== 'all' && (
+                          <button
+                            onClick={() => setExamFilter('all')}
+                            className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium hover:bg-gray-200 transition-all"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                            </svg>
+                            Limpiar filtro
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista de preguntas */}
+                  <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                    {examPreviewData.questions.map((question: any, qIdx: number) => {
+                      // Las respuestas se guardan como objetos: { questionId, selectedAnswer, isCorrect }
+                      const answerObj = examPreviewData.answers.find((a: any) => a.questionId === question.id) 
+                        || examPreviewData.answers[qIdx]
+                      const userAnswer = answerObj?.selectedAnswer
+                      const isCorrect = answerObj?.isCorrect ?? (userAnswer === question.correctAnswer)
+                      
+                      // Aplicar filtro
+                      if (examFilter === 'correct' && !isCorrect) return null
+                      if (examFilter === 'incorrect' && isCorrect) return null
+                      
+                      return (
+                        <div 
+                          key={question.id || qIdx}
+                          className={`p-4 rounded-lg border-2 ${
+                            isCorrect 
+                              ? 'bg-green-50 border-green-200' 
+                              : 'bg-red-50 border-red-200'
+                          }`}
+                        >
+                          {/* Pregunta */}
+                          <div className="flex items-start gap-3 mb-3">
+                            <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${
+                              isCorrect ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                            }`}>
+                              {qIdx + 1}
+                            </span>
+                            <div className="flex-1">
+                              <p className="font-medium text-secondary-900">{question.question}</p>
+                            </div>
+                            {isCorrect ? (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-green-500 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-red-500 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/>
+                              </svg>
+                            )}
+                          </div>
+
+                          {/* Opciones */}
+                          <div className="ml-10 space-y-2">
+                            {question.options?.map((option: string, optIdx: number) => {
+                              const isUserAnswer = userAnswer === optIdx
+                              const isCorrectOption = question.correctAnswer === optIdx
+                              const optionText = typeof option === 'string' ? option : (option as any).text || ''
+                              
+                              let bgClass = 'bg-white border-gray-200'
+                              let textClass = 'text-secondary-700'
+                              let icon = null
+                              
+                              if (isCorrectOption) {
+                                bgClass = 'bg-green-100 border-green-300'
+                                textClass = 'text-green-800 font-medium'
+                                icon = (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                  </svg>
+                                )
+                              } else if (isUserAnswer && !isCorrect) {
+                                bgClass = 'bg-red-100 border-red-300'
+                                textClass = 'text-red-800'
+                                icon = (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                                  </svg>
+                                )
+                              }
+                              
+                              return (
+                                <div 
+                                  key={optIdx}
+                                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${bgClass}`}
+                                >
+                                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                    isCorrectOption ? 'bg-green-500 text-white' :
+                                    isUserAnswer && !isCorrect ? 'bg-red-500 text-white' :
+                                    'bg-gray-200 text-gray-600'
+                                  }`}>
+                                    {String.fromCharCode(65 + optIdx)}
+                                  </span>
+                                  <span className={`flex-1 text-sm ${textClass}`}>{optionText}</span>
+                                  {icon}
+                                  {isUserAnswer && (
+                                    <span className="text-xs text-secondary-500 italic">
+                                      (Respuesta del estudiante)
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+
+                          {/* Explicación si existe y la respuesta fue incorrecta */}
+                          {!isCorrect && question.explanation && (
+                            <div className="ml-10 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <p className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                                </svg>
+                                Explicación
+                              </p>
+                              <p className="text-sm text-blue-800">{question.explanation}</p>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-6 py-4 border-t bg-secondary-50 flex justify-end">
+                    <button
+                      onClick={() => {
+                        setShowExamPreviewModal(false)
+                        setExamPreviewData(null)
+                      }}
+                      className="px-6 py-2 bg-secondary-600 text-white rounded-lg hover:bg-secondary-700 transition-colors font-medium"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
