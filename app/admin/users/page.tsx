@@ -4290,6 +4290,18 @@ export default function UserManagementPage() {
                 <>
                   <div>
                     <label className="block text-sm font-medium text-secondary-700 mb-2">
+                      Nombre
+                    </label>
+                    <input
+                      type="text"
+                      value={editingItem.name || ''}
+                      onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                      className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="Nombre completo del usuario"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">
                       Usuario
                     </label>
                     <input
