@@ -128,10 +128,20 @@ export interface WhiteboardFormula {
   scale: number
 }
 
+export interface WhiteboardShape {
+  id: string
+  shapeType: string
+  x: number
+  y: number
+  scale: number
+  color: string
+}
+
 export interface WhiteboardContent {
   strokes: WhiteboardStroke[]
   textBoxes?: WhiteboardTextBox[]
   formulas?: WhiteboardFormula[]
+  shapes?: WhiteboardShape[]
 }
 
 export interface Whiteboard {

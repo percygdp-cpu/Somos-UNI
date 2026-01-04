@@ -11,6 +11,8 @@ interface WhiteboardCanvasProps {
   currentSize: number
   currentTool: 'select' | 'pen' | 'eraser' | 'text' | 'formula'
   onHistoryChange: (canUndo: boolean, canRedo: boolean) => void
+  zoom?: number
+  selectedStrokeIds?: string[]
 }
 
 export interface WhiteboardCanvasRef {
@@ -38,7 +40,7 @@ function getSvgPathFromStroke(stroke: number[][]) {
 }
 
 const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
-  ({ content, onContentChange, currentColor, currentSize, currentTool, onHistoryChange }, ref) => {
+  ({ content, onContentChange, currentColor, currentSize, currentTool, onHistoryChange, zoom = 1, selectedStrokeIds = [] }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const [isDrawing, setIsDrawing] = useState(false)
@@ -78,11 +80,11 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // Redibujar cuando cambia el contenido
+    // Redibujar cuando cambia el contenido o la selección
     useEffect(() => {
       redraw()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [content])
+    }, [content, selectedStrokeIds])
 
     // Actualizar estado de historial
     useEffect(() => {
@@ -116,6 +118,38 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
         
         ctx.fillStyle = stroke.tool === 'eraser' ? '#ffffff' : stroke.color
         ctx.fill(path)
+
+        // Dibujar indicador de selección si el trazo está seleccionado
+        if (selectedStrokeIds.includes(stroke.id)) {
+          // Calcular bounding box del trazo
+          const xs = stroke.points.map(p => p.x)
+          const ys = stroke.points.map(p => p.y)
+          const minX = Math.min(...xs) - stroke.size / 2 - 4
+          const minY = Math.min(...ys) - stroke.size / 2 - 4
+          const maxX = Math.max(...xs) + stroke.size / 2 + 4
+          const maxY = Math.max(...ys) + stroke.size / 2 + 4
+          
+          // Dibujar rectángulo de selección con borde azul punteado
+          ctx.save()
+          ctx.strokeStyle = '#3b82f6'
+          ctx.lineWidth = 2
+          ctx.setLineDash([5, 3])
+          ctx.strokeRect(minX, minY, maxX - minX, maxY - minY)
+          
+          // Dibujar handles en las esquinas
+          ctx.fillStyle = '#3b82f6'
+          ctx.setLineDash([])
+          const handleSize = 6
+          // Esquina superior izquierda
+          ctx.fillRect(minX - handleSize/2, minY - handleSize/2, handleSize, handleSize)
+          // Esquina superior derecha
+          ctx.fillRect(maxX - handleSize/2, minY - handleSize/2, handleSize, handleSize)
+          // Esquina inferior izquierda
+          ctx.fillRect(minX - handleSize/2, maxY - handleSize/2, handleSize, handleSize)
+          // Esquina inferior derecha
+          ctx.fillRect(maxX - handleSize/2, maxY - handleSize/2, handleSize, handleSize)
+          ctx.restore()
+        }
       })
 
       // Dibujar trazo actual
@@ -134,7 +168,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
         ctx.fillStyle = currentTool === 'eraser' ? '#ffffff' : currentColor
         ctx.fill(path)
       }
-    }, [content, currentPoints, currentColor, currentSize, currentTool])
+    }, [content, currentPoints, currentColor, currentSize, currentTool, selectedStrokeIds])
 
     const getPointFromEvent = (e: React.MouseEvent | React.TouchEvent): WhiteboardPoint | null => {
       const canvas = canvasRef.current
@@ -146,14 +180,14 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
         if (e.touches.length === 0) return null
         const touch = e.touches[0]
         return {
-          x: touch.clientX - rect.left,
-          y: touch.clientY - rect.top,
+          x: (touch.clientX - rect.left) / zoom,
+          y: (touch.clientY - rect.top) / zoom,
           pressure: 0.5
         }
       } else {
         return {
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top,
+          x: (e.clientX - rect.left) / zoom,
+          y: (e.clientY - rect.top) / zoom,
           pressure: 0.5
         }
       }
