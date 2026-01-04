@@ -49,9 +49,10 @@ export default function WhiteboardEditorPage() {
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
 
-  // Modal de texto
-  const [showTextModal, setShowTextModal] = useState(false)
-  const [textInput, setTextInput] = useState('')
+  // Edición inline de texto (sin modal)
+  const [inlineEditingTextId, setInlineEditingTextId] = useState<string | null>(null)
+  const [inlineTextValue, setInlineTextValue] = useState('')
+  const [newTextPosition, setNewTextPosition] = useState<{ x: number; y: number } | null>(null)
   const [textFontSize, setTextFontSize] = useState(24)
   const [textFontFamily, setTextFontFamily] = useState('Arial')
   const [textBold, setTextBold] = useState(false)
@@ -59,15 +60,17 @@ export default function WhiteboardEditorPage() {
   const [textUnderline, setTextUnderline] = useState(false)
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('left')
   const [textBgColor, setTextBgColor] = useState('transparent')
-  const [editingTextId, setEditingTextId] = useState<string | null>(null)
+  const inlineTextRef = useRef<HTMLTextAreaElement>(null)
 
-  // Modal de fórmula
-  const [showFormulaModal, setShowFormulaModal] = useState(false)
+  // Barra de fórmulas (sin modal)
+  const [showFormulaBar, setShowFormulaBar] = useState(false)
   const [formulaInput, setFormulaInput] = useState('')
   const [formulaPreview, setFormulaPreview] = useState('')
   const [formulaError, setFormulaError] = useState('')
   const [formulaScale, setFormulaScale] = useState(1.5)
   const [editingFormulaId, setEditingFormulaId] = useState<string | null>(null)
+  const [formulaPosition, setFormulaPosition] = useState<{ x: number; y: number }>({ x: 100, y: 200 })
+  const formulaInputRef = useRef<HTMLInputElement>(null)
 
   // Fullscreen
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -144,14 +147,20 @@ export default function WhiteboardEditorPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Delete para eliminar seleccionados
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedElements.length > 0 && !showTextModal && !showFormulaModal) {
+        if (selectedElements.length > 0 && !inlineEditingTextId && !showFormulaBar) {
           e.preventDefault()
           deleteSelectedElements()
         }
       }
-      // Escape para deseleccionar
+      // Escape para deseleccionar o cerrar edición inline
       if (e.key === 'Escape') {
-        setSelectedElements([])
+        if (inlineEditingTextId) {
+          saveInlineText()
+        } else if (showFormulaBar) {
+          handleCancelFormula()
+        } else {
+          setSelectedElements([])
+        }
       }
       // Ctrl+A para seleccionar todo
       if ((e.ctrlKey || e.metaKey) && e.key === 'a' && currentTool === 'select') {
@@ -179,7 +188,7 @@ export default function WhiteboardEditorPage() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, title, selectedElements, currentTool, showTextModal, showFormulaModal])
+  }, [content, title, selectedElements, currentTool, inlineEditingTextId, showFormulaBar])
 
   // Detectar cambios de fullscreen
   useEffect(() => {
@@ -298,33 +307,30 @@ export default function WhiteboardEditorPage() {
     }
   }
 
-  // Manejar agregar/editar texto
+  // Manejar agregar/editar texto (inline, sin modal)
   const handleAddText = () => {
-    setTextInput('')
-    setTextFontSize(24)
-    setTextFontFamily('Arial')
-    setTextBold(false)
-    setTextItalic(false)
-    setTextUnderline(false)
-    setTextAlign('left')
-    setTextBgColor('transparent')
-    setEditingTextId(null)
-    setShowTextModal(true)
+    // Activar modo texto - el texto se creará donde haga clic el usuario
+    setCurrentTool('text')
   }
 
-  const handleSaveText = () => {
-    if (!textInput.trim()) return
-
-    // Mantener posición si estamos editando
-    const existingText = editingTextId 
-      ? (content.textBoxes || []).find(t => t.id === editingTextId)
-      : null
-
+  // Crear nuevo texto al hacer clic en el canvas en modo texto
+  const handleCanvasClickForText = (e: React.MouseEvent) => {
+    if (currentTool !== 'text') return
+    
+    const container = canvasContainerRef.current
+    if (!container) return
+    
+    const rect = container.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    
+    // Crear nuevo texto vacío en esta posición
+    const newId = `text-${Date.now()}`
     const newTextBox: WhiteboardTextBox = {
-      id: editingTextId || `text-${Date.now()}`,
-      text: textInput,
-      x: existingText?.x || 100,
-      y: existingText?.y || 100,
+      id: newId,
+      text: '',
+      x,
+      y,
       fontSize: textFontSize,
       color: currentColor,
       fontFamily: textFontFamily,
@@ -334,36 +340,99 @@ export default function WhiteboardEditorPage() {
       align: textAlign,
       backgroundColor: textBgColor !== 'transparent' ? textBgColor : undefined,
     }
-
-    if (editingTextId) {
-      // Editar existente
-      setContent(prev => ({
-        ...prev,
-        textBoxes: (prev.textBoxes || []).map(t => 
-          t.id === editingTextId ? newTextBox : t
-        )
-      }))
-    } else {
-      // Agregar nuevo
-      setContent(prev => ({
-        ...prev,
-        textBoxes: [...(prev.textBoxes || []), newTextBox]
-      }))
-    }
-
-    setShowTextModal(false)
-    setTextInput('')
-    setEditingTextId(null)
+    
+    setContent(prev => ({
+      ...prev,
+      textBoxes: [...(prev.textBoxes || []), newTextBox]
+    }))
+    
+    // Activar edición inline inmediatamente
+    setInlineEditingTextId(newId)
+    setInlineTextValue('')
+    setNewTextPosition({ x, y })
+    
+    // Enfocar el textarea después de renderizar
+    setTimeout(() => inlineTextRef.current?.focus(), 0)
   }
 
-  // Manejar agregar/editar fórmula
+  // Iniciar edición de texto existente
+  const startEditingText = (textBox: WhiteboardTextBox) => {
+    setInlineEditingTextId(textBox.id)
+    setInlineTextValue(textBox.text)
+    setTextFontSize(textBox.fontSize)
+    setTextFontFamily(textBox.fontFamily || 'Arial')
+    setTextBold(textBox.bold || false)
+    setTextItalic(textBox.italic || false)
+    setTextUnderline(textBox.underline || false)
+    setTextAlign(textBox.align || 'left')
+    setTextBgColor(textBox.backgroundColor || 'transparent')
+    setCurrentColor(textBox.color)
+    setTimeout(() => inlineTextRef.current?.focus(), 0)
+  }
+
+  // Guardar texto inline
+  const saveInlineText = () => {
+    if (!inlineEditingTextId) return
+    
+    // Si el texto está vacío, eliminar el elemento
+    if (!inlineTextValue.trim()) {
+      setContent(prev => ({
+        ...prev,
+        textBoxes: (prev.textBoxes || []).filter(t => t.id !== inlineEditingTextId)
+      }))
+    } else {
+      // Actualizar el texto existente
+      setContent(prev => ({
+        ...prev,
+        textBoxes: (prev.textBoxes || []).map(t =>
+          t.id === inlineEditingTextId
+            ? {
+                ...t,
+                text: inlineTextValue,
+                fontSize: textFontSize,
+                color: currentColor,
+                fontFamily: textFontFamily,
+                bold: textBold,
+                italic: textItalic,
+                underline: textUnderline,
+                align: textAlign,
+                backgroundColor: textBgColor !== 'transparent' ? textBgColor : undefined,
+              }
+            : t
+        )
+      }))
+    }
+    
+    setInlineEditingTextId(null)
+    setInlineTextValue('')
+    setNewTextPosition(null)
+  }
+
+  // Actualizar texto mientras se edita (para sincronizar tamaño del textarea)
+  const updateInlineTextStyle = (updates: Partial<WhiteboardTextBox>) => {
+    if (!inlineEditingTextId) return
+    
+    if (updates.fontSize !== undefined) setTextFontSize(updates.fontSize)
+    if (updates.fontFamily !== undefined) setTextFontFamily(updates.fontFamily)
+    if (updates.bold !== undefined) setTextBold(updates.bold)
+    if (updates.italic !== undefined) setTextItalic(updates.italic)
+    if (updates.underline !== undefined) setTextUnderline(updates.underline)
+    if (updates.align !== undefined) setTextAlign(updates.align as 'left' | 'center' | 'right')
+    if (updates.backgroundColor !== undefined) setTextBgColor(updates.backgroundColor)
+    if (updates.color !== undefined) setCurrentColor(updates.color)
+  }
+
+  // Manejar agregar/editar fórmula (barra inferior)
   const handleAddFormula = () => {
     setFormulaInput('')
     setFormulaPreview('')
     setFormulaError('')
     setFormulaScale(1.5)
     setEditingFormulaId(null)
-    setShowFormulaModal(true)
+    setFormulaPosition({ x: 100, y: 200 })
+    setShowFormulaBar(true)
+    setCurrentTool('formula')
+    setTimeout(() => formulaInputRef.current?.focus(), 100)
   }
 
   const handleFormulaChange = (latex: string) => {
@@ -378,6 +447,13 @@ export default function WhiteboardEditorPage() {
     }
   }
 
+  // Insertar fórmula rápida (añade al input actual)
+  const insertFormulaSnippet = (snippet: string) => {
+    const newValue = formulaInput + snippet
+    handleFormulaChange(newValue)
+    formulaInputRef.current?.focus()
+  }
+
   const handleSaveFormula = () => {
     if (!formulaInput.trim() || formulaError) return
 
@@ -389,8 +465,8 @@ export default function WhiteboardEditorPage() {
     const newFormula: WhiteboardFormula = {
       id: editingFormulaId || `formula-${Date.now()}`,
       latex: formulaInput,
-      x: existingFormula?.x || 100,
-      y: existingFormula?.y || 200,
+      x: existingFormula?.x || formulaPosition.x,
+      y: existingFormula?.y || formulaPosition.y,
       scale: formulaScale,
     }
 
@@ -408,9 +484,28 @@ export default function WhiteboardEditorPage() {
       }))
     }
 
-    setShowFormulaModal(false)
+    setShowFormulaBar(false)
     setFormulaInput('')
     setEditingFormulaId(null)
+    setCurrentTool('pen')
+  }
+
+  const handleCancelFormula = () => {
+    setShowFormulaBar(false)
+    setFormulaInput('')
+    setEditingFormulaId(null)
+    setCurrentTool('pen')
+  }
+
+  // Editar fórmula existente (cargar en barra inferior)
+  const startEditingFormula = (formula: WhiteboardFormula) => {
+    setFormulaInput(formula.latex)
+    handleFormulaChange(formula.latex)
+    setFormulaScale(formula.scale)
+    setEditingFormulaId(formula.id)
+    setFormulaPosition({ x: formula.x, y: formula.y })
+    setShowFormulaBar(true)
+    setTimeout(() => formulaInputRef.current?.focus(), 100)
   }
 
   // Funciones para arrastrar elementos (múltiples)
@@ -978,6 +1073,7 @@ export default function WhiteboardEditorPage() {
             className="flex-1 relative" 
             style={{ minHeight: '500px' }}
             onMouseDown={handleCanvasMouseDown}
+            onClick={handleCanvasClickForText}
             onMouseMove={(e) => { handleDragMove(e); handleResizeMove(e); }}
             onMouseUp={() => { handleDragEnd(); handleResizeEnd(); }}
             onMouseLeave={() => { handleDragEnd(); handleResizeEnd(); }}
@@ -997,6 +1093,147 @@ export default function WhiteboardEditorPage() {
             {/* Renderizar textos sobre el canvas */}
             {(content.textBoxes || []).map(textBox => {
               const isSelected = isElementSelected('text', textBox.id)
+              const isEditing = inlineEditingTextId === textBox.id
+              
+              // Si está en modo edición, mostrar textarea
+              if (isEditing) {
+                return (
+                  <div
+                    key={textBox.id}
+                    className="absolute z-20"
+                    style={{
+                      left: textBox.x,
+                      top: textBox.y,
+                    }}
+                  >
+                    {/* Barra de formato flotante */}
+                    <div 
+                      className="absolute -top-12 left-0 bg-white rounded-lg shadow-lg border border-gray-200 p-1.5 flex items-center gap-1 z-30"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      {/* Negrita, Cursiva, Subrayado */}
+                      <button
+                        onClick={() => updateInlineTextStyle({ bold: !textBold })}
+                        className={`w-7 h-7 rounded flex items-center justify-center font-bold text-sm transition-all ${textBold ? 'bg-primary-500 text-white' : 'hover:bg-gray-100'}`}
+                        title="Negrita"
+                      >
+                        B
+                      </button>
+                      <button
+                        onClick={() => updateInlineTextStyle({ italic: !textItalic })}
+                        className={`w-7 h-7 rounded flex items-center justify-center italic text-sm transition-all ${textItalic ? 'bg-primary-500 text-white' : 'hover:bg-gray-100'}`}
+                        title="Cursiva"
+                      >
+                        I
+                      </button>
+                      <button
+                        onClick={() => updateInlineTextStyle({ underline: !textUnderline })}
+                        className={`w-7 h-7 rounded flex items-center justify-center underline text-sm transition-all ${textUnderline ? 'bg-primary-500 text-white' : 'hover:bg-gray-100'}`}
+                        title="Subrayado"
+                      >
+                        U
+                      </button>
+                      
+                      <div className="w-px h-5 bg-gray-300 mx-1" />
+                      
+                      {/* Fuente */}
+                      <select
+                        value={textFontFamily}
+                        onChange={(e) => updateInlineTextStyle({ fontFamily: e.target.value })}
+                        className="h-7 px-1 text-xs border border-gray-200 rounded bg-white"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <option value="Arial">Arial</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Times New Roman">Times</option>
+                        <option value="Courier New">Courier</option>
+                        <option value="Verdana">Verdana</option>
+                      </select>
+                      
+                      {/* Tamaño */}
+                      <select
+                        value={textFontSize}
+                        onChange={(e) => updateInlineTextStyle({ fontSize: Number(e.target.value) })}
+                        className="h-7 px-1 text-xs border border-gray-200 rounded bg-white w-14"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        {[12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 56, 64, 72].map(size => (
+                          <option key={size} value={size}>{size}</option>
+                        ))}
+                      </select>
+                      
+                      <div className="w-px h-5 bg-gray-300 mx-1" />
+                      
+                      {/* Color */}
+                      <input
+                        type="color"
+                        value={currentColor}
+                        onChange={(e) => updateInlineTextStyle({ color: e.target.value })}
+                        className="w-7 h-7 rounded cursor-pointer border border-gray-200"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                      
+                      {/* Fondo */}
+                      <input
+                        type="color"
+                        value={textBgColor === 'transparent' ? '#ffffff' : textBgColor}
+                        onChange={(e) => updateInlineTextStyle({ backgroundColor: e.target.value })}
+                        className="w-7 h-7 rounded cursor-pointer border border-gray-200"
+                        title="Color de fondo"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                      <button
+                        onClick={() => updateInlineTextStyle({ backgroundColor: 'transparent' })}
+                        className={`w-7 h-7 rounded flex items-center justify-center text-xs transition-all ${textBgColor === 'transparent' ? 'bg-primary-100 text-primary-700' : 'hover:bg-gray-100'}`}
+                        title="Sin fondo"
+                      >
+                        ∅
+                      </button>
+                      
+                      <div className="w-px h-5 bg-gray-300 mx-1" />
+                      
+                      {/* Confirmar */}
+                      <button
+                        onClick={saveInlineText}
+                        className="w-7 h-7 rounded flex items-center justify-center bg-primary-500 text-white hover:bg-primary-600 transition-all"
+                        title="Listo (Esc para cancelar)"
+                      >
+                        ✓
+                      </button>
+                    </div>
+                    
+                    {/* Textarea editable */}
+                    <textarea
+                      ref={inlineTextRef}
+                      value={inlineTextValue}
+                      onChange={(e) => setInlineTextValue(e.target.value)}
+                      onBlur={saveInlineText}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          saveInlineText()
+                        }
+                      }}
+                      className="resize-none border-2 border-primary-500 rounded px-2 py-1 outline-none bg-white/90"
+                      style={{
+                        fontSize: textFontSize,
+                        color: currentColor,
+                        fontFamily: textFontFamily,
+                        fontWeight: textBold ? 'bold' : 'normal',
+                        fontStyle: textItalic ? 'italic' : 'normal',
+                        textDecoration: textUnderline ? 'underline' : 'none',
+                        textAlign: textAlign,
+                        backgroundColor: textBgColor !== 'transparent' ? textBgColor : 'white',
+                        minWidth: '150px',
+                        minHeight: '40px',
+                      }}
+                      placeholder="Escribe aquí..."
+                      autoFocus
+                    />
+                  </div>
+                )
+              }
+              
+              // Modo normal (no edición)
               return (
                 <div
                   key={textBox.id}
@@ -1033,22 +1270,11 @@ export default function WhiteboardEditorPage() {
                   }}
                   onDoubleClick={(e) => {
                     e.stopPropagation()
-                    // Cargar todos los valores del texto
-                    setTextInput(textBox.text)
-                    setTextFontSize(textBox.fontSize)
-                    setTextFontFamily(textBox.fontFamily || 'Arial')
-                    setTextBold(textBox.bold || false)
-                    setTextItalic(textBox.italic || false)
-                    setTextUnderline(textBox.underline || false)
-                    setTextAlign(textBox.align || 'left')
-                    setTextBgColor(textBox.backgroundColor || 'transparent')
-                    setCurrentColor(textBox.color)
-                    setEditingTextId(textBox.id)
-                    setShowTextModal(true)
+                    startEditingText(textBox)
                   }}
                   title="Clic para seleccionar • Arrastrar para mover • Doble clic para editar"
                 >
-                  {textBox.text}
+                  {textBox.text || '(vacío)'}
                   {/* Handles de redimensionamiento */}
                   {isSelected && (
                     <>
@@ -1109,11 +1335,7 @@ export default function WhiteboardEditorPage() {
                   }}
                   onDoubleClick={(e) => {
                     e.stopPropagation()
-                    setFormulaInput(formula.latex)
-                    handleFormulaChange(formula.latex)
-                    setFormulaScale(formula.scale)
-                    setEditingFormulaId(formula.id)
-                    setShowFormulaModal(true)
+                    startEditingFormula(formula)
                   }}
                   title="Clic para seleccionar • Arrastrar para mover • Doble clic para editar"
                 >
@@ -1192,248 +1414,81 @@ export default function WhiteboardEditorPage() {
           </div>
         </div>
 
-        {/* Modal Texto */}
-        {showTextModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                    <text x="6" y="17" fontSize="16" fontWeight="bold">T</text>
-                  </svg>
-                  {editingTextId ? 'Editar' : 'Agregar'} Texto
-                </h3>
-                <button
-                  onClick={() => setShowTextModal(false)}
-                  className="p-1 hover:bg-gray-100 rounded-lg"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* Área de texto */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Texto</label>
-                  <textarea
-                    value={textInput}
-                    onChange={(e) => setTextInput(e.target.value)}
-                    placeholder="Escribe aquí..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
-                    rows={3}
-                    autoFocus
-                  />
-                </div>
-
-                {/* Barra de formato estilo editor */}
-                <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-100 rounded-lg">
-                  {/* Negrita, Cursiva, Subrayado */}
-                  <div className="flex items-center gap-1 border-r border-gray-300 pr-2">
-                    <button
-                      onClick={() => setTextBold(!textBold)}
-                      className={`w-8 h-8 rounded flex items-center justify-center font-bold transition-all ${textBold ? 'bg-primary-500 text-white' : 'hover:bg-gray-200'}`}
-                      title="Negrita"
-                    >
-                      B
-                    </button>
-                    <button
-                      onClick={() => setTextItalic(!textItalic)}
-                      className={`w-8 h-8 rounded flex items-center justify-center italic transition-all ${textItalic ? 'bg-primary-500 text-white' : 'hover:bg-gray-200'}`}
-                      title="Cursiva"
-                    >
-                      I
-                    </button>
-                    <button
-                      onClick={() => setTextUnderline(!textUnderline)}
-                      className={`w-8 h-8 rounded flex items-center justify-center underline transition-all ${textUnderline ? 'bg-primary-500 text-white' : 'hover:bg-gray-200'}`}
-                      title="Subrayado"
-                    >
-                      U
-                    </button>
-                  </div>
-
-                  {/* Alineación */}
-                  <div className="flex items-center gap-1 border-r border-gray-300 pr-2">
-                    <button
-                      onClick={() => setTextAlign('left')}
-                      className={`w-8 h-8 rounded flex items-center justify-center transition-all ${textAlign === 'left' ? 'bg-primary-500 text-white' : 'hover:bg-gray-200'}`}
-                      title="Alinear izquierda"
-                    >
-                      ≡
-                    </button>
-                    <button
-                      onClick={() => setTextAlign('center')}
-                      className={`w-8 h-8 rounded flex items-center justify-center transition-all ${textAlign === 'center' ? 'bg-primary-500 text-white' : 'hover:bg-gray-200'}`}
-                      title="Centrar"
-                    >
-                      ≡
-                    </button>
-                    <button
-                      onClick={() => setTextAlign('right')}
-                      className={`w-8 h-8 rounded flex items-center justify-center transition-all ${textAlign === 'right' ? 'bg-primary-500 text-white' : 'hover:bg-gray-200'}`}
-                      title="Alinear derecha"
-                    >
-                      ≡
-                    </button>
-                  </div>
-
-                  {/* Fuente */}
-                  <select
-                    value={textFontFamily}
-                    onChange={(e) => setTextFontFamily(e.target.value)}
-                    className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
-                  >
-                    <option value="Arial">Arial</option>
-                    <option value="Georgia">Georgia</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                    <option value="Courier New">Courier New</option>
-                    <option value="Verdana">Verdana</option>
-                    <option value="Comic Sans MS">Comic Sans MS</option>
-                    <option value="Impact">Impact</option>
-                  </select>
-
-                  {/* Tamaño */}
-                  <select
-                    value={textFontSize}
-                    onChange={(e) => setTextFontSize(Number(e.target.value))}
-                    className="px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20"
-                  >
-                    {[12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 56, 64, 72].map(size => (
-                      <option key={size} value={size}>{size}px</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Colores */}
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-gray-700">Color texto:</label>
-                    <input
-                      type="color"
-                      value={currentColor}
-                      onChange={(e) => setCurrentColor(e.target.value)}
-                      className="w-8 h-8 rounded cursor-pointer border border-gray-300"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-gray-700">Fondo:</label>
-                    <input
-                      type="color"
-                      value={textBgColor === 'transparent' ? '#ffffff' : textBgColor}
-                      onChange={(e) => setTextBgColor(e.target.value)}
-                      className="w-8 h-8 rounded cursor-pointer border border-gray-300"
-                    />
-                    <button
-                      onClick={() => setTextBgColor('transparent')}
-                      className={`px-2 py-1 text-xs rounded ${textBgColor === 'transparent' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 hover:bg-gray-200'}`}
-                    >
-                      Sin fondo
-                    </button>
-                  </div>
-                </div>
-
-                {/* Vista previa */}
-                <div className="bg-gray-50 rounded-lg p-4 min-h-[80px] border border-gray-200">
-                  <p className="text-xs text-gray-500 mb-2">Vista previa:</p>
-                  <p 
-                    style={{ 
-                      fontSize: textFontSize, 
-                      color: currentColor,
-                      fontFamily: textFontFamily,
-                      fontWeight: textBold ? 'bold' : 'normal',
-                      fontStyle: textItalic ? 'italic' : 'normal',
-                      textDecoration: textUnderline ? 'underline' : 'none',
-                      textAlign: textAlign,
-                      backgroundColor: textBgColor,
-                      padding: textBgColor !== 'transparent' ? '4px 8px' : 0,
-                      borderRadius: '4px',
-                      display: 'inline-block',
-                    }}
-                  >
-                    {textInput || 'Vista previa...'}
-                  </p>
-                </div>
-
-                {/* Botones */}
-                <div className="flex gap-2">
-                  {editingTextId && (
-                    <button
-                      onClick={() => {
-                        setContent(prev => ({
-                          ...prev,
-                          textBoxes: (prev.textBoxes || []).filter(t => t.id !== editingTextId)
-                        }))
-                        setShowTextModal(false)
-                      }}
-                      className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                      Eliminar
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setShowTextModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleSaveText}
-                    disabled={!textInput.trim()}
-                    className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-all"
-                  >
-                    {editingTextId ? 'Guardar Cambios' : 'Agregar Texto'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal Fórmula */}
-        {showFormulaModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
+        {/* Barra inferior de fórmulas LaTeX */}
+        {showFormulaBar && (
+          <div className="bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
+            <div className="max-w-7xl mx-auto p-3 flex flex-col lg:flex-row items-center gap-3">
+              {/* Icono fx e input */}
+              <div className="w-full lg:w-1/3 flex items-center gap-3">
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary-100 text-primary-600 shrink-0">
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                     <text x="4" y="17" fontSize="14" fontWeight="bold" fontStyle="italic">fx</text>
                   </svg>
-                  {editingFormulaId ? 'Editar' : 'Agregar'} Fórmula
-                </h3>
-                <button
-                  onClick={() => setShowFormulaModal(false)}
-                  className="p-1 hover:bg-gray-100 rounded-lg"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fórmula LaTeX</label>
+                </div>
+                <div className="w-full relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none font-mono text-sm">$$</div>
                   <input
+                    ref={formulaInputRef}
                     type="text"
                     value={formulaInput}
                     onChange={(e) => handleFormulaChange(e.target.value)}
-                    placeholder="Ejemplo: x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
-                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !formulaError && formulaInput.trim()) {
+                        handleSaveFormula()
+                      }
+                    }}
+                    placeholder="\frac{-b \pm \sqrt{b^2-4ac}}{2a}"
+                    className={`w-full pl-9 pr-3 py-2 border rounded-lg font-mono text-sm shadow-sm transition-all focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                      formulaError ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    }`}
                   />
-                  {formulaError && (
-                    <p className="text-red-500 text-sm mt-1">{formulaError}</p>
+                </div>
+              </div>
+
+              <div className="hidden lg:block w-px h-8 bg-gray-200 mx-2" />
+
+              {/* Botones rápidos de fórmulas */}
+              <div className="w-full lg:w-auto flex-grow flex items-center justify-start overflow-x-auto py-1 gap-2">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider shrink-0 mr-1 hidden xl:block">Comunes</span>
+                <div className="flex gap-1.5 shrink-0">
+                  {[
+                    { label: 'x²', latex: 'x^{2}', title: 'Al cuadrado' },
+                    { label: 'x³', latex: 'x^{3}', title: 'Al cubo' },
+                    { label: '\\frac{a}{b}', latex: '\\frac{a}{b}', title: 'Fracción' },
+                    { label: '\\sqrt{x}', latex: '\\sqrt{x}', title: 'Raíz cuadrada' },
+                    { label: '\\sum', latex: '\\sum_{i=1}^{n}', title: 'Sumatoria' },
+                    { label: '\\int', latex: '\\int_{a}^{b}', title: 'Integral' },
+                    { label: '\\pi', latex: '\\pi', title: 'Pi' },
+                    { label: '\\infty', latex: '\\infty', title: 'Infinito' },
+                  ].map(item => (
+                    <button
+                      key={item.label}
+                      onClick={() => insertFormulaSnippet(item.latex)}
+                      className="inline-flex items-center justify-center h-9 min-w-[36px] px-2 text-sm font-medium font-mono text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded hover:border-gray-300 transition-all"
+                      title={item.title}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="w-px h-6 bg-gray-300 mx-1 shrink-0" />
+
+                {/* Preview */}
+                <div className="flex-1 min-h-[40px] min-w-[120px] max-w-xs flex items-center bg-gray-50 rounded-lg px-4 border border-gray-200 overflow-hidden">
+                  {formulaPreview ? (
+                    <div 
+                      className="transform scale-75 origin-left"
+                      dangerouslySetInnerHTML={{ __html: formulaPreview }} 
+                    />
+                  ) : (
+                    <span className="text-gray-400 text-sm">Vista previa...</span>
                   )}
                 </div>
 
                 {/* Control de tamaño */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tamaño: {formulaScale.toFixed(1)}x</label>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-gray-500">{formulaScale.toFixed(1)}x</span>
                   <input
                     type="range"
                     min="0.5"
@@ -1441,81 +1496,43 @@ export default function WhiteboardEditorPage() {
                     step="0.1"
                     value={formulaScale}
                     onChange={(e) => setFormulaScale(Number(e.target.value))}
-                    className="w-full"
+                    className="w-20"
                   />
-                  <div className="flex justify-between text-xs text-gray-400 mt-1">
-                    <span>Pequeño</span>
-                    <span>Grande</span>
-                  </div>
                 </div>
+              </div>
 
-                <div className="bg-gray-50 rounded-lg p-4 min-h-[100px] flex items-center justify-center overflow-auto">
-                  {formulaPreview ? (
-                    <div style={{ transform: `scale(${formulaScale})`, transformOrigin: 'center' }} dangerouslySetInnerHTML={{ __html: formulaPreview }} />
-                  ) : (
-                    <p className="text-gray-400">Vista previa de la fórmula...</p>
-                  )}
-                </div>
-
-                {/* Atajos de fórmulas comunes */}
-                <div>
-                  <p className="text-xs text-gray-500 mb-2">Fórmulas comunes (clic para insertar):</p>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { label: 'Fracción', latex: '\\frac{a}{b}' },
-                      { label: 'Raíz', latex: '\\sqrt{x}' },
-                      { label: 'Potencia', latex: 'x^{2}' },
-                      { label: 'Subíndice', latex: 'x_{i}' },
-                      { label: 'Sumatoria', latex: '\\sum_{i=1}^{n} x_i' },
-                      { label: 'Integral', latex: '\\int_{a}^{b} f(x)dx' },
-                      { label: 'Pi', latex: '\\pi' },
-                      { label: 'Infinito', latex: '\\infty' },
-                      { label: 'Mayor igual', latex: '\\geq' },
-                      { label: 'Menor igual', latex: '\\leq' },
-                      { label: 'Diferente', latex: '\\neq' },
-                      { label: 'Aprox', latex: '\\approx' },
-                    ].map(item => (
-                      <button
-                        key={item.label}
-                        onClick={() => handleFormulaChange(formulaInput + item.latex)}
-                        className="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-all"
-                        title={item.latex}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  {editingFormulaId && (
-                    <button
-                      onClick={() => {
-                        setContent(prev => ({
-                          ...prev,
-                          formulas: (prev.formulas || []).filter(f => f.id !== editingFormulaId)
-                        }))
-                        setShowFormulaModal(false)
-                      }}
-                      className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all"
-                    >
-                      Eliminar
-                    </button>
-                  )}
+              {/* Botones de acción */}
+              <div className="w-full lg:w-auto flex items-center justify-end gap-2 shrink-0 border-t lg:border-t-0 border-gray-100 pt-2 lg:pt-0">
+                {editingFormulaId && (
                   <button
-                    onClick={() => setShowFormulaModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                    onClick={() => {
+                      setContent(prev => ({
+                        ...prev,
+                        formulas: (prev.formulas || []).filter(f => f.id !== editingFormulaId)
+                      }))
+                      handleCancelFormula()
+                    }}
+                    className="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
                   >
-                    Cancelar
+                    Eliminar
                   </button>
-                  <button
-                    onClick={handleSaveFormula}
-                    disabled={!formulaInput.trim() || !!formulaError}
-                    className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-all"
-                  >
-                    {editingFormulaId ? 'Guardar Cambios' : 'Agregar Fórmula'}
-                  </button>
-                </div>
+                )}
+                <button
+                  onClick={handleCancelFormula}
+                  className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveFormula}
+                  disabled={!formulaInput.trim() || !!formulaError}
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 active:bg-primary-800 rounded-md shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span>{editingFormulaId ? 'Guardar' : 'Insertar'}</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
