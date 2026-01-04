@@ -2162,6 +2162,18 @@ export default function WhiteboardMultiPage() {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && e.ctrlKey && !formulaError && formulaInput.trim()) {
                           handleSaveFormula()
+                        } else if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                          // Enter normal inserta \\ para salto de línea en LaTeX
+                          e.preventDefault()
+                          const textarea = e.currentTarget
+                          const start = textarea.selectionStart
+                          const end = textarea.selectionEnd
+                          const newValue = formulaInput.substring(0, start) + ' \\\\ ' + formulaInput.substring(end)
+                          handleFormulaChange(newValue)
+                          // Restaurar posición del cursor
+                          setTimeout(() => {
+                            textarea.selectionStart = textarea.selectionEnd = start + 5
+                          }, 0)
                         }
                       }}
                       placeholder="\frac{-b \pm \sqrt{b^2-4ac}}{2a}"
