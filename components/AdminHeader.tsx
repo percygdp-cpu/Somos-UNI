@@ -42,6 +42,12 @@ export default function AdminHeader() {
           >
             Analytics
           </button>
+          <button
+            onClick={() => router.push('/admin/whiteboard')}
+            className="text-sm text-secondary-600 hover:text-primary-600 transition-colors"
+          >
+            Pizarra
+          </button>
           <div className="h-6 w-px bg-gray-300"></div>
           <div className="relative">
             <button

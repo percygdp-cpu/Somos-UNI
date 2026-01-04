@@ -89,3 +89,57 @@ export interface AuthContextType {
   logout: () => void
   loading: boolean
 }
+
+// Tipos para Pizarra Digital
+export interface WhiteboardPoint {
+  x: number
+  y: number
+  pressure?: number
+}
+
+export interface WhiteboardStroke {
+  id: string
+  points: WhiteboardPoint[]
+  color: string
+  size: number
+  tool: 'pen' | 'eraser'
+}
+
+export interface WhiteboardTextBox {
+  id: string
+  text: string
+  x: number
+  y: number
+  fontSize: number
+  color: string
+  fontFamily?: string
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  align?: 'left' | 'center' | 'right'
+  backgroundColor?: string
+}
+
+export interface WhiteboardFormula {
+  id: string
+  latex: string
+  x: number
+  y: number
+  scale: number
+}
+
+export interface WhiteboardContent {
+  strokes: WhiteboardStroke[]
+  textBoxes?: WhiteboardTextBox[]
+  formulas?: WhiteboardFormula[]
+}
+
+export interface Whiteboard {
+  id: string
+  title: string
+  content: WhiteboardContent
+  thumbnail?: string
+  createdBy: string
+  createdAt: Date
+  updatedAt: Date
+}

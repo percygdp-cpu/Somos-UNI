@@ -142,6 +142,20 @@ CREATE INDEX IF NOT EXISTS idx_weekly_goal_tests_test ON weekly_goal_tests(test_
 CREATE INDEX IF NOT EXISTS idx_user_weekly_goals_user ON user_weekly_goals(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_weekly_goals_goal ON user_weekly_goals(weekly_goal_id);
 
+-- Tabla de pizarras digitales
+CREATE TABLE IF NOT EXISTS whiteboards (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '[]',
+  thumbnail TEXT,
+  created_by INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_whiteboards_created_by ON whiteboards(created_by);
+
 -- Datos iniciales (admin y algunos datos de prueba)
 INSERT OR IGNORE INTO users (name, username, password, role, status) 
 VALUES ('Administrador', 'admin', 'admin123', 'admin', 'active');
