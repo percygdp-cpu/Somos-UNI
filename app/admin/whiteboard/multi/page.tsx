@@ -2271,7 +2271,7 @@ export default function WhiteboardMultiPage() {
                           : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
                       }`}
                     >
-                      📐 2D
+                      2D
                     </button>
                     <button
                       onClick={() => setFormulaCategory('shapes-3d')}
@@ -2281,7 +2281,7 @@ export default function WhiteboardMultiPage() {
                           : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
                       }`}
                     >
-                      🎲 3D
+                      3D
                     </button>
                   </div>
 
