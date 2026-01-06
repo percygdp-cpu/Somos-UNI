@@ -168,74 +168,58 @@ export default function StudentAccountPage() {
     <ProtectedRoute allowedRoles={['student']}>
       <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary-50 to-secondary-50">
         <StudentHeader />
-        <div className="flex-grow p-6">
+        <div className="flex-grow p-4 sm:p-6">
           <div className="max-w-4xl mx-auto">
             {/* Header */}
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-secondary-900 mb-2">
+            <div className="mb-6 sm:mb-8">
+              <h1 className="text-2xl sm:text-4xl font-bold text-secondary-900 mb-2">
                 Mi Cuenta
               </h1>
-              <p className="text-secondary-600 text-lg">
+              <p className="text-secondary-600 text-base sm:text-lg">
                 Información personal y progreso académico
               </p>
             </div>
 
             {/* Información Personal */}
-            <div className="account-card bg-white rounded-xl shadow-lg border border-secondary-200 p-6 mb-6">
-              <div className="flex items-start gap-6">
-                <div className="w-24 h-24 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-4xl font-bold">
+            <div className="account-card bg-white rounded-xl shadow-lg border border-secondary-200 p-4 sm:p-6 mb-6">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-3xl sm:text-4xl font-bold">
                     {user?.username.charAt(0).toUpperCase()}
                   </span>
                 </div>
                 
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-secondary-900 mb-4">
+                <div className="flex-1 w-full text-center sm:text-left">
+                  <h2 className="text-xl sm:text-2xl font-bold text-secondary-900 mb-4">
                     Información Personal
                   </h2>
                   
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                        </svg>
-                      </div>
+                    <div className="flex items-center gap-3 justify-center sm:justify-start">
                       <div>
                         <p className="text-xs text-secondary-500 uppercase tracking-wide">Nombre de Usuario</p>
                         <p className="text-lg font-semibold text-secondary-900">{user?.username}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-green-600" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                        </svg>
-                      </div>
-                      <div>
+                    <div className="flex items-center gap-3 justify-center sm:justify-start">
+                      <div className="min-w-0">
                         <p className="text-xs text-secondary-500 uppercase tracking-wide">Correo Electrónico</p>
-                        <p className="text-lg font-semibold text-secondary-900">{user?.username}@lmsplatform.com</p>
+                        <p className="text-base sm:text-lg font-semibold text-secondary-900 break-all">{user?.username}@lmsplatform.com</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <span className="text-purple-600 text-xl">🎓</span>
-                      </div>
+                    <div className="flex items-center gap-3 justify-center sm:justify-start">
                       <div>
                         <p className="text-xs text-secondary-500 uppercase tracking-wide">Rol</p>
-                        <p className="text-lg font-semibold text-secondary-900">Estudiante</p>
+                        <p className="text-base sm:text-lg font-semibold text-secondary-900">Estudiante</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                        <span className="text-orange-600 text-xl">📅</span>
-                      </div>
+                    <div className="flex items-center gap-3 justify-center sm:justify-start">
                       <div>
                         <p className="text-xs text-secondary-500 uppercase tracking-wide">Miembro Desde</p>
-                        <p className="text-lg font-semibold text-secondary-900">
+                        <p className="text-base sm:text-lg font-semibold text-secondary-900">
                           {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('es-ES', { 
                             year: 'numeric', 
                             month: 'long', 
@@ -250,8 +234,8 @@ export default function StudentAccountPage() {
             </div>
 
             {/* Progreso General */}
-            <div className="account-card bg-white rounded-xl shadow-lg border border-secondary-200 p-6 mb-6">
-              <h2 className="text-2xl font-bold text-secondary-900 mb-6">
+            <div className="account-card bg-white rounded-xl shadow-lg border border-secondary-200 p-4 sm:p-6 mb-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-secondary-900 mb-4 sm:mb-6">
                 Progreso General
               </h2>
 
@@ -270,23 +254,23 @@ export default function StudentAccountPage() {
               </div>
 
               {/* Estadísticas en Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <div className="text-3xl font-bold text-blue-600 mb-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="bg-blue-50 rounded-lg p-3 sm:p-4 text-center">
+                  <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-1">
                     {progress.coursesCompleted} / {progress.coursesEnrolled}
                   </div>
                   <div className="text-xs text-secondary-600">Cursos Completados</div>
                 </div>
 
-                <div className="bg-green-50 rounded-lg p-4 text-center">
-                  <div className="text-3xl font-bold text-green-600 mb-1">
+                <div className="bg-green-50 rounded-lg p-3 sm:p-4 text-center">
+                  <div className="text-2xl sm:text-3xl font-bold text-green-600 mb-1">
                     {progress.modulesCompleted} / {progress.modulesTotal}
                   </div>
                   <div className="text-xs text-secondary-600">Módulos Completados</div>
                 </div>
 
-                <div className="bg-orange-50 rounded-lg p-4 text-center">
-                  <div className="text-3xl font-bold text-orange-600 mb-1">
+                <div className="bg-orange-50 rounded-lg p-3 sm:p-4 text-center">
+                  <div className="text-2xl sm:text-3xl font-bold text-orange-600 mb-1">
                     {progress.averageScore}%
                   </div>
                   <div className="text-xs text-secondary-600">Promedio General</div>
@@ -295,8 +279,8 @@ export default function StudentAccountPage() {
             </div>
 
             {/* Cursos en Progreso */}
-            <div className="account-card bg-white rounded-xl shadow-lg border border-secondary-200 p-6">
-              <h2 className="text-2xl font-bold text-secondary-900 mb-6">
+            <div className="account-card bg-white rounded-xl shadow-lg border border-secondary-200 p-4 sm:p-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-secondary-900 mb-4 sm:mb-6">
                 Cursos en Progreso
               </h2>
 
