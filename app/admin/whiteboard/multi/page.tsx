@@ -66,6 +66,17 @@ type ViewMode = '1' | '2h' | '2v' | '4'
 
 const LOCAL_STORAGE_KEY = 'whiteboard-multi-config'
 
+// Función para procesar espacios en LaTeX
+// Convierte espacios normales a espacios LaTeX para que se rendericen correctamente
+function processLatexSpaces(latex: string): string {
+  // Si está vacío, retornar vacío
+  if (!latex) return latex
+  
+  // Usar ~ (tilde) que es el carácter de espacio no-breakable en LaTeX
+  // Es la forma más compatible y simple de preservar espacios
+  return latex.replace(/ /g, '~')
+}
+
 export default function WhiteboardMultiPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -96,8 +107,17 @@ export default function WhiteboardMultiPage() {
   // Herramientas (compartidas entre cuadrantes)
   const [currentColor, setCurrentColor] = useState('#000000')
   const [currentSize, setCurrentSize] = useState(8)
-  const [currentTool, setCurrentTool] = useState<'select' | 'pen' | 'eraser' | 'text' | 'formula'>('pen')
+  const [eraserSize, setEraserSize] = useState(24)
+  const [currentTool, setCurrentTool] = useState<'select' | 'pen' | 'eraser' | 'text' | 'formula' | 'pan'>('pen')
   const [penMode, setPenMode] = useState<'free' | 'line' | 'arrow' | 'curveArrow'>('free')
+  
+  // Estado de pan (desplazamiento) por cuadrante
+  const [quadrantPanOffsets, setQuadrantPanOffsets] = useState<{ x: number; y: number }[]>([
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+    { x: 0, y: 0 }
+  ])
   
   // Refs para cada canvas
   const canvasRefs = useRef<(WhiteboardCanvasRef | null)[]>([null, null, null, null])
@@ -108,6 +128,10 @@ export default function WhiteboardMultiPage() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const quadrantsRef = useRef(quadrants)
+
+  // Estados de historial para cada cuadrante (undo/redo)
+  const [canUndoQuadrants, setCanUndoQuadrants] = useState<boolean[]>([false, false, false, false])
+  const [canRedoQuadrants, setCanRedoQuadrants] = useState<boolean[]>([false, false, false, false])
 
   // Mantener quadrantsRef sincronizado
   useEffect(() => { quadrantsRef.current = quadrants }, [quadrants])
@@ -136,6 +160,114 @@ export default function WhiteboardMultiPage() {
   const [formulaCategory, setFormulaCategory] = useState<'basic' | 'greek-lower' | 'greek-upper' | 'trig' | 'operators' | 'chemistry' | 'shapes-2d' | 'shapes-3d'>('basic')
   const formulaInputRef = useRef<HTMLTextAreaElement>(null)
 
+  // Colores de resaltado para selección de texto en fórmulas (formato HEX para KaTeX)
+  const HIGHLIGHT_COLORS = [
+    { name: 'Amarillo', value: '#FFEB3B' },
+    { name: 'Verde', value: '#81C784' },
+    { name: 'Azul', value: '#64B5F6' },
+    { name: 'Rosa', value: '#F48FB1' },
+    { name: 'Naranja', value: '#FFB74D' },
+    { name: 'Morado', value: '#CE93D8' },
+  ]
+
+  // Colores de texto para fórmulas
+  const TEXT_COLORS = [
+    { name: 'Rojo', value: '#E53935' },
+    { name: 'Azul', value: '#1E88E5' },
+    { name: 'Verde', value: '#43A047' },
+    { name: 'Naranja', value: '#FB8C00' },
+    { name: 'Morado', value: '#8E24AA' },
+  ]
+
+  // Extraer el contenido interno de un comando LaTeX (quita \comando{color}{contenido} -> contenido)
+  const extractInnerContent = (text: string): string => {
+    // Quitar \colorbox{...}{...} y \textcolor{...}{...} recursivamente
+    let result = text
+    let changed = true
+    while (changed) {
+      changed = false
+      // Patrón para \colorbox{color}{contenido} o \textcolor{color}{contenido}
+      const match = result.match(/^\\(?:colorbox|textcolor)\{[^}]*\}\{(.*)\}$/)
+      if (match) {
+        result = match[1]
+        changed = true
+      }
+    }
+    return result
+  }
+
+  // Aplicar resaltado a la selección del texto LaTeX
+  const applyHighlightToSelection = (color: string) => {
+    const input = formulaInputRef.current
+    if (!input) return
+    
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    
+    if (start === end) return
+    
+    // Extraer texto seleccionado y limpiar comandos de color existentes
+    const selectedText = formulaInput.slice(start, end)
+    const cleanText = extractInnerContent(selectedText)
+    
+    // Aplicar nuevo color
+    const wrapped = `\\colorbox{${color}}{${cleanText}}`
+    const newValue = formulaInput.slice(0, start) + wrapped + formulaInput.slice(end)
+    setFormulaInput(newValue)
+    handleFormulaChange(newValue)
+    setTimeout(() => {
+      input.focus()
+      input.setSelectionRange(start, start + wrapped.length)
+    }, 0)
+  }
+
+  // Aplicar color de texto a la selección
+  const applyTextColorToSelection = (color: string) => {
+    const input = formulaInputRef.current
+    if (!input) return
+    
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    
+    if (start === end) return
+    
+    // Extraer texto seleccionado y limpiar comandos de color existentes
+    const selectedText = formulaInput.slice(start, end)
+    const cleanText = extractInnerContent(selectedText)
+    
+    // Aplicar nuevo color
+    const wrapped = `\\textcolor{${color}}{${cleanText}}`
+    const newValue = formulaInput.slice(0, start) + wrapped + formulaInput.slice(end)
+    setFormulaInput(newValue)
+    handleFormulaChange(newValue)
+    setTimeout(() => {
+      input.focus()
+      input.setSelectionRange(start, start + wrapped.length)
+    }, 0)
+  }
+
+  // Quitar formato de color de la selección
+  const removeColorFromSelection = () => {
+    const input = formulaInputRef.current
+    if (!input) return
+    
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    
+    if (start === end) return
+    
+    const selectedText = formulaInput.slice(start, end)
+    const cleanText = extractInnerContent(selectedText)
+    
+    const newValue = formulaInput.slice(0, start) + cleanText + formulaInput.slice(end)
+    setFormulaInput(newValue)
+    handleFormulaChange(newValue)
+    setTimeout(() => {
+      input.focus()
+      input.setSelectionRange(start, start + cleanText.length)
+    }, 0)
+  }
+
   // Estado para placement mode (click-to-place)
   const [pendingPlacement, setPendingPlacement] = useState<{
     type: 'formula' | 'shape';
@@ -146,8 +278,8 @@ export default function WhiteboardMultiPage() {
   // Categorías de símbolos para fórmulas
   const FORMULA_CATEGORIES = {
     'basic': [
-      { label: 'x²', latex: 'x^{2}' },
-      { label: 'xⁿ', latex: 'x^{n}' },
+      { label: 'x²', latex: '^{2}' },
+      { label: 'xⁿ', latex: '^{n}' },
       { label: '√', latex: '\\sqrt{x}' },
       { label: 'ⁿ√', latex: '\\sqrt[n]{x}' },
       { label: 'a/b', latex: '\\frac{a}{b}' },
@@ -701,7 +833,7 @@ export default function WhiteboardMultiPage() {
       setFormulaInput(currentLatex)
       if (currentLatex) {
         try {
-          const html = katex.renderToString(currentLatex, { throwOnError: true, displayMode: true })
+          const html = katex.renderToString(processLatexSpaces(currentLatex), { throwOnError: true, displayMode: true })
           setFormulaPreview(html)
           setFormulaError('')
         } catch {
@@ -746,6 +878,20 @@ export default function WhiteboardMultiPage() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'a' && currentTool === 'select') {
         e.preventDefault()
         selectAll()
+      }
+      // Ctrl+Z para deshacer, Ctrl+Shift+Z o Ctrl+Y para rehacer
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z') {
+          e.preventDefault()
+          if (e.shiftKey) {
+            canvasRefs.current[activeQuadrant]?.redo()
+          } else {
+            canvasRefs.current[activeQuadrant]?.undo()
+          }
+        } else if (e.key === 'y') {
+          e.preventDefault()
+          canvasRefs.current[activeQuadrant]?.redo()
+        }
       }
     }
 
@@ -930,6 +1076,20 @@ export default function WhiteboardMultiPage() {
         : q
     ))
   }
+
+  // Manejar cambios de historial de un cuadrante
+  const handleHistoryChange = useCallback((quadrantIndex: number, canUndo: boolean, canRedo: boolean) => {
+    setCanUndoQuadrants(prev => {
+      const newState = [...prev]
+      newState[quadrantIndex] = canUndo
+      return newState
+    })
+    setCanRedoQuadrants(prev => {
+      const newState = [...prev]
+      newState[quadrantIndex] = canRedo
+      return newState
+    })
+  }, [])
 
   // Actualizar color de fondo de un cuadrante
   const updateQuadrantBgColor = (quadrantIndex: number, bgColor: string) => {
@@ -1189,7 +1349,7 @@ export default function WhiteboardMultiPage() {
     setFormulaModoLibre(false) // Modo tiempo real
     if (existingLatex) {
       try {
-        const html = katex.renderToString(existingLatex, { throwOnError: true, displayMode: true })
+        const html = katex.renderToString(processLatexSpaces(existingLatex), { throwOnError: true, displayMode: true })
         setFormulaPreview(html)
         setFormulaError('')
       } catch {
@@ -1229,7 +1389,8 @@ export default function WhiteboardMultiPage() {
       handleLatexContentChange(latex)
     }
     try {
-      const html = katex.renderToString(latex, { throwOnError: true, displayMode: true })
+      // Procesar espacios para que se rendericen correctamente
+      const html = katex.renderToString(processLatexSpaces(latex), { throwOnError: true, displayMode: true })
       setFormulaPreview(html)
       setFormulaError('')
     } catch (err) {
@@ -1239,9 +1400,36 @@ export default function WhiteboardMultiPage() {
   }
 
   const insertFormulaSnippet = (snippet: string) => {
-    const newValue = formulaInput + snippet
+    const input = formulaInputRef.current
+    if (!input) {
+      // Fallback: añadir al final
+      const newValue = formulaInput + snippet
+      handleFormulaChange(newValue)
+      return
+    }
+    
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    const before = formulaInput.substring(0, start)
+    const after = formulaInput.substring(end)
+    const newValue = before + snippet + after
+    
     handleFormulaChange(newValue)
-    formulaInputRef.current?.focus()
+    
+    // Posicionar cursor antes del último "}" del snippet insertado
+    setTimeout(() => {
+      const lastBraceIndex = snippet.lastIndexOf('}')
+      let newCursorPos: number
+      if (lastBraceIndex !== -1) {
+        // Posicionar justo antes del último }
+        newCursorPos = start + lastBraceIndex
+      } else {
+        // Si no hay }, posicionar al final del snippet
+        newCursorPos = start + snippet.length
+      }
+      input.setSelectionRange(newCursorPos, newCursorPos)
+      input.focus()
+    }, 0)
   }
 
   const handleSaveFormula = () => {
@@ -1274,7 +1462,10 @@ export default function WhiteboardMultiPage() {
       // Nueva fórmula: activar placement mode
       setPendingPlacement({
         type: 'formula',
-        data: { latex: formulaInput, scale: formulaScale }
+        data: { 
+          latex: formulaInput, 
+          scale: formulaScale,
+        }
       })
       setShowFormulaBar(false)
       setFormulaInput('')
@@ -1322,11 +1513,12 @@ export default function WhiteboardMultiPage() {
       const lines = latex.split('\n').map(line => {
         if (line.length === 0) return ' '
         // Quitar \\ del final de línea (ya que usamos <br/> para el salto visual)
-        let cleanLine = line.replace(/\s*\\\\$/, '').trim()
+        // NO hacer trim() para preservar espacios al inicio
+        let cleanLine = line.replace(/\s*\\\\$/, '').trimEnd()
         if (cleanLine.length === 0) return ' '
         // Si no tiene $, envolver en $
         const temp = cleanLine.includes('$') ? cleanLine : `$${cleanLine}$`
-        return temp.replace(/ /g, '\u00A0') // Espacios no-breaking
+        return temp
       })
       
       // Renderizar cada línea
@@ -1334,7 +1526,8 @@ export default function WhiteboardMultiPage() {
         try {
           // Extraer contenido entre $ y renderizar
           const mathContent = line.replace(/^\$/, '').replace(/\$$/, '')
-          return katex.renderToString(mathContent, { throwOnError: false, displayMode: false })
+          // Procesar espacios para que se rendericen correctamente
+          return katex.renderToString(processLatexSpaces(mathContent), { throwOnError: false, displayMode: false })
         } catch {
           return line
         }
@@ -1520,6 +1713,17 @@ export default function WhiteboardMultiPage() {
                   </svg>
                 </button>
                 
+                {/* Mano (Pan/Desplazar) */}
+                <button
+                  onClick={() => setCurrentTool('pan')}
+                  className={`p-2 rounded ${currentTool === 'pan' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                  title="Mover vista (arrastrar para desplazar)"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+                  </svg>
+                </button>
+                
                 {/* Lápiz con modos */}
                 <div className="relative pen-dropdown">
                   <button
@@ -1672,11 +1876,11 @@ export default function WhiteboardMultiPage() {
                         <button
                           key={size.value}
                           onClick={() => {
-                            setCurrentSize(size.value)
+                            setEraserSize(size.value)
                             setShowEraserSizes(false)
                           }}
                           className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
-                            currentSize === size.value ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                            eraserSize === size.value ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
                           }`}
                           title={size.name}
                         >
@@ -1796,70 +2000,130 @@ export default function WhiteboardMultiPage() {
                 </div>
               )}
 
-              <div className="flex-1" />
+              <div className="w-px h-8 bg-gray-300" />
 
-              {/* Indicador de guardado profesional */}
-              <div className="flex items-center gap-3 text-sm">
-                {/* Estado del guardado */}
-                <div className="flex items-center gap-2 min-w-[120px] justify-end">
-                  {saveStatus === 'saving' && (
-                    <span className="flex items-center gap-1.5 text-gray-500">
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Guardando...
-                    </span>
-                  )}
-                  {saveStatus === 'saved' && (
-                    <span className="flex items-center gap-1 text-green-600">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Guardado
-                    </span>
-                  )}
-                  {saveStatus === 'error' && (
-                    <span className="flex items-center gap-1 text-red-500">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Error
-                    </span>
-                  )}
-                  {saveStatus === 'idle' && quadrants.some(q => q.isDirty) && (
-                    <span className="flex items-center gap-1 text-amber-600">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                      Sin guardar
-                    </span>
-                  )}
-                </div>
-
-                {/* Botón de guardar manual */}
-                {quadrants.some(q => q.isDirty && q.id) && (
+              {/* Acciones Deshacer/Rehacer */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => canvasRefs.current[activeQuadrant]?.undo()}
+                  disabled={!canUndoQuadrants[activeQuadrant]}
+                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-all"
+                  title="Deshacer (Ctrl+Z)"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => canvasRefs.current[activeQuadrant]?.redo()}
+                  disabled={!canRedoQuadrants[activeQuadrant]}
+                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-all"
+                  title="Rehacer (Ctrl+Y)"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm('¿Limpiar el cuadrante activo?')) {
+                      canvasRefs.current[activeQuadrant]?.clear()
+                    }
+                  }}
+                  className="p-2 rounded-lg hover:bg-red-100 text-red-500 transition-all"
+                  title="Limpiar cuadrante activo"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+                {/* Centrar vista (resetear pan) */}
+                {(quadrantPanOffsets[activeQuadrant].x !== 0 || quadrantPanOffsets[activeQuadrant].y !== 0) && (
                   <button
-                    onClick={saveAllDirty}
-                    disabled={saveStatus === 'saving'}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 text-white rounded-lg text-sm hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    onClick={() => {
+                      setQuadrantPanOffsets(prev => {
+                        const newOffsets = [...prev]
+                        newOffsets[activeQuadrant] = { x: 0, y: 0 }
+                        return newOffsets
+                      })
+                    }}
+                    className="p-2 rounded-lg hover:bg-blue-100 text-blue-500 transition-all"
+                    title="Centrar vista (resetear desplazamiento)"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
                     </svg>
-                    Guardar
                   </button>
                 )}
               </div>
 
-              {/* Fullscreen */}
-              <button
-                onClick={handleFullscreen}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-all"
-                title="Pantalla completa"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                </svg>
-              </button>
+              <div className="flex-1 min-w-0" />
+
+              {/* Indicador de guardado + Fullscreen (agrupados para no hacer wrap) */}
+              <div className="flex items-center gap-3 flex-shrink-0">
+                {/* Estado del guardado */}
+                <div className="flex items-center gap-3 text-sm">
+                  <div className="flex items-center gap-2 min-w-[100px] justify-end">
+                    {saveStatus === 'saving' && (
+                      <span className="flex items-center gap-1.5 text-gray-500">
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span className="hidden sm:inline">Guardando...</span>
+                      </span>
+                    )}
+                    {saveStatus === 'saved' && (
+                      <span className="flex items-center gap-1 text-green-600">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="hidden sm:inline">Guardado</span>
+                      </span>
+                    )}
+                    {saveStatus === 'error' && (
+                      <span className="flex items-center gap-1 text-red-500">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="hidden sm:inline">Error</span>
+                      </span>
+                    )}
+                    {saveStatus === 'idle' && quadrants.some(q => q.isDirty) && (
+                      <span className="flex items-center gap-1 text-amber-600">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                        <span className="hidden sm:inline">Sin guardar</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Botón de guardar manual */}
+                  {quadrants.some(q => q.isDirty && q.id) && (
+                    <button
+                      onClick={saveAllDirty}
+                      disabled={saveStatus === 'saving'}
+                      className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-primary-500 text-white rounded-lg text-sm hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      title="Guardar cambios"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                      </svg>
+                      <span className="hidden sm:inline">Guardar</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Fullscreen */}
+                <button
+                  onClick={handleFullscreen}
+                  className="p-2 rounded-lg hover:bg-gray-100 transition-all flex-shrink-0"
+                  title="Pantalla completa"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2037,6 +2301,7 @@ export default function WhiteboardMultiPage() {
                   <div
                     ref={el => { canvasContainerRefs.current[quadrantIndex] = el }}
                     className="absolute inset-0 overflow-auto"
+                    style={{ backgroundColor: quadrants[quadrantIndex].bgColor }}
                     onMouseDown={(e) => {
                       // Si este cuadrante no está activo, activarlo primero
                       if (activeQuadrant !== quadrantIndex) {
@@ -2082,14 +2347,17 @@ export default function WhiteboardMultiPage() {
                       }
                     }}
                   >
-                    {/* Contenedor con zoom */}
+                    {/* Contenedor virtual grande con zoom - contiene canvas y todos los overlays */}
                     <div
                       className="relative transition-transform duration-150"
                       style={{ 
-                        width: zoomedQuadrant === quadrantIndex && originalQuadrantSize ? originalQuadrantSize.width : '100%',
-                        height: zoomedQuadrant === quadrantIndex && originalQuadrantSize ? originalQuadrantSize.height : '100%',
+                        // Canvas virtual 3x más grande para scroll
+                        width: zoomedQuadrant === quadrantIndex && originalQuadrantSize ? originalQuadrantSize.width : '300%',
+                        height: zoomedQuadrant === quadrantIndex && originalQuadrantSize ? originalQuadrantSize.height : '300%',
                         transform: `scale(${getFullscreenScale(quadrantIndex)})`,
                         transformOrigin: 'top left',
+                        minWidth: '100%',
+                        minHeight: '100%',
                       }}
                     >
                     <WhiteboardCanvas
@@ -2097,20 +2365,30 @@ export default function WhiteboardMultiPage() {
                     content={quadrants[quadrantIndex].content}
                     onContentChange={(content) => updateQuadrantContent(quadrantIndex, content)}
                     currentColor={currentColor}
-                    currentSize={currentSize}
+                    currentSize={currentTool === 'eraser' ? eraserSize : currentSize}
                     currentTool={activeQuadrant === quadrantIndex ? currentTool : 'select'}
                     penMode={penMode}
                     bgColor={quadrants[quadrantIndex].bgColor}
-                    onHistoryChange={() => {}}
+                    onHistoryChange={(canUndo, canRedo) => handleHistoryChange(quadrantIndex, canUndo, canRedo)}
                     zoom={getFullscreenScale(quadrantIndex)}
                     selectedStrokeIds={
                       activeQuadrant === quadrantIndex
                         ? selectedElements.filter(el => el.type === 'stroke').map(el => el.id)
                         : []
                     }
+                    panOffset={quadrantPanOffsets[quadrantIndex]}
+                    onPanScroll={(deltaX, deltaY) => {
+                      // Controlar el scroll del contenedor padre con la herramienta pan
+                      const container = canvasContainerRefs.current[quadrantIndex]
+                      if (container) {
+                        container.scrollLeft += deltaX
+                        container.scrollTop += deltaY
+                      }
+                    }}
+                    enableVirtualCanvas={true}
                   />
 
-                  {/* Contenido LaTeX renderizado en tiempo real - posición fija */}
+                  {/* Contenido LaTeX renderizado en tiempo real - se mueve con el canvas */}
                   {quadrants[quadrantIndex].latexContent && (
                     <div
                       className="absolute pointer-events-none z-[1]"
@@ -2261,9 +2539,11 @@ export default function WhiteboardMultiPage() {
                       }}
                       onMouseDown={(e) => handleDragStart(e, 'formula', formula.id)}
                     >
-                      <div dangerouslySetInnerHTML={{
-                        __html: katex.renderToString(formula.latex, { throwOnError: false, displayMode: true })
-                      }} />
+                      <div 
+                        dangerouslySetInnerHTML={{
+                          __html: katex.renderToString(processLatexSpaces(formula.latex), { throwOnError: false, displayMode: true })
+                        }} 
+                      />
                       {/* Handle de redimensionar */}
                       {currentTool === 'select' && isElementSelected('formula', formula.id) && selectedElements.length === 1 && (
                         <div
@@ -2358,7 +2638,7 @@ export default function WhiteboardMultiPage() {
                         <div 
                           className="bg-yellow-100 border-2 border-dashed border-yellow-400 rounded p-1"
                           dangerouslySetInnerHTML={{
-                            __html: katex.renderToString(pendingPlacement.data.latex, { throwOnError: false, displayMode: true })
+                            __html: katex.renderToString(processLatexSpaces(pendingPlacement.data.latex), { throwOnError: false, displayMode: true })
                           }} 
                         />
                       )}
@@ -2571,14 +2851,57 @@ export default function WhiteboardMultiPage() {
                   </div>
                   {/* Vista previa - solo modo libre */}
                   {formulaModoLibre && (
-                    <div className="min-h-[32px] flex items-center bg-gray-50 rounded px-2 py-1 border border-gray-200">
+                    <div 
+                      className="min-h-[32px] flex items-center bg-white rounded px-2 py-1 border border-gray-200"
+                    >
                       {formulaPreview ? (
-                        <div className="transform scale-75 origin-left" dangerouslySetInnerHTML={{ __html: formulaPreview }} />
+                        <div 
+                          className="transform scale-75 origin-left" 
+                          dangerouslySetInnerHTML={{ __html: formulaPreview }} 
+                        />
                       ) : (
                         <span className="text-gray-400 text-xs italic">Vista previa...</span>
                       )}
                     </div>
                   )}
+                  
+                  {/* Selectores de color - aplicar a selección */}
+                  <div className="flex items-center gap-2 py-1">
+                    <span className="text-[10px] text-gray-500">Resaltar:</span>
+                    <div className="flex gap-0.5">
+                      {HIGHLIGHT_COLORS.map(color => (
+                        <button
+                          key={color.value}
+                          onClick={() => applyHighlightToSelection(color.value)}
+                          className="w-4 h-4 rounded transition-all border border-gray-200 hover:border-gray-400 hover:scale-110"
+                          style={{ backgroundColor: color.value }}
+                          title={`${color.name} - Selecciona texto y haz clic`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-[10px] text-gray-500 ml-1">Color:</span>
+                    <div className="flex gap-0.5">
+                      {TEXT_COLORS.map(color => (
+                        <button
+                          key={color.value}
+                          onClick={() => applyTextColorToSelection(color.value)}
+                          className="w-4 h-4 rounded-full transition-all border border-gray-200 hover:border-gray-400 hover:scale-110"
+                          style={{ backgroundColor: color.value }}
+                          title={color.name}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      onClick={removeColorFromSelection}
+                      className="ml-1 p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all"
+                      title="Quitar formato"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
                   <div className="flex items-center justify-end gap-2">
                     <button
                       onClick={handleCancelFormula}

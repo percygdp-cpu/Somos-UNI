@@ -169,6 +169,8 @@ export interface WhiteboardFormula {
   x: number
   y: number
   scale: number
+  highlightColor?: string  // Color de resaltado (fondo)
+  textColor?: string       // Color del texto de la fórmula
 }
 
 export interface WhiteboardShape {

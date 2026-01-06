@@ -40,6 +40,17 @@ const SIZES = [
   { name: 'Extra grueso', value: 32 },
 ]
 
+// Función para procesar espacios en LaTeX
+// Convierte espacios normales a espacios LaTeX para que se rendericen correctamente
+function processLatexSpaces(latex: string): string {
+  // Si está vacío, retornar vacío
+  if (!latex) return latex
+  
+  // Usar ~ (tilde) que es el carácter de espacio no-breakable en LaTeX
+  // Es la forma más compatible y simple de preservar espacios
+  return latex.replace(/ /g, '~')
+}
+
 export default function WhiteboardEditorPage() {
   const params = useParams()
   const router = useRouter()
@@ -55,11 +66,15 @@ export default function WhiteboardEditorPage() {
   // Herramientas
   const [currentColor, setCurrentColor] = useState('#000000')
   const [currentSize, setCurrentSize] = useState(8)
-  const [currentTool, setCurrentTool] = useState<'select' | 'pen' | 'eraser' | 'text' | 'formula'>('pen')
+  const [eraserSize, setEraserSize] = useState(24)
+  const [currentTool, setCurrentTool] = useState<'select' | 'pen' | 'eraser' | 'text' | 'formula' | 'pan'>('pen')
   const [penMode, setPenMode] = useState<'free' | 'line' | 'arrow' | 'curveArrow'>('free')
   const [bgColor, setBgColor] = useState('#ffffff')
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
+  
+  // Estado de pan (desplazamiento de la vista)
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
 
   // Edición inline de texto (sin modal)
   const [inlineEditingTextId, setInlineEditingTextId] = useState<string | null>(null)
@@ -83,6 +98,120 @@ export default function WhiteboardEditorPage() {
   const [editingFormulaId, setEditingFormulaId] = useState<string | null>(null)
   const [formulaPosition, setFormulaPosition] = useState<{ x: number; y: number }>({ x: 100, y: 200 })
   const formulaInputRef = useRef<HTMLInputElement>(null)
+
+  // Colores de resaltado para selección de texto en fórmulas (formato HEX para KaTeX)
+  const HIGHLIGHT_COLORS = [
+    { name: 'Amarillo', value: '#FFEB3B' },
+    { name: 'Verde', value: '#81C784' },
+    { name: 'Azul', value: '#64B5F6' },
+    { name: 'Rosa', value: '#F48FB1' },
+    { name: 'Naranja', value: '#FFB74D' },
+    { name: 'Morado', value: '#CE93D8' },
+  ]
+
+  // Colores de texto para fórmulas
+  const TEXT_COLORS = [
+    { name: 'Rojo', value: '#E53935' },
+    { name: 'Azul', value: '#1E88E5' },
+    { name: 'Verde', value: '#43A047' },
+    { name: 'Naranja', value: '#FB8C00' },
+    { name: 'Morado', value: '#8E24AA' },
+  ]
+
+  // Extraer el contenido interno de un comando LaTeX (quita \comando{color}{contenido} -> contenido)
+  const extractInnerContent = (text: string): string => {
+    // Quitar \colorbox{...}{...} y \textcolor{...}{...} recursivamente
+    let result = text
+    let changed = true
+    while (changed) {
+      changed = false
+      // Patrón para \colorbox{color}{contenido} o \textcolor{color}{contenido}
+      const match = result.match(/^\\(?:colorbox|textcolor)\{[^}]*\}\{(.*)\}$/)
+      if (match) {
+        result = match[1]
+        changed = true
+      }
+    }
+    return result
+  }
+
+  // Aplicar resaltado a la selección del texto LaTeX
+  const applyHighlightToSelection = (color: string) => {
+    const input = formulaInputRef.current
+    if (!input) return
+    
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    
+    if (start === end) {
+      // No hay selección - no hacer nada, mostrar tooltip
+      return
+    }
+    
+    // Extraer texto seleccionado y limpiar comandos de color existentes
+    const selectedText = formulaInput.slice(start, end)
+    const cleanText = extractInnerContent(selectedText)
+    
+    // Aplicar nuevo color
+    const wrapped = `\\colorbox{${color}}{${cleanText}}`
+    const newValue = formulaInput.slice(0, start) + wrapped + formulaInput.slice(end)
+    setFormulaInput(newValue)
+    handleFormulaChange(newValue)
+    setTimeout(() => {
+      input.focus()
+      input.setSelectionRange(start, start + wrapped.length)
+    }, 0)
+  }
+
+  // Aplicar color de texto a la selección
+  const applyTextColorToSelection = (color: string) => {
+    const input = formulaInputRef.current
+    if (!input) return
+    
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    
+    if (start === end) {
+      // No hay selección - no hacer nada
+      return
+    }
+    
+    // Extraer texto seleccionado y limpiar comandos de color existentes
+    const selectedText = formulaInput.slice(start, end)
+    const cleanText = extractInnerContent(selectedText)
+    
+    // Aplicar nuevo color
+    const wrapped = `\\textcolor{${color}}{${cleanText}}`
+    const newValue = formulaInput.slice(0, start) + wrapped + formulaInput.slice(end)
+    setFormulaInput(newValue)
+    handleFormulaChange(newValue)
+    setTimeout(() => {
+      input.focus()
+      input.setSelectionRange(start, start + wrapped.length)
+    }, 0)
+  }
+
+  // Quitar formato de color de la selección
+  const removeColorFromSelection = () => {
+    const input = formulaInputRef.current
+    if (!input) return
+    
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    
+    if (start === end) return
+    
+    const selectedText = formulaInput.slice(start, end)
+    const cleanText = extractInnerContent(selectedText)
+    
+    const newValue = formulaInput.slice(0, start) + cleanText + formulaInput.slice(end)
+    setFormulaInput(newValue)
+    handleFormulaChange(newValue)
+    setTimeout(() => {
+      input.focus()
+      input.setSelectionRange(start, start + cleanText.length)
+    }, 0)
+  }
 
   // Fullscreen
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -248,14 +377,14 @@ export default function WhiteboardEditorPage() {
     setSelectedElements([])
   }
 
-  // Detectar clic en trazo (hit detection)
+  // Detectar clic en trazo (hit detection) - usa coordenadas de pantalla directamente
   const getStrokeAtPoint = (x: number, y: number): string | null => {
     // Revisar trazos de atrás hacia adelante (último dibujado primero)
     for (let i = content.strokes.length - 1; i >= 0; i--) {
       const stroke = content.strokes[i]
       for (const point of stroke.points) {
         const distance = Math.sqrt(Math.pow(point.x - x, 2) + Math.pow(point.y - y, 2))
-        if (distance < stroke.size + 5) { // margen de tolerancia
+        if (distance < stroke.size + 10) { // margen de tolerancia aumentado
           return stroke.id
         }
       }
@@ -450,7 +579,9 @@ export default function WhiteboardEditorPage() {
   const handleFormulaChange = (latex: string) => {
     setFormulaInput(latex)
     try {
-      const html = katex.renderToString(latex, { throwOnError: true, displayMode: true })
+      // Procesar espacios para que se rendericen correctamente
+      const processedLatex = processLatexSpaces(latex)
+      const html = katex.renderToString(processedLatex, { throwOnError: true, displayMode: true })
       setFormulaPreview(html)
       setFormulaError('')
     } catch (err) {
@@ -459,11 +590,38 @@ export default function WhiteboardEditorPage() {
     }
   }
 
-  // Insertar fórmula rápida (añade al input actual)
+  // Insertar fórmula rápida (en la posición del cursor)
   const insertFormulaSnippet = (snippet: string) => {
-    const newValue = formulaInput + snippet
+    const input = formulaInputRef.current
+    if (!input) {
+      // Fallback: añadir al final
+      const newValue = formulaInput + snippet
+      handleFormulaChange(newValue)
+      return
+    }
+    
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    const before = formulaInput.substring(0, start)
+    const after = formulaInput.substring(end)
+    const newValue = before + snippet + after
+    
     handleFormulaChange(newValue)
-    formulaInputRef.current?.focus()
+    
+    // Posicionar cursor antes del último "}" del snippet insertado
+    setTimeout(() => {
+      const lastBraceIndex = snippet.lastIndexOf('}')
+      let newCursorPos: number
+      if (lastBraceIndex !== -1) {
+        // Posicionar justo antes del último }
+        newCursorPos = start + lastBraceIndex
+      } else {
+        // Si no hay }, posicionar al final del snippet
+        newCursorPos = start + snippet.length
+      }
+      input.setSelectionRange(newCursorPos, newCursorPos)
+      input.focus()
+    }, 0)
   }
 
   const handleSaveFormula = () => {
@@ -652,6 +810,7 @@ export default function WhiteboardEditorPage() {
       // Actualizar tanto state como ref
       setSelectedElements(newSelection)
       selectedElementsRef.current = newSelection
+      
       setSelectingArea(false)
       setSelectionBox(null)
     }
@@ -839,6 +998,17 @@ export default function WhiteboardEditorPage() {
                 </svg>
               </button>
               
+              {/* Mano (Pan/Desplazar) */}
+              <button
+                onClick={() => setCurrentTool('pan')}
+                className={`p-2 rounded-lg transition-all ${currentTool === 'pan' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                title="Mover vista (arrastrar para desplazar)"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+                </svg>
+              </button>
+              
               {/* Lápiz con tamaño y modo */}
               <div className="relative pen-dropdown">
                 <button
@@ -991,11 +1161,11 @@ export default function WhiteboardEditorPage() {
                       <button
                         key={size.value}
                         onClick={() => {
-                          setCurrentSize(size.value)
+                          setEraserSize(size.value)
                           setShowEraserSizes(false)
                         }}
                         className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
-                          currentSize === size.value ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                          eraserSize === size.value ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
                         }`}
                         title={size.name}
                       >
@@ -1103,6 +1273,18 @@ export default function WhiteboardEditorPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11v4M10 13h4" transform="rotate(45 12 13)" />
                 </svg>
               </button>
+              {/* Centrar vista (resetear pan) */}
+              {(panOffset.x !== 0 || panOffset.y !== 0) && (
+                <button
+                  onClick={() => setPanOffset({ x: 0, y: 0 })}
+                  className="p-2 rounded-lg hover:bg-blue-100 text-blue-500 transition-all"
+                  title="Centrar vista (resetear desplazamiento)"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                  </svg>
+                </button>
+              )}
             </div>
 
             {/* Indicador de selección */}
@@ -1178,11 +1360,11 @@ export default function WhiteboardEditorPage() {
             </button>
           </div>
 
-          {/* Canvas (ocupa todo el espacio restante) */}
+          {/* Canvas (ocupa todo el espacio restante, con scroll para canvas virtual) */}
           <div 
             ref={canvasContainerRef}
-            className="flex-1 relative" 
-            style={{ minHeight: '500px' }}
+            className="flex-1 relative overflow-auto" 
+            style={{ backgroundColor: bgColor }}
             onMouseDown={handleCanvasMouseDown}
             onClick={handleCanvasClickForText}
             onMouseMove={(e) => { handleDragMove(e); handleResizeMove(e); }}
@@ -1191,16 +1373,36 @@ export default function WhiteboardEditorPage() {
             onTouchMove={(e) => { handleDragMove(e); handleResizeMove(e); }}
             onTouchEnd={() => { handleDragEnd(); handleResizeEnd(); }}
           >
+            {/* Contenedor virtual 300% para scroll */}
+            <div 
+              className="relative"
+              style={{
+                width: '300%',
+                height: '300%',
+                minWidth: '100%',
+                minHeight: '100%',
+              }}
+            >
             <WhiteboardCanvas
               ref={canvasRef}
               content={content}
               onContentChange={setContent}
               currentColor={currentColor}
-              currentSize={currentSize}
+              currentSize={currentTool === 'eraser' ? eraserSize : currentSize}
               currentTool={currentTool}
               penMode={penMode}
               bgColor={bgColor}
               onHistoryChange={handleHistoryChange}
+              panOffset={panOffset}
+              onPanScroll={(deltaX, deltaY) => {
+                // Controlar el scroll del contenedor padre con la herramienta pan
+                const container = canvasContainerRef.current
+                if (container) {
+                  container.scrollLeft += deltaX
+                  container.scrollTop += deltaY
+                }
+              }}
+              enableVirtualCanvas={true}
             />
             
             {/* Renderizar textos sobre el canvas */}
@@ -1452,9 +1654,11 @@ export default function WhiteboardEditorPage() {
                   }}
                   title="Clic para seleccionar • Arrastrar para mover • Doble clic para editar"
                 >
-                  <div dangerouslySetInnerHTML={{
-                    __html: katex.renderToString(formula.latex, { throwOnError: false, displayMode: true })
-                  }} />
+                  <div 
+                    dangerouslySetInnerHTML={{
+                      __html: katex.renderToString(processLatexSpaces(formula.latex), { throwOnError: false, displayMode: true })
+                    }} 
+                  />
                   {/* Handles de redimensionamiento */}
                   {isSelected && (
                     <>
@@ -1506,6 +1710,7 @@ export default function WhiteboardEditorPage() {
               const stroke = content.strokes.find(s => s.id === selected.id)
               if (!stroke || stroke.points.length === 0) return null
               
+              // Calcular bounding box
               const minX = Math.min(...stroke.points.map(p => p.x)) - stroke.size
               const maxX = Math.max(...stroke.points.map(p => p.x)) + stroke.size
               const minY = Math.min(...stroke.points.map(p => p.y)) - stroke.size
@@ -1525,6 +1730,7 @@ export default function WhiteboardEditorPage() {
               )
             })}
           </div>
+        </div>
         </div>
 
         {/* Barra inferior de fórmulas LaTeX */}
@@ -1565,8 +1771,8 @@ export default function WhiteboardEditorPage() {
                 <span className="text-xs font-medium text-gray-400 uppercase tracking-wider shrink-0 mr-1 hidden xl:block">Comunes</span>
                 <div className="flex gap-1.5 shrink-0">
                   {[
-                    { label: 'x²', latex: 'x^{2}', title: 'Al cuadrado' },
-                    { label: 'x³', latex: 'x^{3}', title: 'Al cubo' },
+                    { label: 'x²', latex: '^{2}', title: 'Al cuadrado' },
+                    { label: 'x³', latex: '^{3}', title: 'Al cubo' },
                     { label: '\\frac{a}{b}', latex: '\\frac{a}{b}', title: 'Fracción' },
                     { label: '\\sqrt{x}', latex: '\\sqrt{x}', title: 'Raíz cuadrada' },
                     { label: '\\sum', latex: '\\sum_{i=1}^{n}', title: 'Sumatoria' },
@@ -1588,7 +1794,9 @@ export default function WhiteboardEditorPage() {
                 <div className="w-px h-6 bg-gray-300 mx-1 shrink-0" />
 
                 {/* Preview */}
-                <div className="flex-1 min-h-[40px] min-w-[120px] max-w-xs flex items-center bg-gray-50 rounded-lg px-4 border border-gray-200 overflow-hidden">
+                <div 
+                  className="flex-1 min-h-[40px] min-w-[120px] max-w-xs flex items-center bg-white rounded-lg px-4 border border-gray-200 overflow-hidden"
+                >
                   {formulaPreview ? (
                     <div 
                       className="transform scale-75 origin-left"
@@ -1612,6 +1820,52 @@ export default function WhiteboardEditorPage() {
                     className="w-20"
                   />
                 </div>
+
+                <div className="w-px h-6 bg-gray-300 mx-1 shrink-0" />
+
+                {/* Resaltado de selección */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-xs text-gray-500 mr-1">Resaltar:</span>
+                  {HIGHLIGHT_COLORS.map(color => (
+                    <button
+                      key={color.value}
+                      onClick={() => applyHighlightToSelection(color.value)}
+                      className="w-6 h-6 rounded transition-all border-2 border-gray-200 hover:border-gray-400 hover:scale-110"
+                      style={{ backgroundColor: color.value }}
+                      title={`${color.name}`}
+                    />
+                  ))}
+                </div>
+
+                <div className="w-px h-6 bg-gray-300 mx-1 shrink-0" />
+
+                {/* Color del texto seleccionado */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-xs text-gray-500 mr-1">Color:</span>
+                  {TEXT_COLORS.map(color => (
+                    <button
+                      key={color.value}
+                      onClick={() => applyTextColorToSelection(color.value)}
+                      className="w-6 h-6 rounded-full transition-all border-2 border-gray-200 hover:border-gray-400 hover:scale-110"
+                      style={{ backgroundColor: color.value }}
+                      title={`${color.name}`}
+                    />
+                  ))}
+                </div>
+
+                <div className="w-px h-6 bg-gray-300 mx-1 shrink-0" />
+
+                {/* Quitar formato */}
+                <button
+                  onClick={removeColorFromSelection}
+                  className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-all"
+                  title="Quitar resaltado y color de la selección"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span>Quitar</span>
+                </button>
               </div>
 
               {/* Botones de acción */}

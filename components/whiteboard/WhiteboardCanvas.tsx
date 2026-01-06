@@ -4,17 +4,27 @@ import { WhiteboardContent, WhiteboardPoint, WhiteboardStroke } from '@/types'
 import getStroke from 'perfect-freehand'
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
+// Multiplicador para el tamaño virtual del canvas (3x = 3 veces el tamaño visible)
+const VIRTUAL_CANVAS_MULTIPLIER = 3
+
 interface WhiteboardCanvasProps {
   content: WhiteboardContent
   onContentChange: (content: WhiteboardContent) => void
   currentColor: string
   currentSize: number
-  currentTool: 'select' | 'pen' | 'eraser' | 'text' | 'formula'
+  currentTool: 'select' | 'pen' | 'eraser' | 'text' | 'formula' | 'pan'
   penMode?: 'free' | 'line' | 'arrow' | 'curveArrow'
   bgColor?: string
   onHistoryChange: (canUndo: boolean, canRedo: boolean) => void
   zoom?: number
   selectedStrokeIds?: string[]
+  // Offset del viewport para pan/scroll (legacy, no usado con enableVirtualCanvas)
+  panOffset?: { x: number; y: number }
+  onPanChange?: (offset: { x: number; y: number }) => void
+  // Callback para scroll con la herramienta pan (delta de movimiento)
+  onPanScroll?: (deltaX: number, deltaY: number) => void
+  // Habilitar canvas virtual expandido con scrollbars
+  enableVirtualCanvas?: boolean
 }
 
 export interface WhiteboardCanvasRef {
@@ -94,21 +104,42 @@ function drawStraightLine(ctx: CanvasRenderingContext2D, start: WhiteboardPoint,
   }
 }
 
-// Función para dibujar una curva con puntos de control
+// Función para dibujar una flecha curva (línea recta de punto a punto con ligera curva hacia abajo)
 function drawCurvedLine(ctx: CanvasRenderingContext2D, points: WhiteboardPoint[], size: number, color: string, withArrow: boolean) {
   if (points.length < 2) return
   
   const headLength = Math.max(size * 2.5, 12)
   
-  // Para la flecha, necesitamos la tangente al final
-  // Usamos los últimos 2 puntos para calcular la dirección
-  const last = points[points.length - 1]
-  const prev = points[points.length - 2]
-  const angle = Math.atan2(last.y - prev.y, last.x - prev.x)
+  // Usamos solo el punto inicial y final
+  const start = points[0]
+  const end = points[points.length - 1]
+  
+  // Calcular el punto medio
+  const midX = (start.x + end.x) / 2
+  const midY = (start.y + end.y) / 2
+  
+  // Calcular la distancia entre puntos
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const distance = Math.sqrt(dx * dx + dy * dy)
+  
+  // Curva hacia abajo: desplazamos el punto de control hacia abajo
+  // La cantidad de curva es proporcional a la distancia (máximo 30px)
+  const curveAmount = Math.min(distance * 0.15, 30)
+  
+  // Punto de control para la curva (desplazado hacia abajo)
+  const controlX = midX
+  const controlY = midY + curveAmount
+  
+  // Para la flecha, calculamos la tangente al final de la curva
+  // La tangente de una curva cuadrática en t=1 es: 2*(P2-P1) = 2*(end - control)
+  const tangentX = end.x - controlX
+  const tangentY = end.y - controlY
+  const angle = Math.atan2(tangentY, tangentX)
   
   // Punto donde termina la línea (antes de la flecha)
-  const lineEndX = withArrow ? last.x - headLength * Math.cos(angle) : last.x
-  const lineEndY = withArrow ? last.y - headLength * Math.sin(angle) : last.y
+  const lineEndX = withArrow ? end.x - headLength * 0.5 * Math.cos(angle) : end.x
+  const lineEndY = withArrow ? end.y - headLength * 0.5 * Math.sin(angle) : end.y
   
   ctx.save()
   ctx.strokeStyle = color
@@ -117,33 +148,18 @@ function drawCurvedLine(ctx: CanvasRenderingContext2D, points: WhiteboardPoint[]
   ctx.lineJoin = 'round'
   
   ctx.beginPath()
-  ctx.moveTo(points[0].x, points[0].y)
-  
-  if (points.length === 2) {
-    ctx.lineTo(lineEndX, lineEndY)
-  } else {
-    // Dibujar curva suave por todos los puntos excepto el último
-    for (let i = 1; i < points.length - 2; i++) {
-      const curr = points[i]
-      const next = points[i + 1]
-      const midX = (curr.x + next.x) / 2
-      const midY = (curr.y + next.y) / 2
-      ctx.quadraticCurveTo(curr.x, curr.y, midX, midY)
-    }
-    // Penúltimo punto como control, terminar en punto acortado
-    ctx.quadraticCurveTo(prev.x, prev.y, lineEndX, lineEndY)
-  }
-  
+  ctx.moveTo(start.x, start.y)
+  ctx.quadraticCurveTo(controlX, controlY, lineEndX, lineEndY)
   ctx.stroke()
   ctx.restore()
   
   if (withArrow) {
-    drawArrowHead(ctx, prev.x, prev.y, last.x, last.y, size, color)
+    drawArrowHead(ctx, controlX, controlY, end.x, end.y, size, color)
   }
 }
 
 const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
-  ({ content, onContentChange, currentColor, currentSize, currentTool, penMode = 'free', bgColor = '#ffffff', onHistoryChange, zoom = 1, selectedStrokeIds = [] }, ref) => {
+  ({ content, onContentChange, currentColor, currentSize, currentTool, penMode = 'free', bgColor = '#ffffff', onHistoryChange, zoom = 1, selectedStrokeIds = [], panOffset = { x: 0, y: 0 }, onPanChange, onPanScroll, enableVirtualCanvas = false }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const [isDrawing, setIsDrawing] = useState(false)
@@ -152,20 +168,37 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
     const [historyIndex, setHistoryIndex] = useState(0)
     const lastContentRef = useRef<WhiteboardContent>(content)
     const startPointRef = useRef<WhiteboardPoint | null>(null)
+    
+    // Estado para pan (arrastre de la vista)
+    const [isPanning, setIsPanning] = useState(false)
+    // Referencia para el pan: guarda posición inicial y última posición conocida
+    const panStartRef = useRef<{ x: number; y: number; lastX: number; lastY: number; offsetX: number; offsetY: number } | null>(null)
+    
+    // Tamaño actual del canvas (se usa para detectar cambios de tamaño)
+    const canvasSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 })
+    
+    // Flag para saber si el cambio de contenido es interno (dibujo/undo/redo) o externo (padre)
+    const isInternalChangeRef = useRef(false)
 
     // Generar ID único
     const generateId = () => Math.random().toString(36).substring(2, 11)
 
     // Sincronizar historial cuando el contenido cambia externamente (ej: al eliminar elementos desde el padre)
     useEffect(() => {
-      // Detectar si el cambio viene de afuera (no de un undo/redo interno)
+      // Si el cambio fue interno, no hacer nada (ya se actualizó el historial)
+      if (isInternalChangeRef.current) {
+        isInternalChangeRef.current = false
+        return
+      }
+      
+      // Detectar si el contenido realmente cambió
       const currentHistoryContent = history[historyIndex]
-      const contentChanged = JSON.stringify(content.strokes) !== JSON.stringify(currentHistoryContent?.strokes)
+      const contentChanged = JSON.stringify(content) !== JSON.stringify(currentHistoryContent)
       
       if (contentChanged && !isDrawing) {
-        // El contenido cambió externamente, actualizar el historial
-        const newHistory = history.slice(0, historyIndex + 1)
-        newHistory.push(content)
+        // El contenido cambió externamente, reemplazar el historial actual
+        // para evitar que undo restaure estados eliminados
+        const newHistory = [...history.slice(0, historyIndex + 1), content]
         setHistory(newHistory)
         setHistoryIndex(newHistory.length - 1)
         lastContentRef.current = content
@@ -183,10 +216,18 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
         const rect = container.getBoundingClientRect()
         const dpr = window.devicePixelRatio || 1
         
-        canvas.width = rect.width * dpr
-        canvas.height = rect.height * dpr
-        canvas.style.width = `${rect.width}px`
-        canvas.style.height = `${rect.height}px`
+        // El canvas ocupa el 100% del contenedor
+        // Si enableVirtualCanvas está true, el padre ya maneja el scroll con un div más grande
+        const canvasWidth = rect.width
+        const canvasHeight = rect.height
+        
+        canvas.width = canvasWidth * dpr
+        canvas.height = canvasHeight * dpr
+        canvas.style.width = `${canvasWidth}px`
+        canvas.style.height = `${canvasHeight}px`
+        
+        // Guardar tamaño actual para escalar coordenadas
+        canvasSizeRef.current = { width: canvasWidth, height: canvasHeight }
         
         const ctx = canvas.getContext('2d')
         if (ctx) {
@@ -200,13 +241,13 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
       window.addEventListener('resize', resizeCanvas)
       return () => window.removeEventListener('resize', resizeCanvas)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [enableVirtualCanvas])
 
     // Redibujar cuando cambia el contenido, selección o color de fondo
     useEffect(() => {
       redraw()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [content, selectedStrokeIds, bgColor])
+    }, [content, selectedStrokeIds, bgColor, panOffset])
 
     // Actualizar estado de historial
     useEffect(() => {
@@ -227,12 +268,22 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
       // Limpiar y aplicar color de fondo
       ctx.fillStyle = bgColor
       ctx.fillRect(0, 0, width, height)
+      
+      // Aplicar transformación de pan (desplazamiento del viewport)
+      ctx.save()
+      ctx.translate(panOffset.x, panOffset.y)
 
-      // Dibujar todos los trazos
+      // Dibujar todos los trazos (sin escalar - las coordenadas ya son relativas al canvas)
       content.strokes.forEach(stroke => {
         if (stroke.points.length < 2) return
 
         const strokeType = stroke.strokeType || 'free'
+        
+        // Usar los puntos directamente sin escalar
+        const points = stroke.points
+        
+        // Usar el tamaño del trazo directamente
+        const strokeSize = stroke.size
         
         // Para el borrador, usar el color de fondo actual
         const eraserColor = bgColor
@@ -240,22 +291,22 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
         // Dibujar según el tipo de trazo
         if (strokeType === 'line') {
           // Línea recta sin flecha
-          const start = stroke.points[0]
-          const end = stroke.points[stroke.points.length - 1]
-          drawStraightLine(ctx, start, end, stroke.size, stroke.tool === 'eraser' ? eraserColor : stroke.color, false)
+          const start = points[0]
+          const end = points[points.length - 1]
+          drawStraightLine(ctx, start, end, strokeSize, stroke.tool === 'eraser' ? eraserColor : stroke.color, false)
         } else if (strokeType === 'arrow') {
           // Línea recta con flecha
-          const start = stroke.points[0]
-          const end = stroke.points[stroke.points.length - 1]
-          drawStraightLine(ctx, start, end, stroke.size, stroke.tool === 'eraser' ? eraserColor : stroke.color, true)
+          const start = points[0]
+          const end = points[points.length - 1]
+          drawStraightLine(ctx, start, end, strokeSize, stroke.tool === 'eraser' ? eraserColor : stroke.color, true)
         } else if (strokeType === 'curveArrow') {
           // Curva con flecha
-          drawCurvedLine(ctx, stroke.points, stroke.size, stroke.tool === 'eraser' ? eraserColor : stroke.color, true)
+          drawCurvedLine(ctx, points, strokeSize, stroke.tool === 'eraser' ? eraserColor : stroke.color, true)
         } else {
           // Dibujo libre (default)
-          const strokePoints = stroke.points.map(p => [p.x, p.y, p.pressure || 0.5])
+          const strokePoints = points.map(p => [p.x, p.y, p.pressure || 0.5])
           const outlinePoints = getStroke(strokePoints, {
-            size: stroke.size,
+            size: strokeSize,
             thinning: 0.5,
             smoothing: 0.5,
             streamline: 0.5,
@@ -271,12 +322,12 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
         // Dibujar indicador de selección si el trazo está seleccionado
         if (selectedStrokeIds.includes(stroke.id)) {
           // Calcular bounding box del trazo
-          const xs = stroke.points.map(p => p.x)
-          const ys = stroke.points.map(p => p.y)
-          const minX = Math.min(...xs) - stroke.size / 2 - 4
-          const minY = Math.min(...ys) - stroke.size / 2 - 4
-          const maxX = Math.max(...xs) + stroke.size / 2 + 4
-          const maxY = Math.max(...ys) + stroke.size / 2 + 4
+          const xs = points.map(p => p.x)
+          const ys = points.map(p => p.y)
+          const minX = Math.min(...xs) - strokeSize / 2 - 4
+          const minY = Math.min(...ys) - strokeSize / 2 - 4
+          const maxX = Math.max(...xs) + strokeSize / 2 + 4
+          const maxY = Math.max(...ys) + strokeSize / 2 + 4
           
           // Dibujar rectángulo de selección con borde azul punteado
           ctx.save()
@@ -304,17 +355,18 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
       // Dibujar trazo actual (preview)
       if (currentPoints.length > 1 && startPointRef.current) {
         const color = currentTool === 'eraser' ? bgColor : currentColor
+        const startPoint = startPointRef.current
         const lastPoint = currentPoints[currentPoints.length - 1]
         
         // El borrador siempre usa trazo libre para el preview
         if (currentTool === 'pen' && penMode === 'line') {
           // Preview de línea recta
-          drawStraightLine(ctx, startPointRef.current, lastPoint, currentSize, color, false)
+          drawStraightLine(ctx, startPoint, lastPoint, currentSize, color, false)
         } else if (currentTool === 'pen' && penMode === 'arrow') {
           // Preview de flecha recta
-          drawStraightLine(ctx, startPointRef.current, lastPoint, currentSize, color, true)
+          drawStraightLine(ctx, startPoint, lastPoint, currentSize, color, true)
         } else if (currentTool === 'pen' && penMode === 'curveArrow') {
-          // Preview de curva con flecha - usar todos los puntos para preview estable
+          // Preview de curva con flecha
           drawCurvedLine(ctx, currentPoints, currentSize, color, true)
         } else {
           // Dibujo libre o borrador
@@ -333,7 +385,10 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
           ctx.fill(path)
         }
       }
-    }, [content, currentPoints, currentColor, currentSize, currentTool, penMode, bgColor, selectedStrokeIds])
+      
+      // Restaurar contexto (quitar translate)
+      ctx.restore()
+    }, [content, currentPoints, currentColor, currentSize, currentTool, penMode, bgColor, selectedStrokeIds, panOffset])
 
     // Función para muestrear puntos (reducir cantidad para curvas suaves)
     const samplePoints = (points: WhiteboardPoint[], maxPoints: number): WhiteboardPoint[] => {
@@ -353,24 +408,65 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
 
       const rect = canvas.getBoundingClientRect()
       
+      // Obtener coordenadas relativas al canvas, compensando zoom y panOffset
       if ('touches' in e) {
         if (e.touches.length === 0) return null
         const touch = e.touches[0]
         return {
-          x: (touch.clientX - rect.left) / zoom,
-          y: (touch.clientY - rect.top) / zoom,
+          x: (touch.clientX - rect.left) / zoom - panOffset.x,
+          y: (touch.clientY - rect.top) / zoom - panOffset.y,
           pressure: 0.5
         }
       } else {
         return {
-          x: (e.clientX - rect.left) / zoom,
-          y: (e.clientY - rect.top) / zoom,
+          x: (e.clientX - rect.left) / zoom - panOffset.x,
+          y: (e.clientY - rect.top) / zoom - panOffset.y,
           pressure: 0.5
         }
       }
     }
 
+    // Obtener posición del mouse/touch para pan (sin compensar panOffset)
+    const getRawPointFromEvent = (e: React.MouseEvent | React.TouchEvent): { x: number; y: number } | null => {
+      const canvas = canvasRef.current
+      if (!canvas) return null
+
+      const rect = canvas.getBoundingClientRect()
+      
+      if ('touches' in e) {
+        if (e.touches.length === 0) return null
+        const touch = e.touches[0]
+        return {
+          x: touch.clientX - rect.left,
+          y: touch.clientY - rect.top
+        }
+      } else {
+        return {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        }
+      }
+    }
+
     const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
+      // Manejar herramienta de pan
+      if (currentTool === 'pan') {
+        e.preventDefault()
+        const rawPoint = getRawPointFromEvent(e)
+        if (!rawPoint) return
+        
+        setIsPanning(true)
+        panStartRef.current = {
+          x: rawPoint.x,
+          y: rawPoint.y,
+          lastX: rawPoint.x,
+          lastY: rawPoint.y,
+          offsetX: panOffset.x,
+          offsetY: panOffset.y
+        }
+        return
+      }
+      
       // Solo dibujar con pen o eraser
       if (currentTool !== 'pen' && currentTool !== 'eraser') return
       
@@ -384,6 +480,35 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
     }
 
     const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
+      // Manejar movimiento del pan
+      if (isPanning && panStartRef.current) {
+        e.preventDefault()
+        const rawPoint = getRawPointFromEvent(e)
+        if (!rawPoint) return
+        
+        // Calcular delta desde la última posición (para scroll incremental)
+        const deltaX = panStartRef.current.lastX - rawPoint.x
+        const deltaY = panStartRef.current.lastY - rawPoint.y
+        
+        // Actualizar la última posición
+        panStartRef.current.lastX = rawPoint.x
+        panStartRef.current.lastY = rawPoint.y
+        
+        // Si hay callback de scroll (para controlar scrollbars del contenedor padre)
+        if (onPanScroll) {
+          onPanScroll(deltaX, deltaY)
+        } else if (onPanChange) {
+          // Fallback al comportamiento anterior (offset absoluto)
+          const totalDeltaX = rawPoint.x - panStartRef.current.x
+          const totalDeltaY = rawPoint.y - panStartRef.current.y
+          onPanChange({
+            x: panStartRef.current.offsetX + totalDeltaX,
+            y: panStartRef.current.offsetY + totalDeltaY
+          })
+        }
+        return
+      }
+      
       if (!isDrawing) return
       e.preventDefault()
 
@@ -405,6 +530,13 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
     }
 
     const handleEnd = (e: React.MouseEvent | React.TouchEvent) => {
+      // Terminar pan
+      if (isPanning) {
+        setIsPanning(false)
+        panStartRef.current = null
+        return
+      }
+      
       if (!isDrawing) return
       e.preventDefault()
 
@@ -443,6 +575,8 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
         setHistory(newHistory)
         setHistoryIndex(newHistory.length - 1)
 
+        // Marcar como cambio interno para evitar doble sincronización
+        isInternalChangeRef.current = true
         onContentChange(newContent)
       }
 
@@ -457,6 +591,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
         if (historyIndex > 0) {
           const newIndex = historyIndex - 1
           setHistoryIndex(newIndex)
+          isInternalChangeRef.current = true
           onContentChange(history[newIndex])
         }
       },
@@ -464,6 +599,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
         if (historyIndex < history.length - 1) {
           const newIndex = historyIndex + 1
           setHistoryIndex(newIndex)
+          isInternalChangeRef.current = true
           onContentChange(history[newIndex])
         }
       },
@@ -473,6 +609,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
         newHistory.push(emptyContent)
         setHistory(newHistory)
         setHistoryIndex(newHistory.length - 1)
+        isInternalChangeRef.current = true
         onContentChange(emptyContent)
       },
       exportImage: () => {
@@ -486,17 +623,18 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
     return (
       <div 
         ref={containerRef} 
-        className="flex-1 bg-white rounded-lg shadow-inner overflow-hidden touch-none"
-        style={{ minHeight: '500px', height: '100%' }}
+        className={`flex-1 rounded-lg shadow-inner touch-none overflow-hidden`}
+        style={enableVirtualCanvas ? { height: '100%', backgroundColor: bgColor } : { minHeight: '500px', height: '100%', backgroundColor: bgColor }}
       >
         <canvas
           ref={canvasRef}
-          className={`w-full h-full ${
+          className={`${enableVirtualCanvas ? '' : 'w-full h-full'} ${
             currentTool === 'select' ? 'cursor-default' 
             : currentTool === 'eraser' ? 'cursor-cell'
+            : currentTool === 'pan' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab')
             : 'cursor-crosshair'
           }`}
-          style={{ minHeight: '500px' }}
+          style={enableVirtualCanvas ? {} : { minHeight: '500px' }}
           onMouseDown={handleStart}
           onMouseMove={handleMove}
           onMouseUp={handleEnd}
