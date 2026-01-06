@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>PIZARRA UNAC - VERSIÓN FINAL ESTABLE</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
+        :root { --blue: #2563eb; --red: #dc2626; --slate: #f1f5f9; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #cbd5e1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        #pizarra-container { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; flex: 1; padding: 8px; }
+        .screen { background: white; border: 2px solid #94a3b8; border-radius: 10px; padding: 45px 25px 25px 25px; overflow: hidden; position: relative; }
+        .screen.active { border: 4px solid var(--blue); z-index: 10; box-shadow: 0 0 15px rgba(37, 99, 235, 0.2); }
+        .zoom-mode { position: fixed !important; top: 0; left: 0; width: 100vw !important; height: 65vh !important; z-index: 1500 !important; }
+
+        .res-content { font-family: 'KaTeX_Main', serif; white-space: pre-wrap; line-height: 1.6; position: relative; z-index: 1; pointer-events: none; }
+        canvas { position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; }
+        .drawing-active canvas { 
+            pointer-events: auto;
+            cursor: crosshair; /* ✅ Estable, sin SVG */
+        }
+
+        .screen-controls { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 2000; background: rgba(255,255,255,0.9); padding: 4px; border-radius: 6px; border: 1px solid #ddd; }
+        .color-dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid #ccc; cursor: pointer; }
+
+        .panel { background: white; padding: 10px; border-top: 4px solid var(--blue); z-index: 2000; box-shadow: 0 -5px 15px rgba(0,0,0,0.1); }
+        .toolbar { display: flex; gap: 4px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; background: var(--slate); padding: 5px; border-radius: 8px; }
+        .group { display: flex; align-items: center; gap: 3px; border-right: 2px solid #cbd5e1; padding-right: 6px; margin-right: 4px; }
+        .btn-math { background: white; border: 1px solid #94a3b8; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        .btn-math:hover { background: var(--blue); color: white; }
+        
+        .btn-pencil { background: #fee2e2; color: var(--red); border: 2px solid var(--red); }
+        .btn-pencil.on { background: var(--red); color: white; }
+        .opt-draw { font-size: 10px; padding: 3px 6px; cursor: pointer; border: 1px solid #94a3b8; background: white; border-radius: 4px; }
+        .opt-draw.active { background: #3b82f6; color: white; }
+
+        .opt-color {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 1px solid #94a3b8;
+            cursor: pointer;
+            padding: 0;
+        }
+        .opt-color.active {
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px black;
+        }
+
+        .editor-area { display: flex; gap: 10px; }
+        textarea { flex: 1; height: 95px; border: 2px solid #94a3b8; border-radius: 8px; padding: 12px; font-size: 1.6rem; font-family: 'Consolas', monospace; outline: none; }
+        .nav-col { display: flex; flex-direction: column; gap: 2px; }
+        .btn-nav { width: 40px; height: 22px; font-size: 10px; font-weight: bold; cursor: pointer; }
+        .btn-nav.active { background: var(--blue); color: white; }
+    </style>
+</head>
+<body>
+
+<div id="pizarra-container">
+    <div id="s1" class="screen active" onclick="sel(1)" ondblclick="toggleZoom(1)">
+        <span style="position:absolute; top:8px; left:12px; font-size:10px; color:#64748b; font-weight:bold;">HOJA 1</span>
+        <div class="screen-controls" onclick="event.stopPropagation()">
+            <div class="color-dot" style="background:#ffffff" onclick="changeBg(1,'#ffffff')"></div>
+            <div class="color-dot" style="background:#f0fdf4" onclick="changeBg(1,'#f0fdf4')"></div>
+            <div class="color-dot" style="background:#eff6ff" onclick="changeBg(1,'#eff6ff')"></div>
+            <div class="color-dot" style="background:#fffbeb" onclick="changeBg(1,'#fffbeb')"></div>
+            <button onclick="clearCanvas(1)" style="font-size:9px; cursor:pointer;">Borrar Trazos</button>
+        </div>
+        <canvas id="canv1"></canvas>
+        <div id="out1" class="res-content"></div>
+    </div>
+    <div id="s2" class="screen" onclick="sel(2)" ondblclick="toggleZoom(2)">
+        <span style="position:absolute; top:8px; left:12px; font-size:10px; color:#64748b; font-weight:bold;">HOJA 2</span>
+        <div class="screen-controls" onclick="event.stopPropagation()">
+            <div class="color-dot" style="background:#ffffff" onclick="changeBg(2,'#ffffff')"></div>
+            <div class="color-dot" style="background:#f0fdf4" onclick="changeBg(2,'#f0fdf4')"></div>
+            <div class="color-dot" style="background:#eff6ff" onclick="changeBg(2,'#eff6ff')"></div>
+            <div class="color-dot" style="background:#fffbeb" onclick="changeBg(2,'#fffbeb')"></div>
+            <button onclick="clearCanvas(2)" style="font-size:9px; cursor:pointer;">Borrar Trazos</button>
+        </div>
+        <canvas id="canv2"></canvas>
+        <div id="out2" class="res-content"></div>
+    </div>
+    <div id="s3" class="screen" onclick="sel(3)" ondblclick="toggleZoom(3)">
+        <span style="position:absolute; top:8px; left:12px; font-size:10px; color:#64748b; font-weight:bold;">HOJA 3</span>
+        <div class="screen-controls" onclick="event.stopPropagation()">
+            <div class="color-dot" style="background:#ffffff" onclick="changeBg(3,'#ffffff')"></div>
+            <div class="color-dot" style="background:#f0fdf4" onclick="changeBg(3,'#f0fdf4')"></div>
+            <div class="color-dot" style="background:#eff6ff" onclick="changeBg(3,'#eff6ff')"></div>
+            <div class="color-dot" style="background:#fffbeb" onclick="changeBg(3,'#fffbeb')"></div>
+            <button onclick="clearCanvas(3)" style="font-size:9px; cursor:pointer;">Borrar Trazos</button>
+        </div>
+        <canvas id="canv3"></canvas>
+        <div id="out3" class="res-content"></div>
+    </div>
+    <div id="s4" class="screen" onclick="sel(4)" ondblclick="toggleZoom(4)">
+        <span style="position:absolute; top:8px; left:12px; font-size:10px; color:#64748b; font-weight:bold;">HOJA 4</span>
+        <div class="screen-controls" onclick="event.stopPropagation()">
+            <div class="color-dot" style="background:#ffffff" onclick="changeBg(4,'#ffffff')"></div>
+            <div class="color-dot" style="background:#f0fdf4" onclick="changeBg(4,'#f0fdf4')"></div>
+            <div class="color-dot" style="background:#eff6ff" onclick="changeBg(4,'#eff6ff')"></div>
+            <div class="color-dot" style="background:#fffbeb" onclick="changeBg(4,'#fffbeb')"></div>
+            <button onclick="clearCanvas(4)" style="font-size:9px; cursor:pointer;">Borrar Trazos</button>
+        </div>
+        <canvas id="canv4"></canvas>
+        <div id="out4" class="res-content"></div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="toolbar">
+        <div class="group">
+            <button class="btn-math" onclick="add('\\frac{}{}')">a/b</button>
+            <button class="btn-math" onclick="add('\\sqrt{}')">√</button>
+            <button class="btn-math" onclick="add('^{}')">xⁿ</button>
+        </div>
+        <div class="group">
+            <button class="btn-math" onclick="add('\\int')">∫</button>
+            <button class="btn-math" onclick="add('\\sum')">∑</button>
+            <button class="btn-math" onclick="add('\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}')">MAT</button>
+            <button class="btn-math" onclick="add('\\begin{cases} x+y=0 \\\\ x-y=1 \\end{cases}')">{SYS</button>
+        </div>
+        <div class="group">
+            <button class="btn-math" style="color:red" onclick="add('\\color{red}{}')">A</button>
+            <button class="btn-math" style="color:blue" onclick="add('\\color{blue}{}')">A</button>
+            <button class="btn-math" onclick="add('\\mathbf{}')">B</button>
+        </div>
+        <div class="group">
+            <button id="pencilBtn" class="btn-math btn-pencil" onclick="toggleDrawingMode()">LÁPIZ: OFF</button>
+            <button class="opt-draw active" id="m-free" onclick="setMode('free')">Libre</button>
+            <button class="opt-draw" id="m-line" onclick="setMode('line')">Recta →</button>
+            <button class="opt-draw" id="m-curve" onclick="setMode('curve')">Curva ⤴</button>
+        </div>
+        <div class="group">
+            <span style="font-size:12px;">Lápiz:</span>
+            <button class="opt-color active" style="background:black;color:white;" onclick="setPenColor('black')">●</button>
+            <button class="opt-color" style="background:red;color:white;" onclick="setPenColor('red')">●</button>
+            <button class="opt-color" style="background:blue;color:white;" onclick="setPenColor('blue')">●</button>
+            <button class="opt-color" style="background:green;color:white;" onclick="setPenColor('green')">●</button>
+        </div>
+        <div style="flex-grow:1"></div>
+        <input type="number" id="fSize" style="width:45px;" value="38" oninput="updateSize()">
+    </div>
+
+    <div class="editor-area">
+        <div class="nav-col">
+            <button id="n1" class="btn-nav active" onclick="sel(1)">H1</button>
+            <button id="n2" class="btn-nav" onclick="sel(2)">H2</button>
+            <button id="n3" class="btn-nav" onclick="sel(3)">H3</button>
+            <button id="n4" class="btn-nav" onclick="sel(4)">H4</button>
+        </div>
+        <textarea id="mainInp" spellcheck="false" placeholder="Ctrl+Alt+P/R/D/L/S/C/T para fórmulas."></textarea>
+        <button onclick="clearAll()" style="background:var(--red); color:white; border:none; border-radius:6px; width:60px; font-weight:bold; cursor:pointer;">X</button>
+    </div>
+</div>
+
+<script>
+    let active = 1; 
+    let store = ["", "", "", ""];
+    let drawingEnabled = false; 
+    let isDrawing = false;
+    let drawMode = 'free'; 
+    let penColor = 'red';
+    let startX, startY;
+    const input = document.getElementById('mainInp');
+
+    function sel(n) {
+        if(drawingEnabled) return; 
+        active = n;
+        document.querySelectorAll('.screen, .btn-nav').forEach(el => el.classList.remove('active'));
+        document.getElementById('s'+n).classList.add('active');
+        document.getElementById('n'+n).classList.add('active');
+        input.value = store[n-1];
+        input.focus();
+    }
+
+    function toggleZoom(n) {
+        if(drawingEnabled) return;
+        document.getElementById('s' + n).classList.toggle('zoom-mode');
+        resizeCanvases();
+    }
+
+    function toggleDrawingMode() {
+        drawingEnabled = !drawingEnabled;
+        document.body.classList.toggle('drawing-active', drawingEnabled);
+        document.getElementById('pencilBtn').innerText = drawingEnabled ? "LÁPIZ: ON" : "LÁPIZ: OFF";
+        document.getElementById('pencilBtn').classList.toggle('on', drawingEnabled);
+    }
+
+    function setMode(m) {
+        drawMode = m;
+        document.querySelectorAll('.opt-draw').forEach(b => b.classList.remove('active'));
+        document.getElementById('m-'+m).classList.add('active');
+    }
+
+    // ✅ FUNCIÓN CORREGIDA: Solo cambia el color del trazo (sin cursor personalizado)
+    function setPenColor(color) {
+        penColor = color;
+        document.querySelectorAll('.opt-color').forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+        document.querySelectorAll('canvas').forEach(canvas => {
+            const ctx = canvas.getContext('2d');
+            ctx.strokeStyle = penColor;
+        });
+    }
+
+    function changeBg(n, col) { 
+        document.getElementById('s'+n).style.backgroundColor = col; 
+    }
+
+    function setupCanvases() {
+        document.querySelectorAll('canvas').forEach(canvas => {
+            canvas.width = canvas.parentElement.offsetWidth;
+            canvas.height = canvas.parentElement.offsetHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.strokeStyle = penColor; 
+            ctx.lineWidth = 2.5; 
+            ctx.lineCap = "round";
+
+            canvas.onmousedown = (e) => {
+                if(!drawingEnabled) return;
+                isDrawing = true;
+                const rect = canvas.getBoundingClientRect();
+                startX = e.clientX - rect.left; 
+                startY = e.clientY - rect.top;
+                if(drawMode === 'free') { 
+                    ctx.beginPath(); 
+                    ctx.moveTo(startX, startY); 
+                }
+            };
+
+            canvas.onmousemove = (e) => {
+                if(!isDrawing || drawMode !== 'free') return;
+                const rect = canvas.getBoundingClientRect();
+                ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+                ctx.stroke();
+            };
+
+            canvas.onmouseup = (e) => {
+                if(!isDrawing) return;
+                const rect = canvas.getBoundingClientRect();
+                const endX = e.clientX - rect.left; 
+                const endY = e.clientY - rect.top;
+                if(drawMode === 'line') drawArrow(ctx, startX, startY, endX, endY);
+                if(drawMode === 'curve') drawCurveArrow(ctx, startX, startY, endX, endY);
+                isDrawing = false;
+            };
+        });
+    }
+
+    function drawArrow(ctx, x1, y1, x2, y2) {
+        const head = 12; 
+        const angle = Math.atan2(y2-y1, x2-x1);
+        ctx.beginPath(); 
+        ctx.moveTo(x1, y1); 
+        ctx.lineTo(x2, y2);
+        ctx.lineTo(x2-head*Math.cos(angle-Math.PI/6), y2-head*Math.sin(angle-Math.PI/6));
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2-head*Math.cos(angle+Math.PI/6), y2-head*Math.sin(angle+Math.PI/6));
+        ctx.stroke();
+    }
+
+    function drawCurveArrow(ctx, x1, y1, x2, y2) {
+        const head = 12; 
+        const cp1y = Math.min(y1, y2) - 60;
+        ctx.beginPath(); 
+        ctx.moveTo(x1, y1);
+        ctx.quadraticCurveTo((x1+x2)/2, cp1y, x2, y2);
+        const angle = Math.atan2(y2 - cp1y, x2 - (x1+x2)/2);
+        ctx.lineTo(x2-head*Math.cos(angle-Math.PI/6), y2-head*Math.sin(angle-Math.PI/6));
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2-head*Math.cos(angle+Math.PI/6), y2-head*Math.sin(angle+Math.PI/6));
+        ctx.stroke();
+    }
+
+    function render() {
+        store[active-1] = input.value;
+        const out = document.getElementById('out' + active);
+        let lines = input.value.split('\n').map(l => {
+            if (l.length === 0) return " ";
+            let temp = l.includes('$') ? l : `$${l}$`;
+            return temp.replace(/ /g, '\u00A0'); 
+        });
+        out.innerText = lines.join('\n');
+        renderMathInElement(out, { delimiters: [{left: '$', right: '$', display: false}], throwOnError: false });
+    }
+
+    function add(code) {
+        const start = input.selectionStart; 
+        const end = input.selectionEnd;
+        const selText = input.value.substring(start, end);
+        let snippet = code.includes('{}') ? code.replace('{}', `{${selText}}`) : code;
+        input.setRangeText(snippet, start, end, 'end');
+        render(); 
+        input.focus();
+    }
+
+    function clearCanvas(n) { 
+        const canvas = document.getElementById('canv'+n);
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function clearAll() { 
+        store[active-1] = ""; 
+        input.value = ""; 
+        render(); 
+        clearCanvas(active); 
+    }
+
+    function updateSize() { 
+        document.querySelectorAll('.res-content').forEach(c => c.style.fontSize = document.getElementById('fSize').value + 'px'); 
+    }
+
+    function resizeCanvases() { 
+        document.querySelectorAll('canvas').forEach(c => { 
+            c.width = c.parentElement.offsetWidth; 
+            c.height = c.parentElement.offsetHeight; 
+        }); 
+    }
+
+    // ✅ Atajos de teclado
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.altKey) {
+            e.preventDefault();
+            let snippet = '';
+            switch(e.key.toLowerCase()) {
+                case 'p': snippet = '^{}'; break;
+                case 'r': snippet = '\\sqrt{}'; break;
+                case 'd': snippet = '\\frac{}{}'; break;
+                case 'l': snippet = '\\log_{}'; break;
+                case 's': snippet = '\\sin'; break;
+                case 'c': snippet = '\\cos'; break;
+                case 't': snippet = '\\tan'; break;
+                default: return;
+            }
+            add(snippet);
+        }
+    });
+
+    input.addEventListener('input', render);
+    window.onload = () => { 
+        setupCanvases(); 
+        updateSize(); 
+    };
+    window.onresize = resizeCanvases;
+</script>
+</body>
+</html>

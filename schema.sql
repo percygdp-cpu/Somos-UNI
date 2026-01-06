@@ -7,6 +7,11 @@ CREATE TABLE IF NOT EXISTS users (
   password TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('student', 'admin')),
   status TEXT NOT NULL CHECK (status IN ('active', 'inactive')) DEFAULT 'active',
+  -- Campos adicionales para estudiantes
+  start_date TEXT,              -- Fecha de inicio de clases (obligatorio para estudiantes)
+  phone TEXT,                   -- Teléfono de contacto (opcional)
+  guardian_name TEXT,           -- Nombre del apoderado (opcional)
+  address TEXT,                 -- Domicilio (opcional)
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -155,6 +160,55 @@ CREATE TABLE IF NOT EXISTS whiteboards (
 );
 
 CREATE INDEX IF NOT EXISTS idx_whiteboards_created_by ON whiteboards(created_by);
+
+-- Tabla de configuración de facturación por estudiante
+CREATE TABLE IF NOT EXISTS student_billing (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL UNIQUE,
+  monthly_amount REAL NOT NULL,           -- Monto mensual a pagar
+  due_day INTEGER NOT NULL DEFAULT 5,     -- Día del mes que vence (1-28)
+  start_date TEXT NOT NULL,               -- Fecha de inicio de facturación
+  status TEXT NOT NULL CHECK (status IN ('active', 'suspended', 'completed')) DEFAULT 'active',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Tabla de cuotas mensuales
+CREATE TABLE IF NOT EXISTS invoices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  period TEXT NOT NULL,                   -- Periodo en formato YYYY-MM
+  amount REAL NOT NULL,                   -- Monto de la cuota
+  due_date TEXT NOT NULL,                 -- Fecha de vencimiento
+  status TEXT NOT NULL CHECK (status IN ('pending', 'partial', 'paid', 'overdue')) DEFAULT 'pending',
+  paid_amount REAL DEFAULT 0,             -- Monto pagado (para pagos parciales)
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE(user_id, period)
+);
+
+-- Tabla de pagos realizados
+CREATE TABLE IF NOT EXISTS payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_id INTEGER NOT NULL,
+  amount REAL NOT NULL,                   -- Monto del pago
+  payment_date TEXT NOT NULL,             -- Fecha del pago
+  payment_method TEXT NOT NULL CHECK (payment_method IN ('efectivo', 'transferencia', 'yape_plin', 'otro')),
+  notes TEXT,                             -- Notas adicionales
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+);
+
+-- Índices para cobranza
+CREATE INDEX IF NOT EXISTS idx_student_billing_user ON student_billing(user_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_period ON invoices(period);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_due_date ON invoices(due_date);
+CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date);
 
 -- Datos iniciales (admin y algunos datos de prueba)
 INSERT OR IGNORE INTO users (name, username, password, role, status) 

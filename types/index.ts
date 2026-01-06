@@ -7,8 +7,50 @@ export interface User {
   status: 'active' | 'inactive'
   email?: string
   fullName?: string
+  // Campos adicionales para estudiantes
+  startDate?: string          // Fecha de inicio de clases
+  phone?: string              // Teléfono de contacto
+  guardianName?: string       // Nombre del apoderado
+  address?: string            // Domicilio
   createdAt: Date
   updatedAt: Date
+}
+
+// Interfaces para el módulo de cobranza
+export interface StudentBilling {
+  id: string
+  userId: string
+  monthlyAmount: number       // Monto mensual a pagar
+  dueDay: number              // Día del mes que vence (1-28)
+  startDate: string           // Fecha de inicio de facturación
+  status: 'active' | 'suspended' | 'completed'
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface Invoice {
+  id: string
+  userId: string
+  period: string              // Formato YYYY-MM
+  amount: number              // Monto de la cuota
+  dueDate: string             // Fecha de vencimiento
+  status: 'pending' | 'partial' | 'paid' | 'overdue'
+  paidAmount: number          // Monto pagado (para pagos parciales)
+  createdAt: Date
+  updatedAt: Date
+  // Campos adicionales para mostrar en UI
+  userName?: string
+  remainingAmount?: number
+}
+
+export interface Payment {
+  id: string
+  invoiceId: string
+  amount: number              // Monto del pago
+  paymentDate: string         // Fecha del pago
+  paymentMethod: 'efectivo' | 'transferencia' | 'yape_plin' | 'otro'
+  notes?: string              // Notas adicionales
+  createdAt: Date
 }
 
 export interface Course {
@@ -103,6 +145,7 @@ export interface WhiteboardStroke {
   color: string
   size: number
   tool: 'pen' | 'eraser'
+  strokeType?: 'free' | 'line' | 'arrow' | 'curveArrow'  // Tipo de trazo: libre, línea, flecha recta, flecha curva
 }
 
 export interface WhiteboardTextBox {
@@ -142,6 +185,8 @@ export interface WhiteboardContent {
   textBoxes?: WhiteboardTextBox[]
   formulas?: WhiteboardFormula[]
   shapes?: WhiteboardShape[]
+  latexContent?: string       // Contenido LaTeX en tiempo real (posición fija)
+  latexFontSize?: number      // Tamaño de fuente del LaTeX
 }
 
 export interface Whiteboard {

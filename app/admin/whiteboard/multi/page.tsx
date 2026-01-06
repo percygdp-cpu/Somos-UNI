@@ -20,6 +20,14 @@ const COLORS = [
   { name: 'Morado', value: '#a855f7' },
 ]
 
+// Colores de fondo de pizarra
+const BG_COLORS = [
+  { name: 'Blanco', value: '#ffffff' },
+  { name: 'Verde muy claro', value: '#f0fdf4' },
+  { name: 'Azul muy claro', value: '#eff6ff' },
+  { name: 'Amarillo muy claro', value: '#fffbeb' },
+]
+
 // Grosores
 const SIZES = [
   { name: 'Muy fino', value: 2 },
@@ -43,6 +51,9 @@ interface QuadrantData {
   title: string
   content: WhiteboardContent
   isDirty: boolean
+  latexContent: string // Contenido LaTeX en tiempo real
+  latexFontSize: number // Tamaño de fuente del LaTeX
+  bgColor: string // Color de fondo de la pizarra
 }
 
 interface WhiteboardListItem {
@@ -66,13 +77,16 @@ export default function WhiteboardMultiPage() {
   // Modo de vista
   const [viewMode, setViewMode] = useState<ViewMode>('4')
   const [activeQuadrant, setActiveQuadrant] = useState(0)
+  const [zoomedQuadrant, setZoomedQuadrant] = useState<number | null>(null) // Cuadrante en pantalla completa
+  const [originalQuadrantSize, setOriginalQuadrantSize] = useState<{ width: number; height: number } | null>(null)
+  const quadrantContainerRefs = useRef<(HTMLDivElement | null)[]>([null, null, null, null])
   
   // Cuadrantes
   const [quadrants, setQuadrants] = useState<QuadrantData[]>([
-    { id: null, title: 'Pizarra 1', content: { strokes: [], formulas: [] }, isDirty: false },
-    { id: null, title: 'Pizarra 2', content: { strokes: [], formulas: [] }, isDirty: false },
-    { id: null, title: 'Pizarra 3', content: { strokes: [], formulas: [] }, isDirty: false },
-    { id: null, title: 'Pizarra 4', content: { strokes: [], formulas: [] }, isDirty: false },
+    { id: null, title: 'Pizarra 1', content: { strokes: [], formulas: [] }, isDirty: false, latexContent: '', latexFontSize: 38, bgColor: '#ffffff' },
+    { id: null, title: 'Pizarra 2', content: { strokes: [], formulas: [] }, isDirty: false, latexContent: '', latexFontSize: 38, bgColor: '#ffffff' },
+    { id: null, title: 'Pizarra 3', content: { strokes: [], formulas: [] }, isDirty: false, latexContent: '', latexFontSize: 38, bgColor: '#ffffff' },
+    { id: null, title: 'Pizarra 4', content: { strokes: [], formulas: [] }, isDirty: false, latexContent: '', latexFontSize: 38, bgColor: '#ffffff' },
   ])
 
   // Lista de pizarras disponibles
@@ -83,6 +97,7 @@ export default function WhiteboardMultiPage() {
   const [currentColor, setCurrentColor] = useState('#000000')
   const [currentSize, setCurrentSize] = useState(8)
   const [currentTool, setCurrentTool] = useState<'select' | 'pen' | 'eraser' | 'text' | 'formula'>('pen')
+  const [penMode, setPenMode] = useState<'free' | 'line' | 'arrow' | 'curveArrow'>('free')
   
   // Refs para cada canvas
   const canvasRefs = useRef<(WhiteboardCanvasRef | null)[]>([null, null, null, null])
@@ -111,6 +126,7 @@ export default function WhiteboardMultiPage() {
 
   // Barra de fórmulas
   const [showFormulaBar, setShowFormulaBar] = useState(false)
+  const [formulaModoLibre, setFormulaModoLibre] = useState(false) // true = insertar con clic, false = tiempo real
   const [formulaInput, setFormulaInput] = useState('')
   const [formulaPreview, setFormulaPreview] = useState('')
   const [formulaError, setFormulaError] = useState('')
@@ -160,6 +176,8 @@ export default function WhiteboardMultiPage() {
       { label: 'tan', latex: '\\tan' },
       { label: 'cot', latex: '\\cot' },
       { label: 'csc', latex: '\\csc' },
+      { label: '[₂ₓ₂]', latex: '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}' },
+      { label: '{=', latex: '\\begin{cases} x+y=0 \\\\ x-y=1 \\end{cases}' },
     ],
     'greek-lower': [
       { label: 'α', latex: '\\alpha' },
@@ -449,26 +467,34 @@ export default function WhiteboardMultiPage() {
     const canvasRef = canvasRefs.current[quadrantIndex]
     const canvas = canvasRef?.getCanvas?.()
     
+    // Calcular el zoom efectivo (considerando pantalla completa)
+    let effectiveZoom = quadrantZoom[quadrantIndex]
+    if (zoomedQuadrant === quadrantIndex && originalQuadrantSize) {
+      const screenWidth = window.innerWidth
+      const screenHeight = window.innerHeight
+      const scaleX = screenWidth / originalQuadrantSize.width
+      const scaleY = screenHeight / originalQuadrantSize.height
+      effectiveZoom = Math.min(scaleX, scaleY) * quadrantZoom[quadrantIndex]
+    }
+    
     if (!canvas) {
       // Fallback al contenedor si el canvas no está disponible
       const container = canvasContainerRefs.current[quadrantIndex]
       if (!container) return null
       
       const rect = container.getBoundingClientRect()
-      const zoom = quadrantZoom[quadrantIndex]
-      const x = (e.clientX - rect.left) / zoom
-      const y = (e.clientY - rect.top) / zoom
+      const x = (e.clientX - rect.left) / effectiveZoom
+      const y = (e.clientY - rect.top) / effectiveZoom
       return { x, y }
     }
     
     // El canvas ya está dentro del div transformado, así que getBoundingClientRect
     // devuelve las coordenadas visuales correctas
     const rect = canvas.getBoundingClientRect()
-    const zoom = quadrantZoom[quadrantIndex]
     
     // Convertir a coordenadas lógicas del canvas
-    const x = (e.clientX - rect.left) / zoom
-    const y = (e.clientY - rect.top) / zoom
+    const x = (e.clientX - rect.left) / effectiveZoom
+    const y = (e.clientY - rect.top) / effectiveZoom
     
     return { x, y }
   }
@@ -668,12 +694,38 @@ export default function WhiteboardMultiPage() {
     })
   }
 
+  // Sincronizar formulaInput cuando cambia de pizarra (solo en modo tiempo real)
+  useEffect(() => {
+    if (showFormulaBar && !formulaModoLibre) {
+      const currentLatex = quadrants[activeQuadrant].latexContent || ''
+      setFormulaInput(currentLatex)
+      if (currentLatex) {
+        try {
+          const html = katex.renderToString(currentLatex, { throwOnError: true, displayMode: true })
+          setFormulaPreview(html)
+          setFormulaError('')
+        } catch {
+          setFormulaPreview('')
+          setFormulaError('')
+        }
+      } else {
+        setFormulaPreview('')
+        setFormulaError('')
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeQuadrant, showFormulaBar, formulaModoLibre])
+
   // Atajos de teclado
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Delete para eliminar seleccionados
+      // Verificar si el foco está en un input o textarea
+      const activeElement = document.activeElement
+      const isInputFocused = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA'
+      
+      // Delete para eliminar seleccionados (solo si no hay foco en input/textarea)
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedElementsRef.current.length > 0 && !inlineEditingTextId && !showFormulaBar) {
+        if (selectedElementsRef.current.length > 0 && !inlineEditingTextId && !isInputFocused) {
           e.preventDefault()
           deleteSelectedElements()
         }
@@ -710,7 +762,15 @@ export default function WhiteboardMultiPage() {
         const data = await response.json()
         setQuadrants(prev => prev.map((q, i) => 
           i === quadrantIndex 
-            ? { id: whiteboardId, title: data.title, content: data.content || { strokes: [], formulas: [] }, isDirty: false }
+            ? { 
+                id: whiteboardId, 
+                title: data.title, 
+                content: data.content || { strokes: [], formulas: [] }, 
+                isDirty: false,
+                latexContent: data.content?.latexContent || '',
+                latexFontSize: data.content?.latexFontSize || 24,
+                bgColor: data.content?.bgColor || q.bgColor || '#ffffff'
+              }
             : q
         ))
       }
@@ -787,9 +847,23 @@ export default function WhiteboardMultiPage() {
       const response = await fetch(`/api/whiteboard?id=${whiteboardId}`)
       if (response.ok) {
         const data = await response.json()
+        const content = data.content || { strokes: [], formulas: [] }
         setQuadrants(prev => prev.map((q, i) => 
           i === quadrantIndex 
-            ? { id: whiteboardId, title: data.title, content: data.content || { strokes: [], formulas: [] }, isDirty: false }
+            ? { 
+                id: whiteboardId, 
+                title: data.title, 
+                content: { 
+                  strokes: content.strokes || [], 
+                  formulas: content.formulas || [],
+                  textBoxes: content.textBoxes || [],
+                  shapes: content.shapes || [],
+                }, 
+                isDirty: false,
+                latexContent: content.latexContent || '',
+                latexFontSize: content.latexFontSize || 38,
+                bgColor: content.bgColor || q.bgColor || '#ffffff'
+              }
             : q
         ))
       }
@@ -816,7 +890,7 @@ export default function WhiteboardMultiPage() {
         const data = await response.json()
         setQuadrants(prev => prev.map((q, i) => 
           i === quadrantIndex 
-            ? { id: data.id, title: data.title || title, content: { strokes: [], formulas: [] }, isDirty: false }
+            ? { id: data.id, title: data.title || title, content: { strokes: [], formulas: [] }, isDirty: false, latexContent: '', latexFontSize: 38, bgColor: q.bgColor }
             : q
         ))
         fetchWhiteboardList()
@@ -842,7 +916,7 @@ export default function WhiteboardMultiPage() {
   const clearQuadrant = (quadrantIndex: number) => {
     setQuadrants(prev => prev.map((q, i) => 
       i === quadrantIndex 
-        ? { id: null, title: `Pizarra ${quadrantIndex + 1}`, content: { strokes: [], formulas: [] }, isDirty: false }
+        ? { id: null, title: `Pizarra ${quadrantIndex + 1}`, content: { strokes: [], formulas: [] }, isDirty: false, latexContent: '', latexFontSize: 38, bgColor: q.bgColor }
         : q
     ))
     setShowWhiteboardSelector(null)
@@ -857,6 +931,15 @@ export default function WhiteboardMultiPage() {
     ))
   }
 
+  // Actualizar color de fondo de un cuadrante
+  const updateQuadrantBgColor = (quadrantIndex: number, bgColor: string) => {
+    setQuadrants(prev => prev.map((q, i) => 
+      i === quadrantIndex 
+        ? { ...q, bgColor }
+        : q
+    ))
+  }
+
   // Guardar cuadrante (memoizado)
   const saveQuadrant = useCallback(async (quadrantIndex: number) => {
     const quadrant = quadrantsRef.current[quadrantIndex]
@@ -865,13 +948,19 @@ export default function WhiteboardMultiPage() {
     setSaveStatus('saving')
     setSavingQuadrant(quadrantIndex)
     try {
+      // Incluir latexContent y latexFontSize en el content al guardar
+      const contentToSave = {
+        ...quadrant.content,
+        latexContent: quadrant.latexContent,
+        latexFontSize: quadrant.latexFontSize,
+      }
       const response = await fetch('/api/whiteboard', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: quadrant.id,
           title: quadrant.title,
-          content: quadrant.content,
+          content: contentToSave,
         }),
       })
       if (response.ok) {
@@ -1094,9 +1183,37 @@ export default function WhiteboardMultiPage() {
 
   // Funciones de fórmulas
   const handleAddFormula = () => {
+    // Cargar el latexContent existente del cuadrante activo
+    const existingLatex = quadrants[activeQuadrant].latexContent || ''
+    setFormulaInput(existingLatex)
+    setFormulaModoLibre(false) // Modo tiempo real
+    if (existingLatex) {
+      try {
+        const html = katex.renderToString(existingLatex, { throwOnError: true, displayMode: true })
+        setFormulaPreview(html)
+        setFormulaError('')
+      } catch {
+        setFormulaPreview('')
+        setFormulaError('')
+      }
+    } else {
+      setFormulaPreview('')
+    }
+    setFormulaError('')
+    setFormulaScale(1.5)
+    setEditingFormulaId(null)
+    setFormulaPosition({ x: 100, y: 200 })
+    setShowFormulaBar(true)
+    setCurrentTool('formula')
+    setTimeout(() => formulaInputRef.current?.focus(), 100)
+  }
+
+  // Agregar fórmula en modo libre (insertar con clic)
+  const handleAddFormulaLibre = () => {
     setFormulaInput('')
     setFormulaPreview('')
     setFormulaError('')
+    setFormulaModoLibre(true) // Modo insertar con clic
     setFormulaScale(1.5)
     setEditingFormulaId(null)
     setFormulaPosition({ x: 100, y: 200 })
@@ -1107,6 +1224,10 @@ export default function WhiteboardMultiPage() {
 
   const handleFormulaChange = (latex: string) => {
     setFormulaInput(latex)
+    // Actualizar latexContent en tiempo real solo si NO está en modo libre
+    if (!formulaModoLibre) {
+      handleLatexContentChange(latex)
+    }
     try {
       const html = katex.renderToString(latex, { throwOnError: true, displayMode: true })
       setFormulaPreview(html)
@@ -1167,6 +1288,62 @@ export default function WhiteboardMultiPage() {
     setEditingFormulaId(null)
     setCurrentTool('pen')
   }
+
+  // ========== EDITOR LATEX EN TIEMPO REAL ==========
+  // Actualizar el contenido LaTeX del cuadrante activo
+  const handleLatexContentChange = (latex: string) => {
+    setQuadrants(prev => prev.map((q, i) => 
+      i === activeQuadrant 
+        ? { ...q, latexContent: latex, isDirty: true }
+        : q
+    ))
+  }
+
+  // Actualizar el tamaño de fuente del LaTeX del cuadrante activo
+  const handleLatexFontSizeChange = (size: number) => {
+    setQuadrants(prev => prev.map((q, i) => 
+      i === activeQuadrant 
+        ? { ...q, latexFontSize: Math.max(12, Math.min(72, size)), isDirty: true }
+        : q
+    ))
+  }
+
+  // Insertar snippet en el LaTeX del cuadrante activo
+  const insertLatexSnippet = (snippet: string) => {
+    const currentLatex = quadrants[activeQuadrant].latexContent
+    handleLatexContentChange(currentLatex + snippet)
+  }
+
+  // Renderizar LaTeX a HTML con KaTeX
+  const renderLatexToHtml = (latex: string): string => {
+    if (!latex.trim()) return ''
+    try {
+      // Procesar líneas individualmente
+      const lines = latex.split('\n').map(line => {
+        if (line.length === 0) return ' '
+        // Quitar \\ del final de línea (ya que usamos <br/> para el salto visual)
+        let cleanLine = line.replace(/\s*\\\\$/, '').trim()
+        if (cleanLine.length === 0) return ' '
+        // Si no tiene $, envolver en $
+        const temp = cleanLine.includes('$') ? cleanLine : `$${cleanLine}$`
+        return temp.replace(/ /g, '\u00A0') // Espacios no-breaking
+      })
+      
+      // Renderizar cada línea
+      return lines.map(line => {
+        try {
+          // Extraer contenido entre $ y renderizar
+          const mathContent = line.replace(/^\$/, '').replace(/\$$/, '')
+          return katex.renderToString(mathContent, { throwOnError: false, displayMode: false })
+        } catch {
+          return line
+        }
+      }).join('<br/>')
+    } catch {
+      return latex
+    }
+  }
+  // ========== FIN EDITOR LATEX EN TIEMPO REAL ==========
 
   // Insertar figura geométrica (activar placement mode)
   const insertShape = (shapeType: string) => {
@@ -1234,6 +1411,10 @@ export default function WhiteboardMultiPage() {
   // Determinar cuántos cuadrantes mostrar según el modo
   // Siempre usa índices consecutivos: 0, 1, 2, 3
   const getVisibleQuadrants = () => {
+    // Si hay zoom a pantalla completa, mostrar solo ese cuadrante
+    if (zoomedQuadrant !== null) {
+      return [zoomedQuadrant]
+    }
     switch (viewMode) {
       case '1': return [0]
       case '2h': return [0, 1]
@@ -1245,6 +1426,10 @@ export default function WhiteboardMultiPage() {
 
   // Grid class según modo
   const getGridClass = () => {
+    // Si hay zoom a pantalla completa, no necesita grid
+    if (zoomedQuadrant !== null) {
+      return ''
+    }
     switch (viewMode) {
       case '1': return 'grid-cols-1 grid-rows-1'
       case '2h': return 'grid-cols-2 grid-rows-1'
@@ -1252,6 +1437,41 @@ export default function WhiteboardMultiPage() {
       case '4': return 'grid-cols-2 grid-rows-2'
       default: return 'grid-cols-2 grid-rows-2'
     }
+  }
+
+  // Toggle zoom de cuadrante (pantalla completa)
+  // Guarda el tamaño original del cuadrante para calcular la escala proporcional
+  const toggleZoom = (quadrantIndex: number) => {
+    if (zoomedQuadrant === quadrantIndex) {
+      // Salir de pantalla completa
+      setZoomedQuadrant(null)
+      setOriginalQuadrantSize(null)
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+    } else {
+      // Guardar tamaño original antes de expandir
+      const container = quadrantContainerRefs.current[quadrantIndex]
+      if (container) {
+        const rect = container.getBoundingClientRect()
+        setOriginalQuadrantSize({ width: rect.width, height: rect.height })
+      }
+      // Entrar en pantalla completa
+      setZoomedQuadrant(quadrantIndex)
+      setActiveQuadrant(quadrantIndex)
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+    }
+  }
+
+  // Calcular escala proporcional para pantalla completa
+  const getFullscreenScale = (quadrantIndex: number): number => {
+    if (zoomedQuadrant !== quadrantIndex || !originalQuadrantSize) return quadrantZoom[quadrantIndex]
+    
+    // Calcular cuánto más grande es la pantalla vs el cuadrante original
+    const screenWidth = window.innerWidth
+    const screenHeight = window.innerHeight
+    const scaleX = screenWidth / originalQuadrantSize.width
+    const scaleY = screenHeight / originalQuadrantSize.height
+    // Usar la escala menor para que quepa todo, multiplicado por el zoom actual
+    return Math.min(scaleX, scaleY) * quadrantZoom[quadrantIndex]
   }
 
   return (
@@ -1300,7 +1520,7 @@ export default function WhiteboardMultiPage() {
                   </svg>
                 </button>
                 
-                {/* Lápiz */}
+                {/* Lápiz con modos */}
                 <div className="relative pen-dropdown">
                   <button
                     onClick={(e) => {
@@ -1310,39 +1530,118 @@ export default function WhiteboardMultiPage() {
                       setShowEraserSizes(false)
                     }}
                     className={`p-2 rounded flex items-center gap-1 ${currentTool === 'pen' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
-                    title="Lápiz"
+                    title={`Lápiz - ${penMode === 'free' ? 'Libre' : penMode === 'line' ? 'Línea' : penMode === 'arrow' ? 'Flecha' : 'Curva'}`}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
+                    {penMode === 'free' ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    ) : penMode === 'line' ? (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
+                      </svg>
+                    ) : penMode === 'arrow' ? (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
+                        <polyline points="12,5 19,5 19,12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M5 19 Q 12 5, 19 5" strokeWidth={2} strokeLinecap="round" fill="none"/>
+                        <polyline points="15,3 19,5 17,9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
                   {showPenSizes && currentTool === 'pen' && (
-                    <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border p-2 z-20 flex flex-wrap items-center gap-1 w-48">
-                      {SIZES.map(size => (
-                        <button
-                          key={size.value}
-                          onClick={() => {
-                            setCurrentSize(size.value)
-                            setShowPenSizes(false)
-                          }}
-                          className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
-                            currentSize === size.value ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
-                          }`}
-                          title={size.name}
-                        >
-                          <span 
-                            className="rounded-full"
-                            style={{ 
-                              width: Math.min(size.value/1.5, 18), 
-                              height: Math.min(size.value/1.5, 18),
-                              backgroundColor: currentColor 
-                            }}
-                          />
-                        </button>
-                      ))}
+                    <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border p-3 z-20 w-56">
+                      {/* Modos de trazo */}
+                      <div className="mb-3">
+                        <div className="text-xs text-gray-500 mb-2 font-medium">Tipo de trazo</div>
+                        <div className="grid grid-cols-4 gap-1">
+                          <button
+                            onClick={() => { setPenMode('free'); }}
+                            className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
+                              penMode === 'free' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                            }`}
+                            title="Libre"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                            <span className="text-[10px] mt-1">Libre</span>
+                          </button>
+                          <button
+                            onClick={() => { setPenMode('line'); }}
+                            className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
+                              penMode === 'line' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                            }`}
+                            title="Línea recta"
+                          >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
+                            </svg>
+                            <span className="text-[10px] mt-1">Línea</span>
+                          </button>
+                          <button
+                            onClick={() => { setPenMode('arrow'); }}
+                            className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
+                              penMode === 'arrow' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                            }`}
+                            title="Flecha recta"
+                          >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
+                              <polyline points="12,5 19,5 19,12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                            <span className="text-[10px] mt-1">Flecha</span>
+                          </button>
+                          <button
+                            onClick={() => { setPenMode('curveArrow'); }}
+                            className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
+                              penMode === 'curveArrow' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                            }`}
+                            title="Flecha curva"
+                          >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path d="M5 19 Q 12 5, 19 5" strokeWidth={2} strokeLinecap="round" fill="none"/>
+                              <polyline points="15,3 19,5 17,9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                            <span className="text-[10px] mt-1">Curva</span>
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Grosor */}
+                      <div className="border-t border-gray-100 pt-3">
+                        <div className="text-xs text-gray-500 mb-2 font-medium">Grosor</div>
+                        <div className="flex flex-wrap items-center gap-1">
+                          {SIZES.map(size => (
+                            <button
+                              key={size.value}
+                              onClick={() => {
+                                setCurrentSize(size.value)
+                                setShowPenSizes(false)
+                              }}
+                              className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
+                                currentSize === size.value ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                              }`}
+                              title={size.name}
+                            >
+                              <span 
+                                className="rounded-full"
+                                style={{ 
+                                  width: Math.min(size.value/1.5, 18), 
+                                  height: Math.min(size.value/1.5, 18),
+                                  backgroundColor: currentColor 
+                                }}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1410,11 +1709,21 @@ export default function WhiteboardMultiPage() {
                 </button>
                 <button
                   onClick={handleAddFormula}
-                  className={`p-2 rounded ${currentTool === 'formula' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
-                  title="Agregar fórmula"
+                  className={`p-2 rounded ${currentTool === 'formula' && !formulaModoLibre ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                  title="Fórmula (tiempo real)"
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                     <text x="4" y="17" fontSize="14" fontWeight="bold" fontStyle="italic">fx</text>
+                  </svg>
+                </button>
+                <button
+                  onClick={handleAddFormulaLibre}
+                  className={`p-2 rounded ${currentTool === 'formula' && formulaModoLibre ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                  title="Fórmula (posición libre - clic para colocar)"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <text x="0" y="14" fontSize="9" fontWeight="bold" fontStyle="italic">fx</text>
+                    <text x="10" y="20" fontSize="7" fill="#6b7280">+</text>
                   </svg>
                 </button>
               </div>
@@ -1555,14 +1864,17 @@ export default function WhiteboardMultiPage() {
           </div>
 
           {/* Área de cuadrantes */}
-          <div className={`flex-1 grid ${getGridClass()} gap-1 p-2 bg-gray-200`}>
+          <div className={`flex-1 grid ${zoomedQuadrant === null ? getGridClass() : ''} gap-1 p-2 bg-gray-200 relative`}>
             {getVisibleQuadrants().map(quadrantIndex => (
               <div
                 key={quadrantIndex}
+                ref={el => { quadrantContainerRefs.current[quadrantIndex] = el }}
                 className={`group/quadrant relative bg-white rounded-lg overflow-hidden transition-all ${
-                  activeQuadrant === quadrantIndex 
-                    ? 'ring-4 ring-primary-500 shadow-lg' 
-                    : 'ring-1 ring-gray-300 hover:ring-2 hover:ring-gray-400'
+                  zoomedQuadrant === quadrantIndex 
+                    ? 'fixed inset-0 z-50 rounded-none' 
+                    : activeQuadrant === quadrantIndex 
+                      ? 'ring-4 ring-primary-500 shadow-lg' 
+                      : 'ring-1 ring-gray-300 hover:ring-2 hover:ring-gray-400'
                 }`}
                 onClick={() => {
                   if (activeQuadrant !== quadrantIndex) {
@@ -1570,7 +1882,62 @@ export default function WhiteboardMultiPage() {
                     setActiveQuadrant(quadrantIndex)
                   }
                 }}
+                onDoubleClick={(e) => {
+                  // Solo hacer zoom si no está en modo dibujo y no es un elemento interactivo
+                  const target = e.target as HTMLElement
+                  if (
+                    currentTool === 'pen' || currentTool === 'eraser' ||
+                    target.closest('button') || 
+                    target.closest('[data-selectable]') ||
+                    target.closest('input') ||
+                    target.closest('textarea')
+                  ) return
+                  toggleZoom(quadrantIndex)
+                }}
               >
+                {/* Indicador de zoom - botón para salir */}
+                {zoomedQuadrant === quadrantIndex && (
+                  <div className="absolute top-2 right-2 z-20">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleZoom(quadrantIndex)
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary-600 text-white text-xs font-medium shadow-lg hover:bg-primary-700 transition-all"
+                      title="Doble clic o clic aquí para salir"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Salir
+                    </button>
+                  </div>
+                )}
+
+                {/* Selector de color de fondo por cuadrante - esquina derecha */}
+                {quadrants[quadrantIndex].id && zoomedQuadrant !== quadrantIndex && (
+                  <div className="absolute top-2 right-2 z-10">
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-white/95 shadow-sm border border-gray-200">
+                      {BG_COLORS.map(color => (
+                        <button
+                          key={color.value}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            updateQuadrantBgColor(quadrantIndex, color.value)
+                          }}
+                          className={`w-4 h-4 rounded-full border-2 transition-all ${
+                            quadrants[quadrantIndex].bgColor === color.value
+                              ? 'border-primary-500 scale-110 ring-1 ring-primary-200'
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                          style={{ backgroundColor: color.value }}
+                          title={color.name}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Etiqueta del cuadrante */}
                 <div className="absolute top-2 left-2 z-10">
                   <div className="whiteboard-selector relative">
@@ -1719,10 +2086,10 @@ export default function WhiteboardMultiPage() {
                     <div
                       className="relative transition-transform duration-150"
                       style={{ 
-                        width: '100%',
-                        height: '100%',
-                        transform: `scale(${quadrantZoom[quadrantIndex]})`,
-                        transformOrigin: quadrantZoom[quadrantIndex] < 1 ? 'center center' : 'top left',
+                        width: zoomedQuadrant === quadrantIndex && originalQuadrantSize ? originalQuadrantSize.width : '100%',
+                        height: zoomedQuadrant === quadrantIndex && originalQuadrantSize ? originalQuadrantSize.height : '100%',
+                        transform: `scale(${getFullscreenScale(quadrantIndex)})`,
+                        transformOrigin: 'top left',
                       }}
                     >
                     <WhiteboardCanvas
@@ -1732,14 +2099,32 @@ export default function WhiteboardMultiPage() {
                     currentColor={currentColor}
                     currentSize={currentSize}
                     currentTool={activeQuadrant === quadrantIndex ? currentTool : 'select'}
+                    penMode={penMode}
+                    bgColor={quadrants[quadrantIndex].bgColor}
                     onHistoryChange={() => {}}
-                    zoom={quadrantZoom[quadrantIndex]}
+                    zoom={getFullscreenScale(quadrantIndex)}
                     selectedStrokeIds={
                       activeQuadrant === quadrantIndex
                         ? selectedElements.filter(el => el.type === 'stroke').map(el => el.id)
                         : []
                     }
                   />
+
+                  {/* Contenido LaTeX renderizado en tiempo real - posición fija */}
+                  {quadrants[quadrantIndex].latexContent && (
+                    <div
+                      className="absolute pointer-events-none z-[1]"
+                      style={{
+                        top: 45,
+                        left: 25,
+                        fontSize: quadrants[quadrantIndex].latexFontSize,
+                        fontFamily: "'KaTeX_Main', serif",
+                        lineHeight: 1.6,
+                        whiteSpace: 'pre-wrap',
+                      }}
+                      dangerouslySetInnerHTML={{ __html: renderLatexToHtml(quadrants[quadrantIndex].latexContent) }}
+                    />
+                  )}
 
                   {/* Rectángulo de selección por área */}
                   {selectingArea && selectionBox && activeQuadrant === quadrantIndex && (
@@ -2141,17 +2526,20 @@ export default function WhiteboardMultiPage() {
             ))}
           </div>
 
-          {/* Barra inferior de fórmulas - Diseño mejorado */}
+          {/* Barra inferior de fórmulas - Diseño con 2 columnas */}
           {showFormulaBar && (
             <div className="bg-white border-t border-gray-200 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-20">
-              <div className="flex flex-col md:flex-row h-auto md:h-48">
+              <div className="flex flex-col md:flex-row h-auto md:h-40">
                 {/* Columna izquierda - Editor LaTeX */}
-                <div className="w-full md:w-1/4 lg:w-1/5 p-2 md:p-3 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col gap-2">
+                <div className="w-full md:w-1/4 lg:w-1/5 p-2 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col gap-1.5">
                   <div className="flex items-center gap-2 text-primary-600 font-medium text-xs">
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                       <text x="4" y="17" fontSize="14" fontWeight="bold" fontStyle="italic">fx</text>
                     </svg>
                     <span>Editor LaTeX</span>
+                    {formulaModoLibre && (
+                      <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Modo Libre</span>
+                    )}
                   </div>
                   <div className="relative flex-grow">
                     <div className="absolute left-2 top-2 text-gray-400 pointer-events-none font-mono text-xs">$$</div>
@@ -2163,33 +2551,34 @@ export default function WhiteboardMultiPage() {
                         if (e.key === 'Enter' && e.ctrlKey && !formulaError && formulaInput.trim()) {
                           handleSaveFormula()
                         } else if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
-                          // Enter normal inserta \\ para salto de línea en LaTeX
                           e.preventDefault()
                           const textarea = e.currentTarget
                           const start = textarea.selectionStart
                           const end = textarea.selectionEnd
-                          const newValue = formulaInput.substring(0, start) + ' \\\\ ' + formulaInput.substring(end)
+                          // Insertar \\ seguido de salto de línea real para visualización
+                          const newValue = formulaInput.substring(0, start) + ' \\\\\n' + formulaInput.substring(end)
                           handleFormulaChange(newValue)
-                          // Restaurar posición del cursor
                           setTimeout(() => {
-                            textarea.selectionStart = textarea.selectionEnd = start + 5
+                            textarea.selectionStart = textarea.selectionEnd = start + 4
                           }, 0)
                         }
                       }}
                       placeholder="\frac{-b \pm \sqrt{b^2-4ac}}{2a}"
-                      className={`block w-full h-full min-h-[50px] rounded-md border bg-white text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 text-xs font-mono p-2 pl-7 shadow-sm transition-all resize-none ${
+                      className={`block w-full h-full min-h-[60px] rounded-md border bg-white text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 text-xs font-mono p-2 pl-7 shadow-sm transition-all resize-none ${
                         formulaError ? 'border-red-300 bg-red-50' : 'border-gray-300'
                       }`}
                     />
                   </div>
-                  {/* Vista previa */}
-                  <div className="min-h-[36px] flex items-center bg-gray-50 rounded px-3 py-1 border border-gray-200">
-                    {formulaPreview ? (
-                      <div className="transform scale-75 origin-left" dangerouslySetInnerHTML={{ __html: formulaPreview }} />
-                    ) : (
-                      <span className="text-gray-400 text-xs italic">Vista previa...</span>
-                    )}
-                  </div>
+                  {/* Vista previa - solo modo libre */}
+                  {formulaModoLibre && (
+                    <div className="min-h-[32px] flex items-center bg-gray-50 rounded px-2 py-1 border border-gray-200">
+                      {formulaPreview ? (
+                        <div className="transform scale-75 origin-left" dangerouslySetInnerHTML={{ __html: formulaPreview }} />
+                      ) : (
+                        <span className="text-gray-400 text-xs italic">Vista previa...</span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center justify-end gap-2">
                     <button
                       onClick={handleCancelFormula}
@@ -2202,10 +2591,7 @@ export default function WhiteboardMultiPage() {
                       disabled={!formulaInput.trim() || !!formulaError}
                       className="px-2 py-1 text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded shadow-sm transition-all flex items-center gap-1 disabled:opacity-50"
                     >
-                      <span>Insertar</span>
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                      </svg>
+                      <span>{formulaModoLibre ? 'Insertar' : 'OK'}</span>
                     </button>
                   </div>
                 </div>
@@ -2214,171 +2600,111 @@ export default function WhiteboardMultiPage() {
                 <div className="flex-1 flex flex-col bg-gray-50">
                   {/* Pestañas de categorías */}
                   <div className="flex items-center px-1 pt-1 border-b border-gray-200 bg-white overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-                    <button
-                      onClick={() => setFormulaCategory('basic')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-x border-t transition-colors whitespace-nowrap ${
-                        formulaCategory === 'basic'
-                          ? 'bg-primary-600 text-white border-primary-600 relative top-[1px] z-10'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
-                      }`}
-                    >
-                      Basic
-                    </button>
-                    <button
-                      onClick={() => setFormulaCategory('greek-lower')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-x border-t transition-colors font-serif italic whitespace-nowrap ${
-                        formulaCategory === 'greek-lower'
-                          ? 'bg-primary-600 text-white border-primary-600 relative top-[1px] z-10'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
-                      }`}
-                    >
-                      αβγ
-                    </button>
-                    <button
-                      onClick={() => setFormulaCategory('greek-upper')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-x border-t transition-colors font-serif whitespace-nowrap ${
-                        formulaCategory === 'greek-upper'
-                          ? 'bg-primary-600 text-white border-primary-600 relative top-[1px] z-10'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
-                      }`}
-                    >
-                      ABΓ
-                    </button>
-                    <button
-                      onClick={() => setFormulaCategory('trig')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-x border-t transition-colors whitespace-nowrap ${
-                        formulaCategory === 'trig'
-                          ? 'bg-primary-600 text-white border-primary-600 relative top-[1px] z-10'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
-                      }`}
-                    >
-                      sin cos
-                    </button>
-                    <button
-                      onClick={() => setFormulaCategory('operators')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-x border-t transition-colors font-mono tracking-tighter whitespace-nowrap ${
-                        formulaCategory === 'operators'
-                          ? 'bg-primary-600 text-white border-primary-600 relative top-[1px] z-10'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
-                      }`}
-                    >
-                      ≥ ÷ →
-                    </button>
-                    <button
-                      onClick={() => setFormulaCategory('chemistry')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-x border-t transition-colors font-serif whitespace-nowrap ${
-                        formulaCategory === 'chemistry'
-                          ? 'bg-primary-600 text-white border-primary-600 relative top-[1px] z-10'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
-                      }`}
-                    >
-                      H₂O
-                    </button>
-                    <div className="w-px h-6 bg-gray-300 mx-1" />
-                    <button
-                      onClick={() => setFormulaCategory('shapes-2d')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-x border-t transition-colors whitespace-nowrap ${
-                        formulaCategory === 'shapes-2d'
-                          ? 'bg-emerald-600 text-white border-emerald-600 relative top-[1px] z-10'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
-                      }`}
-                    >
-                      2D
-                    </button>
-                    <button
-                      onClick={() => setFormulaCategory('shapes-3d')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-x border-t transition-colors whitespace-nowrap ${
-                        formulaCategory === 'shapes-3d'
-                          ? 'bg-emerald-600 text-white border-emerald-600 relative top-[1px] z-10'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
-                      }`}
-                    >
-                      3D
-                    </button>
+                    {[
+                      { key: 'basic', label: 'Basic' },
+                      { key: 'greek-lower', label: 'αβγ', className: 'font-serif italic' },
+                      { key: 'greek-upper', label: 'ABΓ', className: 'font-serif' },
+                      { key: 'trig', label: 'sin cos' },
+                      { key: 'operators', label: '≥ ÷ →', className: 'font-mono tracking-tighter' },
+                      { key: 'chemistry', label: 'H₂O', className: 'font-serif' },
+                    ].map(tab => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setFormulaCategory(tab.key as typeof formulaCategory)}
+                        className={`px-2.5 py-1 text-xs font-medium rounded-t-md border-x border-t transition-colors whitespace-nowrap ${tab.className || ''} ${
+                          formulaCategory === tab.key
+                            ? 'bg-primary-600 text-white border-primary-600 relative top-[1px] z-10'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                    <div className="w-px h-5 bg-gray-300 mx-1" />
+                    {[
+                      { key: 'shapes-2d', label: '2D' },
+                      { key: 'shapes-3d', label: '3D' },
+                    ].map(tab => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setFormulaCategory(tab.key as typeof formulaCategory)}
+                        className={`px-2.5 py-1 text-xs font-medium rounded-t-md border-x border-t transition-colors whitespace-nowrap ${
+                          formulaCategory === tab.key
+                            ? 'bg-emerald-600 text-white border-emerald-600 relative top-[1px] z-10'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
                   </div>
 
-                  {/* Grid de símbolos o figuras */}
-                  <div className="flex-1 p-2 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-                    {/* Fórmulas LaTeX */}
-                    {formulaCategory !== 'shapes-2d' && formulaCategory !== 'shapes-3d' && (
-                      <>
-                        <div className="grid grid-cols-8 sm:grid-cols-10 lg:grid-cols-14 gap-1.5">
-                          {FORMULA_CATEGORIES[formulaCategory].map((item, idx) => (
-                            <button
-                              key={`${item.label}-${idx}`}
-                              onClick={() => insertFormulaSnippet(item.latex)}
-                              title={item.latex}
-                              className="h-8 flex items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-primary-500 hover:text-primary-600 transition-all font-serif text-sm"
-                            >
-                              {item.label}
-                            </button>
-                          ))}
-                        </div>
-                        {/* Fórmulas rápidas */}
-                        <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-gray-200">
-                          {QUICK_FORMULAS.map((formula, idx) => (
-                            <button
-                              key={idx}
-                              onClick={() => handleFormulaChange(formula.latex)}
-                              className="px-2 py-0.5 bg-white border border-gray-200 rounded text-xs font-medium text-gray-600 hover:bg-gray-100 hover:border-gray-300 transition-colors"
-                            >
-                              {formula.label}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
+                  {/* Grid de símbolos */}
+                  <div className="flex-1 p-1.5 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+                  {/* Fórmulas LaTeX */}
+                  {formulaCategory !== 'shapes-2d' && formulaCategory !== 'shapes-3d' && (
+                    <div className="grid grid-cols-10 sm:grid-cols-14 lg:grid-cols-18 gap-1">
+                      {FORMULA_CATEGORIES[formulaCategory].map((item, idx) => (
+                        <button
+                          key={`${item.label}-${idx}`}
+                          onClick={() => insertFormulaSnippet(item.latex)}
+                          title={item.latex}
+                          className="h-7 flex items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-primary-500 hover:text-primary-600 transition-all font-serif text-xs"
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
-                    {/* Figuras 2D */}
-                    {formulaCategory === 'shapes-2d' && (
-                      <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
-                        {Object.entries(SHAPES_2D).map(([key, shape]) => (
-                          <button
-                            key={key}
-                            onClick={() => insertShape(key)}
-                            title={shape.label}
-                            className="h-16 flex flex-col items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all gap-1"
+                  {/* Figuras 2D */}
+                  {formulaCategory === 'shapes-2d' && (
+                    <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-10 gap-1">
+                      {Object.entries(SHAPES_2D).map(([key, shape]) => (
+                        <button
+                          key={key}
+                          onClick={() => insertShape(key)}
+                          title={shape.label}
+                          className="h-12 flex flex-col items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all"
+                        >
+                          <svg 
+                            width="24" 
+                            height="24" 
+                            viewBox={shape.viewBox}
+                            fill="none" 
+                            stroke={currentColor} 
+                            strokeWidth="4"
+                            strokeLinejoin="round"
                           >
-                            <svg 
-                              width="32" 
-                              height="32" 
-                              viewBox={shape.viewBox}
-                              fill="none" 
-                              stroke={currentColor} 
-                              strokeWidth="4"
-                              strokeLinejoin="round"
-                            >
-                              <path d={shape.path} />
-                            </svg>
-                            <span className="text-[10px] text-gray-500">{shape.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                            <path d={shape.path} />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
-                    {/* Figuras 3D */}
-                    {formulaCategory === 'shapes-3d' && (
-                      <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
-                        {Object.entries(SHAPES_3D).map(([key, shape]) => (
-                          <button
-                            key={key}
-                            onClick={() => insertShape(key)}
-                            title={shape.label}
-                            className="h-16 flex flex-col items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all gap-1"
-                          >
-                            <img 
-                              src={shape.src}
-                              alt={shape.label}
-                              width="32" 
-                              height="32"
-                              className="pointer-events-none"
-                              draggable={false}
-                            />
-                            <span className="text-[10px] text-gray-500 truncate max-w-full px-1">{shape.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                  {/* Figuras 3D */}
+                  {formulaCategory === 'shapes-3d' && (
+                    <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-10 gap-1">
+                      {Object.entries(SHAPES_3D).map(([key, shape]) => (
+                        <button
+                          key={key}
+                          onClick={() => insertShape(key)}
+                          title={shape.label}
+                          className="h-12 flex flex-col items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all"
+                        >
+                          <img 
+                            src={shape.src}
+                            alt={shape.label}
+                            width="24" 
+                            height="24"
+                            className="pointer-events-none"
+                            draggable={false}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   </div>
                 </div>
               </div>

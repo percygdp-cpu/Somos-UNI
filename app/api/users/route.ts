@@ -10,7 +10,7 @@ const client = createClient({
 export async function GET() {
   try {
     const result = await client.execute(
-      'SELECT id, name, username, password, role, status, created_at, updated_at FROM users ORDER BY created_at DESC'
+      'SELECT id, name, username, password, role, status, start_date, phone, guardian_name, address, created_at, updated_at FROM users ORDER BY created_at DESC'
     )
     
     return NextResponse.json(result.rows)
@@ -24,12 +24,20 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { name, username, password, role, status } = body
+    const { name, username, password, role, status, startDate, phone, guardianName, address, monthlyAmount, dueDay } = body
 
     // Validaciones
     if (!name || !role) {
       return NextResponse.json(
         { error: 'Nombre y role son requeridos' },
+        { status: 400 }
+      )
+    }
+
+    // Validar fecha de inicio obligatoria para estudiantes
+    if (role === 'student' && !startDate) {
+      return NextResponse.json(
+        { error: 'La fecha de inicio es obligatoria para estudiantes' },
         { status: 400 }
       )
     }
@@ -76,11 +84,24 @@ export async function POST(request: Request) {
     }
 
     const result = await client.execute({
-      sql: 'INSERT INTO users (name, username, password, role, status) VALUES (?, ?, ?, ?, ?) RETURNING id, name, username, password, role, status, created_at, updated_at',
-      args: [name, finalUsername, finalPassword, role, status || 'active']
+      sql: `INSERT INTO users (name, username, password, role, status, start_date, phone, guardian_name, address) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) 
+            RETURNING id, name, username, password, role, status, start_date, phone, guardian_name, address, created_at, updated_at`,
+      args: [name, finalUsername, finalPassword, role, status || 'active', startDate || null, phone || null, guardianName || null, address || null]
     })
 
-    return NextResponse.json(result.rows[0], { status: 201 })
+    const newUser = result.rows[0]
+
+    // Si es estudiante y se proporcionó configuración de facturación, crear registro de billing
+    if (role === 'student' && monthlyAmount && monthlyAmount > 0) {
+      await client.execute({
+        sql: `INSERT INTO student_billing (user_id, monthly_amount, due_day, start_date, status)
+              VALUES (?, ?, ?, ?, 'active')`,
+        args: [newUser.id, monthlyAmount, dueDay || 5, startDate]
+      })
+    }
+
+    return NextResponse.json(newUser, { status: 201 })
   } catch (error: any) {
     console.error('Error creating user:', error)
     
@@ -100,7 +121,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json()
-    const { id, name, username, password, role, status } = body
+    const { id, name, username, password, role, status, startDate, phone, guardianName, address } = body
 
     if (!id) {
       return NextResponse.json(
@@ -133,6 +154,22 @@ export async function PUT(request: Request) {
       updates.push('status = ?')
       args.push(status)
     }
+    if (startDate !== undefined) {
+      updates.push('start_date = ?')
+      args.push(startDate)
+    }
+    if (phone !== undefined) {
+      updates.push('phone = ?')
+      args.push(phone)
+    }
+    if (guardianName !== undefined) {
+      updates.push('guardian_name = ?')
+      args.push(guardianName)
+    }
+    if (address !== undefined) {
+      updates.push('address = ?')
+      args.push(address)
+    }
     
     if (updates.length === 0) {
       return NextResponse.json(
@@ -148,7 +185,7 @@ export async function PUT(request: Request) {
       sql: `UPDATE users 
             SET ${updates.join(', ')}
             WHERE id = ?
-            RETURNING id, name, username, password, role, status, created_at, updated_at`,
+            RETURNING id, name, username, password, role, status, start_date, phone, guardian_name, address, created_at, updated_at`,
       args: args
     })
 

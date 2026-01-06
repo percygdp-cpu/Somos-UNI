@@ -12,16 +12,32 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
     const testId = searchParams.get('testId')
+    const limit = searchParams.get('limit')
+    const offset = searchParams.get('offset')
     
     let sql = 'SELECT * FROM test_results'
+    let countSql = 'SELECT COUNT(*) as total FROM test_results'
     let args: any[] = []
+    let countArgs: any[] = []
     
     if (userId && testId) {
       sql += ' WHERE user_id = ? AND test_id = ? ORDER BY completed_at DESC LIMIT 1'
       args = [parseInt(userId), parseInt(testId)]
     } else if (userId) {
-      sql += ' WHERE user_id = ? ORDER BY completed_at DESC'
+      sql += ' WHERE user_id = ?'
+      countSql += ' WHERE user_id = ?'
       args = [parseInt(userId)]
+      countArgs = [parseInt(userId)]
+      
+      sql += ' ORDER BY completed_at DESC'
+      
+      // Aplicar paginación si se especifica
+      if (limit) {
+        sql += ` LIMIT ${parseInt(limit)}`
+        if (offset) {
+          sql += ` OFFSET ${parseInt(offset)}`
+        }
+      }
     } else if (testId) {
       sql += ' WHERE test_id = ? ORDER BY completed_at DESC'
       args = [parseInt(testId)]
@@ -39,9 +55,15 @@ export async function GET(request: Request) {
       totalQuestions: row.total_questions,
       percentage: row.percentage,
       answers: JSON.parse(String(row.answers || '[]')),
-      // Agregar 'Z' para indicar que la fecha de SQLite está en UTC
       completedAt: row.completed_at ? row.completed_at.replace(' ', 'T') + 'Z' : null
     }))
+    
+    // Si hay paginación, incluir el total
+    if (limit && userId) {
+      const countResult = await client.execute({ sql: countSql, args: countArgs })
+      const total = Number(countResult.rows[0]?.total || 0)
+      return NextResponse.json({ results, total, hasMore: (parseInt(offset || '0') + results.length) < total })
+    }
     
     return NextResponse.json(results)
   } catch (error: any) {

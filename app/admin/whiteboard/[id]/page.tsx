@@ -20,6 +20,16 @@ const COLORS = [
   { name: 'Morado', value: '#a855f7' },
 ]
 
+// Colores de fondo de pizarra
+const BG_COLORS = [
+  { name: 'Blanco', value: '#ffffff' },
+  { name: 'Crema', value: '#fefce8' },
+  { name: 'Verde pizarra', value: '#134e4a' },
+  { name: 'Negro pizarra', value: '#1e1e1e' },
+  { name: 'Azul oscuro', value: '#1e3a5f' },
+  { name: 'Gris claro', value: '#f3f4f6' },
+]
+
 // Grosores
 const SIZES = [
   { name: 'Muy fino', value: 2 },
@@ -46,6 +56,8 @@ export default function WhiteboardEditorPage() {
   const [currentColor, setCurrentColor] = useState('#000000')
   const [currentSize, setCurrentSize] = useState(8)
   const [currentTool, setCurrentTool] = useState<'select' | 'pen' | 'eraser' | 'text' | 'formula'>('pen')
+  const [penMode, setPenMode] = useState<'free' | 'line' | 'arrow' | 'curveArrow'>('free')
+  const [bgColor, setBgColor] = useState('#ffffff')
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
 
@@ -827,7 +839,7 @@ export default function WhiteboardEditorPage() {
                 </svg>
               </button>
               
-              {/* Lápiz con tamaño */}
+              {/* Lápiz con tamaño y modo */}
               <div className="relative pen-dropdown">
                 <button
                   onClick={(e) => {
@@ -837,39 +849,118 @@ export default function WhiteboardEditorPage() {
                     setShowEraserSizes(false)
                   }}
                   className={`p-2 rounded-lg transition-all flex items-center gap-1 ${currentTool === 'pen' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
-                  title="Lápiz"
+                  title={`Lápiz - ${penMode === 'free' ? 'Libre' : penMode === 'line' ? 'Línea' : penMode === 'arrow' ? 'Flecha' : 'Curva'}`}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
+                  {penMode === 'free' ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  ) : penMode === 'line' ? (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
+                    </svg>
+                  ) : penMode === 'arrow' ? (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
+                      <polyline points="12,5 19,5 19,12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path d="M5 19 Q 12 5, 19 5" strokeWidth={2} strokeLinecap="round" fill="none"/>
+                      <polyline points="15,3 19,5 17,9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 {showPenSizes && currentTool === 'pen' && (
-                  <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border p-2 z-20 flex flex-wrap items-center gap-1 w-48">
-                    {SIZES.map(size => (
-                      <button
-                        key={size.value}
-                        onClick={() => {
-                          setCurrentSize(size.value)
-                          setShowPenSizes(false)
-                        }}
-                        className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
-                          currentSize === size.value ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
-                        }`}
-                        title={size.name}
-                      >
-                        <span 
-                          className="rounded-full"
-                          style={{ 
-                            width: Math.min(size.value/1.5, 18), 
-                            height: Math.min(size.value/1.5, 18),
-                            backgroundColor: currentColor 
-                          }}
-                        />
-                      </button>
-                    ))}
+                  <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border p-3 z-20 w-56">
+                    {/* Modos de trazo */}
+                    <div className="mb-3">
+                      <div className="text-xs text-gray-500 mb-2 font-medium">Tipo de trazo</div>
+                      <div className="grid grid-cols-4 gap-1">
+                        <button
+                          onClick={() => { setPenMode('free'); }}
+                          className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
+                            penMode === 'free' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                          }`}
+                          title="Libre"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                          <span className="text-[10px] mt-1">Libre</span>
+                        </button>
+                        <button
+                          onClick={() => { setPenMode('line'); }}
+                          className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
+                            penMode === 'line' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                          }`}
+                          title="Línea recta"
+                        >
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
+                          </svg>
+                          <span className="text-[10px] mt-1">Línea</span>
+                        </button>
+                        <button
+                          onClick={() => { setPenMode('arrow'); }}
+                          className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
+                            penMode === 'arrow' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                          }`}
+                          title="Flecha recta"
+                        >
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
+                            <polyline points="12,5 19,5 19,12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          <span className="text-[10px] mt-1">Flecha</span>
+                        </button>
+                        <button
+                          onClick={() => { setPenMode('curveArrow'); }}
+                          className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
+                            penMode === 'curveArrow' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                          }`}
+                          title="Flecha curva"
+                        >
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M5 19 Q 12 5, 19 5" strokeWidth={2} strokeLinecap="round" fill="none"/>
+                            <polyline points="15,3 19,5 17,9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          <span className="text-[10px] mt-1">Curva</span>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Grosor */}
+                    <div className="border-t border-gray-100 pt-3">
+                      <div className="text-xs text-gray-500 mb-2 font-medium">Grosor</div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {SIZES.map(size => (
+                          <button
+                            key={size.value}
+                            onClick={() => {
+                              setCurrentSize(size.value)
+                              setShowPenSizes(false)
+                            }}
+                            className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
+                              currentSize === size.value ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                            }`}
+                            title={size.name}
+                          >
+                            <span 
+                              className="rounded-full"
+                              style={{ 
+                                width: Math.min(size.value/1.5, 18), 
+                                height: Math.min(size.value/1.5, 18),
+                                backgroundColor: currentColor 
+                              }}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1046,6 +1137,26 @@ export default function WhiteboardEditorPage() {
 
             <div className="flex-1" />
 
+            {/* Selector de color de fondo */}
+            <div className="flex items-center gap-2 px-2 border-r border-gray-200">
+              <span className="text-xs text-gray-500">Fondo:</span>
+              <div className="flex items-center gap-1">
+                {BG_COLORS.map(color => (
+                  <button
+                    key={color.value}
+                    onClick={() => setBgColor(color.value)}
+                    className={`w-6 h-6 rounded border-2 transition-all ${
+                      bgColor === color.value
+                        ? 'border-primary-500 scale-110 ring-2 ring-primary-200'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                    style={{ backgroundColor: color.value }}
+                    title={color.name}
+                  />
+                ))}
+              </div>
+            </div>
+
             {/* Botones especiales */}
             <button
               onClick={handleExport}
@@ -1087,6 +1198,8 @@ export default function WhiteboardEditorPage() {
               currentColor={currentColor}
               currentSize={currentSize}
               currentTool={currentTool}
+              penMode={penMode}
+              bgColor={bgColor}
               onHistoryChange={handleHistoryChange}
             />
             

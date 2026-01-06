@@ -675,7 +675,15 @@ export default function UserManagementPage() {
     username: '',
     password: '',
     role: 'student' as 'student' | 'admin',
-    status: 'active' as 'active' | 'inactive'
+    status: 'active' as 'active' | 'inactive',
+    // Campos adicionales para estudiantes
+    startDate: '',
+    phone: '',
+    guardianName: '',
+    address: '',
+    // Configuración de facturación
+    monthlyAmount: '',
+    dueDay: '5'
   })
   const [newCourse, setNewCourse] = useState({
     title: '',
@@ -909,9 +917,15 @@ export default function UserManagementPage() {
   }
 
   const handleCreateUser = async () => {
-    // Validar
+    // Validar nombre
     if (!newUser.name) {
       alert('Por favor ingresa el nombre completo del estudiante')
+      return
+    }
+
+    // Validar fecha de inicio obligatoria para estudiantes
+    if (newUser.role === 'student' && !newUser.startDate) {
+      alert('La fecha de inicio de clases es obligatoria para estudiantes')
       return
     }
 
@@ -919,7 +933,11 @@ export default function UserManagementPage() {
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser)
+        body: JSON.stringify({
+          ...newUser,
+          monthlyAmount: newUser.monthlyAmount ? parseFloat(newUser.monthlyAmount) : null,
+          dueDay: parseInt(newUser.dueDay)
+        })
       })
 
       if (response.ok) {
@@ -935,7 +953,13 @@ export default function UserManagementPage() {
           username: '',
           password: '',
           role: 'student',
-          status: 'active'
+          status: 'active',
+          startDate: '',
+          phone: '',
+          guardianName: '',
+          address: '',
+          monthlyAmount: '',
+          dueDay: '5'
         })
       } else {
         const error = await response.json()
@@ -2513,6 +2537,18 @@ export default function UserManagementPage() {
               >
                 <p className="text-sm font-bold">Frases de Motivación</p>
               </button>
+              
+              {/* Separador y botón de Cobranza */}
+              <div className="flex-1"></div>
+              <button
+                onClick={() => router.push('/admin/billing')}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors font-medium text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Cobranza
+              </button>
             </div>
           </div>
 
@@ -3846,6 +3882,133 @@ export default function UserManagementPage() {
                       <option value="inactive">Inactivo</option>
                     </select>
                   </div>
+
+                  {/* Sección: Datos Adicionales (solo para estudiantes) */}
+                  {newUser.role === 'student' && (
+                    <>
+                      <div className="border-t border-secondary-200 pt-4 mt-4">
+                        <h3 className="text-lg font-semibold text-secondary-800 mb-4 flex items-center gap-2">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          Datos del Estudiante
+                        </h3>
+                        
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                              Fecha de Primera Clase <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="date"
+                              value={newUser.startDate}
+                              onChange={(e) => {
+                                const dateValue = e.target.value
+                                const updates: any = { startDate: dateValue }
+                                // Calcular día de pago basado en el día de la fecha
+                                if (dateValue) {
+                                  const day = new Date(dateValue).getDate()
+                                  // Si el día es mayor a 28, usar 28 (para evitar problemas con meses cortos)
+                                  updates.dueDay = String(Math.min(day, 28))
+                                }
+                                setNewUser({...newUser, ...updates})
+                              }}
+                              className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                                Teléfono de Contacto
+                              </label>
+                              <input
+                                type="tel"
+                                value={newUser.phone}
+                                onChange={(e) => setNewUser({...newUser, phone: e.target.value})}
+                                className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                placeholder="Ej: 999 888 777"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                                Nombre del Apoderado
+                              </label>
+                              <input
+                                type="text"
+                                value={newUser.guardianName}
+                                onChange={(e) => setNewUser({...newUser, guardianName: e.target.value})}
+                                className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                placeholder="Nombre del padre/madre"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                              Domicilio
+                            </label>
+                            <input
+                              type="text"
+                              value={newUser.address}
+                              onChange={(e) => setNewUser({...newUser, address: e.target.value})}
+                              className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                              placeholder="Dirección completa"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Sección: Configuración de Pago */}
+                      <div className="border-t border-secondary-200 pt-4 mt-4">
+                        <h3 className="text-lg font-semibold text-secondary-800 mb-4 flex items-center gap-2">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Configuración de Pago
+                        </h3>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                              Monto Mensual (S/)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={newUser.monthlyAmount}
+                              onChange={(e) => setNewUser({...newUser, monthlyAmount: e.target.value})}
+                              className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                              placeholder="Ej: 250.00"
+                            />
+                            <p className="text-xs text-secondary-500 mt-1">
+                              Dejar vacío si aún no se define el monto
+                            </p>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                              Día de Primer Pago
+                            </label>
+                            <select
+                              value={newUser.dueDay}
+                              onChange={(e) => setNewUser({...newUser, dueDay: e.target.value})}
+                              className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            >
+                              {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28].map(day => (
+                                <option key={day} value={day}>Día {day} de cada mes</option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-secondary-500 mt-1">
+                              Calculado automáticamente desde la fecha de primera clase (editable)
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
@@ -4348,6 +4511,126 @@ export default function UserManagementPage() {
                       <option value="inactive">Cesado</option>
                     </select>
                   </div>
+
+                  {/* Datos del Estudiante */}
+                  {editingItem.role === 'student' && (
+                    <>
+                      <div className="border-t border-secondary-200 pt-4 mt-4">
+                        <h4 className="text-sm font-semibold text-secondary-700 mb-3 flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          Datos del Estudiante
+                        </h4>
+                        
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                              Fecha de Primera Clase
+                            </label>
+                            <input
+                              type="date"
+                              value={editingItem.start_date || ''}
+                              onChange={(e) => {
+                                const dateValue = e.target.value
+                                const updates: any = { start_date: dateValue }
+                                if (dateValue && !editingItem.due_day) {
+                                  const day = new Date(dateValue).getDate()
+                                  updates.due_day = Math.min(day, 28)
+                                }
+                                setEditingItem({ ...editingItem, ...updates })
+                              }}
+                              className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                                Teléfono
+                              </label>
+                              <input
+                                type="tel"
+                                value={editingItem.phone || ''}
+                                onChange={(e) => setEditingItem({ ...editingItem, phone: e.target.value })}
+                                className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                placeholder="999 888 777"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                                Apoderado
+                              </label>
+                              <input
+                                type="text"
+                                value={editingItem.guardian_name || ''}
+                                onChange={(e) => setEditingItem({ ...editingItem, guardian_name: e.target.value })}
+                                className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                placeholder="Nombre del padre/madre"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                              Domicilio
+                            </label>
+                            <input
+                              type="text"
+                              value={editingItem.address || ''}
+                              onChange={(e) => setEditingItem({ ...editingItem, address: e.target.value })}
+                              className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                              placeholder="Dirección completa"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Configuración de Pago */}
+                      <div className="border-t border-secondary-200 pt-4 mt-4">
+                        <h4 className="text-sm font-semibold text-secondary-700 mb-3 flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          Configuración de Pago
+                        </h4>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                              Monto Mensual (S/)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editingItem.monthly_amount || ''}
+                              onChange={(e) => setEditingItem({ ...editingItem, monthly_amount: e.target.value })}
+                              className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                              placeholder="Ej: 250.00"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                              Día de Primer Pago
+                            </label>
+                            <select
+                              value={editingItem.due_day || '5'}
+                              onChange={(e) => setEditingItem({ ...editingItem, due_day: parseInt(e.target.value) })}
+                              className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            >
+                              {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28].map(day => (
+                                <option key={day} value={day}>Día {day}</option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-secondary-500 mt-1">
+                              Calculado desde fecha de primera clase
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
