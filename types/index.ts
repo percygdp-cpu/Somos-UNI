@@ -182,11 +182,22 @@ export interface WhiteboardShape {
   color: string
 }
 
+export interface WhiteboardImage {
+  id: string
+  src: string           // Data URL o URL de la imagen
+  x: number
+  y: number
+  width: number
+  height: number
+  rotation?: number     // Rotación en grados (opcional)
+}
+
 export interface WhiteboardContent {
   strokes: WhiteboardStroke[]
   textBoxes?: WhiteboardTextBox[]
   formulas?: WhiteboardFormula[]
   shapes?: WhiteboardShape[]
+  images?: WhiteboardImage[]  // Imágenes pegadas
   latexContent?: string       // Contenido LaTeX en tiempo real (posición fija)
   latexFontSize?: number      // Tamaño de fuente del LaTeX
 }

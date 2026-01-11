@@ -2,10 +2,44 @@
 
 import { WhiteboardContent, WhiteboardPoint, WhiteboardStroke } from '@/types'
 import getStroke from 'perfect-freehand'
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 
 // Multiplicador para el tamaño virtual del canvas (3x = 3 veces el tamaño visible)
 const VIRTUAL_CANVAS_MULTIPLIER = 3
+
+// Cursores personalizados como SVG data URIs (base64 para mejor compatibilidad)
+const createCursorUrl = (svg: string, hotspotX: number = 12, hotspotY: number = 12) => {
+  // Convertir a base64 para mejor compatibilidad cross-browser
+  const base64 = btoa(svg)
+  return `url('data:image/svg+xml;base64,${base64}') ${hotspotX} ${hotspotY}, crosshair`
+}
+
+// SVG para lápiz/pluma (punta hacia abajo-izquierda)
+const getPenCursor = (color: string) => {
+  const c = color.startsWith('#') ? color : '#000000'
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`
+}
+
+// SVG para línea recta
+const getLineCursor = (color: string) => {
+  const c = color.startsWith('#') ? color : '#000000'
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.5" stroke-linecap="round"><line x1="4" y1="20" x2="20" y2="4"/><circle cx="20" cy="4" r="2.5" fill="${c}"/></svg>`
+}
+
+// SVG para flecha recta
+const getArrowCursor = (color: string) => {
+  const c = color.startsWith('#') ? color : '#000000'
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="18" y2="6"/><polyline points="10 4 20 4 20 14"/></svg>`
+}
+
+// SVG para flecha curva - arco con punta de flecha al final (más intuitivo)
+const getCurveArrowCursor = (color: string) => {
+  const c = color.startsWith('#') ? color : '#000000'
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6 Q4 18, 16 18"/><path d="M12 14 L16 18 L12 22" fill="none"/></svg>`
+}
+
+// SVG para borrador
+const ERASER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#666666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>`
 
 interface WhiteboardCanvasProps {
   content: WhiteboardContent
@@ -124,8 +158,8 @@ function drawCurvedLine(ctx: CanvasRenderingContext2D, points: WhiteboardPoint[]
   const distance = Math.sqrt(dx * dx + dy * dy)
   
   // Curva hacia abajo: desplazamos el punto de control hacia abajo
-  // La cantidad de curva es proporcional a la distancia (máximo 30px)
-  const curveAmount = Math.min(distance * 0.15, 30)
+  // La cantidad de curva es proporcional a la distancia (máximo 80px para curva más pronunciada)
+  const curveAmount = Math.min(distance * 0.35, 80)
   
   // Punto de control para la curva (desplazado hacia abajo)
   const controlX = midX
@@ -163,7 +197,8 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const [isDrawing, setIsDrawing] = useState(false)
-    const [currentPoints, setCurrentPoints] = useState<WhiteboardPoint[]>([])
+    // Usar ref para puntos actuales (evita re-renders durante el dibujo)
+    const currentPointsRef = useRef<WhiteboardPoint[]>([])
     const [history, setHistory] = useState<WhiteboardContent[]>([content])
     const [historyIndex, setHistoryIndex] = useState(0)
     const lastContentRef = useRef<WhiteboardContent>(content)
@@ -173,6 +208,10 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
     const [isPanning, setIsPanning] = useState(false)
     // Referencia para el pan: guarda posición inicial y última posición conocida
     const panStartRef = useRef<{ x: number; y: number; lastX: number; lastY: number; offsetX: number; offsetY: number } | null>(null)
+    
+    // Referencia para requestAnimationFrame (optimización de renderizado)
+    const rafRef = useRef<number | null>(null)
+    const needsRedrawRef = useRef(false)
     
     // Tamaño actual del canvas (se usa para detectar cambios de tamaño)
     const canvasSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 })
@@ -239,7 +278,14 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
 
       resizeCanvas()
       window.addEventListener('resize', resizeCanvas)
-      return () => window.removeEventListener('resize', resizeCanvas)
+      return () => {
+        window.removeEventListener('resize', resizeCanvas)
+        // Limpiar requestAnimationFrame pendiente
+        if (rafRef.current) {
+          cancelAnimationFrame(rafRef.current)
+          rafRef.current = null
+        }
+      }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enableVirtualCanvas])
 
@@ -307,9 +353,12 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
           const strokePoints = points.map(p => [p.x, p.y, p.pressure || 0.5])
           const outlinePoints = getStroke(strokePoints, {
             size: strokeSize,
-            thinning: 0.5,
-            smoothing: 0.5,
-            streamline: 0.5,
+            thinning: 0.4,
+            smoothing: 0.8,
+            streamline: 0.7,
+            easing: (t) => t,
+            start: { taper: 0, cap: true },
+            end: { taper: 0, cap: true },
           })
 
           const pathData = getSvgPathFromStroke(outlinePoints)
@@ -353,6 +402,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
       })
 
       // Dibujar trazo actual (preview)
+      const currentPoints = currentPointsRef.current
       if (currentPoints.length > 1 && startPointRef.current) {
         const color = currentTool === 'eraser' ? bgColor : currentColor
         const startPoint = startPointRef.current
@@ -373,9 +423,12 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
           const strokePoints = currentPoints.map(p => [p.x, p.y, p.pressure || 0.5])
           const outlinePoints = getStroke(strokePoints, {
             size: currentSize,
-            thinning: 0.5,
-            smoothing: 0.5,
-            streamline: 0.5,
+            thinning: 0.4,
+            smoothing: 0.8,
+            streamline: 0.7,
+            easing: (t) => t,
+            start: { taper: 0, cap: true },
+            end: { taper: 0, cap: true },
           })
 
           const pathData = getSvgPathFromStroke(outlinePoints)
@@ -388,7 +441,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
       
       // Restaurar contexto (quitar translate)
       ctx.restore()
-    }, [content, currentPoints, currentColor, currentSize, currentTool, penMode, bgColor, selectedStrokeIds, panOffset])
+    }, [content, currentColor, currentSize, currentTool, penMode, bgColor, selectedStrokeIds, panOffset])
 
     // Función para muestrear puntos (reducir cantidad para curvas suaves)
     const samplePoints = (points: WhiteboardPoint[], maxPoints: number): WhiteboardPoint[] => {
@@ -476,7 +529,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
 
       startPointRef.current = point
       setIsDrawing(true)
-      setCurrentPoints([point])
+      currentPointsRef.current = [point]
     }
 
     const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
@@ -518,15 +571,25 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
       // El borrador siempre usa trazo libre
       // Para línea recta y flecha (solo con pen), guardamos primer y último punto
       if (currentTool === 'pen' && (penMode === 'line' || penMode === 'arrow')) {
-        setCurrentPoints([startPointRef.current!, point])
+        currentPointsRef.current = [startPointRef.current!, point]
       } else if (currentTool === 'pen' && penMode === 'curveArrow') {
         // Curva con flecha: acumular todos los puntos
-        setCurrentPoints(prev => [...prev, point])
+        currentPointsRef.current = [...currentPointsRef.current, point]
       } else {
         // Trazo libre o borrador
-        setCurrentPoints(prev => [...prev, point])
+        currentPointsRef.current = [...currentPointsRef.current, point]
       }
-      redraw()
+      // Usar requestAnimationFrame para optimizar el renderizado
+      needsRedrawRef.current = true
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(() => {
+          if (needsRedrawRef.current) {
+            redraw()
+            needsRedrawRef.current = false
+          }
+          rafRef.current = null
+        })
+      }
     }
 
     const handleEnd = (e: React.MouseEvent | React.TouchEvent) => {
@@ -540,6 +603,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
       if (!isDrawing) return
       e.preventDefault()
 
+      const currentPoints = currentPointsRef.current
       if (currentPoints.length > 1 && (currentTool === 'pen' || currentTool === 'eraser')) {
         // Determinar tipo de trazo y puntos finales
         let finalPoints = currentPoints
@@ -581,7 +645,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
       }
 
       setIsDrawing(false)
-      setCurrentPoints([])
+      currentPointsRef.current = []
       startPointRef.current = null
     }
 
@@ -620,6 +684,36 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
       getCanvas: () => canvasRef.current
     }))
 
+    // Calcular cursor personalizado basado en la herramienta seleccionada
+    const customCursor = useMemo(() => {
+      if (currentTool === 'select') return 'default'
+      if (currentTool === 'pan') return isPanning ? 'grabbing' : 'grab'
+      if (currentTool === 'text' || currentTool === 'formula') return 'text'
+      
+      // Para herramientas de dibujo, usar SVG personalizado
+      try {
+        if (currentTool === 'eraser') {
+          return createCursorUrl(ERASER_SVG, 2, 22)
+        }
+        if (currentTool === 'pen') {
+          switch (penMode) {
+            case 'line':
+              return createCursorUrl(getLineCursor(currentColor), 4, 20)
+            case 'arrow':
+              return createCursorUrl(getArrowCursor(currentColor), 4, 20)
+            case 'curveArrow':
+              return createCursorUrl(getCurveArrowCursor(currentColor), 5, 6)
+            default: // 'free'
+              return createCursorUrl(getPenCursor(currentColor), 2, 22)
+          }
+        }
+      } catch {
+        // Si falla btoa (SSR), usar cursor por defecto
+        return 'crosshair'
+      }
+      return 'crosshair'
+    }, [currentTool, currentColor, penMode, isPanning])
+
     return (
       <div 
         ref={containerRef} 
@@ -628,13 +722,11 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasRef, WhiteboardCanvasProps>(
       >
         <canvas
           ref={canvasRef}
-          className={`${enableVirtualCanvas ? '' : 'w-full h-full'} ${
-            currentTool === 'select' ? 'cursor-default' 
-            : currentTool === 'eraser' ? 'cursor-cell'
-            : currentTool === 'pan' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab')
-            : 'cursor-crosshair'
-          }`}
-          style={enableVirtualCanvas ? {} : { minHeight: '500px' }}
+          className={`${enableVirtualCanvas ? '' : 'w-full h-full'}`}
+          style={{
+            ...(enableVirtualCanvas ? {} : { minHeight: '500px' }),
+            cursor: customCursor
+          }}
           onMouseDown={handleStart}
           onMouseMove={handleMove}
           onMouseUp={handleEnd}

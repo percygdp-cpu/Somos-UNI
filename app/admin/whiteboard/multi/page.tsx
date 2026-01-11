@@ -4,10 +4,10 @@ import AdminHeader from '@/components/AdminHeader'
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import WhiteboardCanvas, { WhiteboardCanvasRef } from '@/components/whiteboard/WhiteboardCanvas'
-import { WhiteboardContent, WhiteboardFormula, WhiteboardShape } from '@/types'
+import { WhiteboardContent, WhiteboardFormula, WhiteboardImage, WhiteboardShape } from '@/types'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 // Colores disponibles
@@ -77,8 +77,34 @@ function processLatexSpaces(latex: string): string {
   return latex.replace(/ /g, '~')
 }
 
+// Función para generar cursor SVG según el modo del lápiz
+function getPenCursor(color: string, penMode: 'free' | 'line' | 'arrow' | 'curveArrow', size: number = 4): string {
+  // Crear el SVG como string y convertir a base64
+  let svgContent = ''
+  
+  if (penMode === 'free') {
+    // Cursor de lápiz clásico
+    svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M8 24 L24 8 L26 10 L10 26 Z" fill="${color}" stroke="#000" stroke-width="0.5"/><path d="M6 26 L8 24 L10 26 L8 28 Z" fill="#ffcc99" stroke="#000" stroke-width="0.5"/><path d="M24 8 L26 6 L28 8 L26 10 Z" fill="#ff9999" stroke="#000" stroke-width="0.5"/></svg>`
+  } else if (penMode === 'line') {
+    // Cursor de línea
+    svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><line x1="6" y1="26" x2="26" y2="6" stroke="${color}" stroke-width="3" stroke-linecap="round"/><circle cx="6" cy="26" r="3" fill="white" stroke="${color}" stroke-width="1.5"/></svg>`
+  } else if (penMode === 'arrow') {
+    // Cursor de flecha recta
+    svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><line x1="6" y1="26" x2="22" y2="10" stroke="${color}" stroke-width="3" stroke-linecap="round"/><path d="M26 6 L20 8 L24 12 Z" fill="${color}"/><circle cx="6" cy="26" r="3" fill="white" stroke="${color}" stroke-width="1.5"/></svg>`
+  } else {
+    // Cursor de flecha curva
+    svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M6 26 Q 10 10 24 10" stroke="${color}" stroke-width="3" stroke-linecap="round" fill="none"/><path d="M28 8 L22 8 L24 14 Z" fill="${color}"/><circle cx="6" cy="26" r="3" fill="white" stroke="${color}" stroke-width="1.5"/></svg>`
+  }
+  
+  // Convertir a base64 para mayor compatibilidad
+  const base64 = typeof btoa !== 'undefined' ? btoa(svgContent) : Buffer.from(svgContent).toString('base64')
+  return `url(data:image/svg+xml;base64,${base64}) 6 26, crosshair`
+}
+
 export default function WhiteboardMultiPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialWhiteboardId = searchParams.get('id')
   const { user } = useAuth()
 
   // Estado de carga inicial
@@ -159,6 +185,11 @@ export default function WhiteboardMultiPage() {
   const [formulaPosition, setFormulaPosition] = useState<{ x: number; y: number }>({ x: 100, y: 200 })
   const [formulaCategory, setFormulaCategory] = useState<'basic' | 'greek-lower' | 'greek-upper' | 'trig' | 'operators' | 'chemistry' | 'shapes-2d' | 'shapes-3d'>('basic')
   const formulaInputRef = useRef<HTMLTextAreaElement>(null)
+  const [formulaPanelPos, setFormulaPanelPos] = useState({ x: 0, y: 0 }) // 0,0 = posición por defecto (bottom-right)
+  const [formulaPanelSize, setFormulaPanelSize] = useState({ width: 340, height: 300 }) // Tamaño del panel (responsive)
+  const [isDraggingPanel, setIsDraggingPanel] = useState(false)
+  const [isResizingPanel, setIsResizingPanel] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
 
   // Colores de resaltado para selección de texto en fórmulas (formato HEX para KaTeX)
   const HIGHLIGHT_COLORS = [
@@ -472,10 +503,12 @@ export default function WhiteboardMultiPage() {
   // Dropdowns
   const [showPenSizes, setShowPenSizes] = useState(false)
   const [showEraserSizes, setShowEraserSizes] = useState(false)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [showViewModes, setShowViewModes] = useState(false)
 
   // Selección de elementos
-  const [selectedElements, setSelectedElements] = useState<Array<{ type: 'stroke' | 'text' | 'formula' | 'shape'; id: string }>>([])
-  const selectedElementsRef = useRef<Array<{ type: 'stroke' | 'text' | 'formula' | 'shape'; id: string }>>([])
+  const [selectedElements, setSelectedElements] = useState<Array<{ type: 'stroke' | 'text' | 'formula' | 'shape' | 'image'; id: string }>>([])
+  const selectedElementsRef = useRef<Array<{ type: 'stroke' | 'text' | 'formula' | 'shape' | 'image'; id: string }>>([])
   
   // Drag para mover elementos
   const [dragging, setDragging] = useState(false)
@@ -499,12 +532,12 @@ export default function WhiteboardMultiPage() {
   const [zoomInputValue, setZoomInputValue] = useState('')
   const zoomInputRef = useRef<HTMLInputElement>(null)
 
-  // Funciones de zoom
+  // Funciones de zoom (10% en 10%) - usando Math.round para evitar errores de punto flotante
   const zoomIn = (quadrantIndex: number) => {
-    setQuadrantZoom(prev => prev.map((z, i) => i === quadrantIndex ? Math.min(z + 0.25, 3) : z))
+    setQuadrantZoom(prev => prev.map((z, i) => i === quadrantIndex ? Math.min(Math.round((z + 0.1) * 10) / 10, 3) : z))
   }
   const zoomOut = (quadrantIndex: number) => {
-    setQuadrantZoom(prev => prev.map((z, i) => i === quadrantIndex ? Math.max(z - 0.25, 0.5) : z))
+    setQuadrantZoom(prev => prev.map((z, i) => i === quadrantIndex ? Math.max(Math.round((z - 0.1) * 10) / 10, 0.5) : z))
   }
   const resetZoom = (quadrantIndex: number) => {
     setQuadrantZoom(prev => prev.map((z, i) => i === quadrantIndex ? 1 : z))
@@ -516,12 +549,12 @@ export default function WhiteboardMultiPage() {
   }, [selectedElements])
 
   // Funciones de selección
-  const isElementSelected = (type: 'stroke' | 'text' | 'formula' | 'shape', id: string, useRef = false) => {
+  const isElementSelected = (type: 'stroke' | 'text' | 'formula' | 'shape' | 'image', id: string, useRef = false) => {
     const elements = useRef ? selectedElementsRef.current : selectedElements
     return elements.some(el => el.type === type && el.id === id)
   }
 
-  const toggleSelection = (type: 'stroke' | 'text' | 'formula' | 'shape', id: string, addToSelection: boolean) => {
+  const toggleSelection = (type: 'stroke' | 'text' | 'formula' | 'shape' | 'image', id: string, addToSelection: boolean) => {
     if (addToSelection) {
       if (isElementSelected(type, id)) {
         setSelectedElements(prev => prev.filter(el => !(el.type === type && el.id === id)))
@@ -535,11 +568,12 @@ export default function WhiteboardMultiPage() {
 
   const selectAll = () => {
     const quadrantContent = quadrants[activeQuadrant].content
-    const all: Array<{ type: 'stroke' | 'text' | 'formula' | 'shape'; id: string }> = []
+    const all: Array<{ type: 'stroke' | 'text' | 'formula' | 'shape' | 'image'; id: string }> = []
     quadrantContent.strokes.forEach(s => all.push({ type: 'stroke', id: s.id }))
     ;(quadrantContent.textBoxes || []).forEach(t => all.push({ type: 'text', id: t.id }))
     ;(quadrantContent.formulas || []).forEach(f => all.push({ type: 'formula', id: f.id }))
     ;(quadrantContent.shapes || []).forEach(sh => all.push({ type: 'shape', id: sh.id }))
+    ;(quadrantContent.images || []).forEach(img => all.push({ type: 'image', id: img.id }))
     setSelectedElements(all)
   }
 
@@ -553,6 +587,7 @@ export default function WhiteboardMultiPage() {
       textBoxes: (quadrantContent.textBoxes || []).filter(t => !isElementSelected('text', t.id, true)),
       formulas: (quadrantContent.formulas || []).filter(f => !isElementSelected('formula', f.id, true)),
       shapes: (quadrantContent.shapes || []).filter(sh => !isElementSelected('shape', sh.id, true)),
+      images: (quadrantContent.images || []).filter(img => !isElementSelected('image', img.id, true)),
     }
     updateQuadrantContent(activeQuadrant, newContent)
     setSelectedElements([])
@@ -588,6 +623,12 @@ export default function WhiteboardMultiPage() {
           return { ...sh, x: sh.x + deltaX, y: sh.y + deltaY }
         }
         return sh
+      }),
+      images: (quadrantContent.images || []).map(img => {
+        if (isElementSelected('image', img.id)) {
+          return { ...img, x: img.x + deltaX, y: img.y + deltaY }
+        }
+        return img
       }),
     }
     updateQuadrantContent(activeQuadrant, newContent)
@@ -632,12 +673,12 @@ export default function WhiteboardMultiPage() {
   }
 
   // Handlers de drag
-  const handleDragStart = (e: React.MouseEvent, type: 'stroke' | 'text' | 'formula' | 'shape', id: string) => {
+  const handleDragStart = (e: React.MouseEvent, type: 'stroke' | 'text' | 'formula' | 'shape' | 'image', id: string) => {
     if (currentTool !== 'select') return
     e.stopPropagation()
     
     // Lógica profesional de selección
-    let newSelection: Array<{ type: 'stroke' | 'text' | 'formula' | 'shape'; id: string }>
+    let newSelection: Array<{ type: 'stroke' | 'text' | 'formula' | 'shape' | 'image'; id: string }>
     
     if (isElementSelected(type, id)) {
       // Ya seleccionado, mantener selección actual
@@ -826,6 +867,43 @@ export default function WhiteboardMultiPage() {
     })
   }
 
+  // Redimensionar imágenes (mantiene proporción)
+  const handleImageResizeStart = (e: React.MouseEvent, image: WhiteboardImage) => {
+    e.stopPropagation()
+    e.preventDefault()
+    
+    const startX = e.clientX
+    const startY = e.clientY
+    const startWidth = image.width
+    const startHeight = image.height
+    const aspectRatio = startWidth / startHeight
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX
+      const deltaY = moveEvent.clientY - startY
+      const delta = Math.max(deltaX, deltaY)
+      
+      const newWidth = Math.max(50, startWidth + delta)
+      const newHeight = newWidth / aspectRatio
+
+      const quadrantContent = quadrants[activeQuadrant].content
+      updateQuadrantContent(activeQuadrant, {
+        ...quadrantContent,
+        images: (quadrantContent.images || []).map(img =>
+          img.id === image.id ? { ...img, width: newWidth, height: newHeight } : img
+        )
+      })
+    }
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
   // Sincronizar formulaInput cuando cambia de pizarra (solo en modo tiempo real)
   useEffect(() => {
     if (showFormulaBar && !formulaModoLibre) {
@@ -900,6 +978,84 @@ export default function WhiteboardMultiPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedElements, currentTool, inlineEditingTextId, showFormulaBar, activeQuadrant, quadrants, pendingPlacement])
 
+  // Manejo de pegado de imágenes (Ctrl+V)
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      // No procesar si hay un input/textarea enfocado
+      const activeElement = document.activeElement
+      const isInputFocused = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA'
+      if (isInputFocused) return
+
+      // Verificar si hay cuadrante activo con pizarra
+      const quadrant = quadrantsRef.current[activeQuadrant]
+      if (!quadrant) return
+
+      // Buscar imágenes en el clipboard
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault()
+          
+          const blob = item.getAsFile()
+          if (!blob) continue
+
+          // Convertir a data URL
+          const reader = new FileReader()
+          reader.onload = (event) => {
+            const dataUrl = event.target?.result as string
+            if (!dataUrl) return
+
+            // Crear imagen para obtener dimensiones
+            const img = new Image()
+            img.onload = () => {
+              // Limitar tamaño máximo a 400px manteniendo proporción
+              const maxSize = 400
+              let width = img.width
+              let height = img.height
+              
+              if (width > maxSize || height > maxSize) {
+                if (width > height) {
+                  height = (height / width) * maxSize
+                  width = maxSize
+                } else {
+                  width = (width / height) * maxSize
+                  height = maxSize
+                }
+              }
+
+              // Crear la nueva imagen
+              const newImage: WhiteboardImage = {
+                id: Math.random().toString(36).substring(2, 11),
+                src: dataUrl,
+                x: 100, // Posición inicial
+                y: 100,
+                width,
+                height
+              }
+
+              // Actualizar el contenido del cuadrante
+              const updatedContent: WhiteboardContent = {
+                ...quadrant.content,
+                images: [...(quadrant.content.images || []), newImage]
+              }
+
+              updateQuadrantContent(activeQuadrant, updatedContent)
+            }
+            img.src = dataUrl
+          }
+          reader.readAsDataURL(blob)
+          break // Solo procesar la primera imagen
+        }
+      }
+    }
+
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeQuadrant])
+
   // Función para cargar una pizarra en un cuadrante (definida antes del useEffect)
   const loadWhiteboardById = async (quadrantIndex: number, whiteboardId: string) => {
     try {
@@ -928,6 +1084,17 @@ export default function WhiteboardMultiPage() {
   // Cargar configuración desde localStorage
   useEffect(() => {
     const initializeFromStorage = async () => {
+      // Si hay un ID específico en la URL, cargar solo esa pizarra en modo 1
+      if (initialWhiteboardId) {
+        setViewMode('1')
+        setActiveQuadrant(0)
+        await loadWhiteboardById(0, initialWhiteboardId)
+        await fetchWhiteboardList()
+        setLoading(false)
+        setInitialLoadDone(true)
+        return
+      }
+
       const savedConfig = localStorage.getItem(LOCAL_STORAGE_KEY)
       
       if (savedConfig) {
@@ -961,7 +1128,7 @@ export default function WhiteboardMultiPage() {
       initializeFromStorage()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
+  }, [user?.id, initialWhiteboardId])
 
   // Guardar configuración en localStorage (solo después de la carga inicial)
   useEffect(() => {
@@ -1205,6 +1372,12 @@ export default function WhiteboardMultiPage() {
       if (!target.closest('.pen-dropdown') && !target.closest('.eraser-dropdown')) {
         setShowPenSizes(false)
         setShowEraserSizes(false)
+      }
+      if (!target.closest('.color-picker-dropdown')) {
+        setShowColorPicker(false)
+      }
+      if (!target.closest('.view-mode-dropdown')) {
+        setShowViewModes(false)
       }
       if (!target.closest('.whiteboard-selector')) {
         setShowWhiteboardSelector(null)
@@ -1688,27 +1861,27 @@ export default function WhiteboardMultiPage() {
         ) : (
         <div className="flex-1 flex flex-col" style={{ minHeight: 'calc(100vh - 80px)' }}>
           {/* Toolbar */}
-          <div className="bg-white border-b border-gray-200 px-4 py-2">
-            <div className="max-w-7xl mx-auto flex items-center gap-4 flex-wrap">
+          <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
+            <div className="flex items-center gap-1 sm:gap-2 lg:gap-4 flex-nowrap min-w-max">
               {/* Volver */}
               <button
                 onClick={() => router.push('/admin/whiteboard')}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all"
+                className="p-1.5 sm:p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all flex-shrink-0"
                 title="Volver"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
 
               {/* Herramientas */}
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1 flex-shrink-0">
                 <button
                   onClick={() => setCurrentTool('select')}
-                  className={`p-2 rounded ${currentTool === 'select' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                  className={`p-1.5 sm:p-2 rounded ${currentTool === 'select' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
                   title="Seleccionar"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
                   </svg>
                 </button>
@@ -1716,141 +1889,123 @@ export default function WhiteboardMultiPage() {
                 {/* Mano (Pan/Desplazar) */}
                 <button
                   onClick={() => setCurrentTool('pan')}
-                  className={`p-2 rounded ${currentTool === 'pan' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                  className={`p-1.5 sm:p-2 rounded ${currentTool === 'pan' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
                   title="Mover vista (arrastrar para desplazar)"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
                   </svg>
                 </button>
+              </div>
+
+              {/* Modos de Lápiz - Botones separados */}
+              <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1 flex-shrink-0">
+                {/* Lápiz Libre */}
+                <button
+                  onClick={() => { setCurrentTool('pen'); setPenMode('free'); }}
+                  className={`p-1.5 sm:p-2 rounded transition-all ${currentTool === 'pen' && penMode === 'free' ? 'bg-white shadow-sm ring-2 ring-primary-300' : 'hover:bg-gray-200'}`}
+                  title="Lápiz libre"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
                 
-                {/* Lápiz con modos */}
+                {/* Línea recta */}
+                <button
+                  onClick={() => { setCurrentTool('pen'); setPenMode('line'); }}
+                  className={`p-1.5 sm:p-2 rounded transition-all ${currentTool === 'pen' && penMode === 'line' ? 'bg-white shadow-sm ring-2 ring-primary-300' : 'hover:bg-gray-200'}`}
+                  title="Línea recta"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
+                  </svg>
+                </button>
+                
+                {/* Flecha recta */}
+                <button
+                  onClick={() => { setCurrentTool('pen'); setPenMode('arrow'); }}
+                  className={`p-1.5 sm:p-2 rounded transition-all ${currentTool === 'pen' && penMode === 'arrow' ? 'bg-white shadow-sm ring-2 ring-primary-300' : 'hover:bg-gray-200'}`}
+                  title="Flecha recta"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
+                    <polyline points="12,5 19,5 19,12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                
+                {/* Flecha curva */}
+                <button
+                  onClick={() => { setCurrentTool('pen'); setPenMode('curveArrow'); }}
+                  className={`p-1.5 sm:p-2 rounded transition-all ${currentTool === 'pen' && penMode === 'curveArrow' ? 'bg-white shadow-sm ring-2 ring-primary-300' : 'hover:bg-gray-200'}`}
+                  title="Flecha curva"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M5 19 Q 8 2, 19 5" strokeWidth={2} strokeLinecap="round" fill="none"/>
+                    <polyline points="15,3 19,5 17,9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                
+                {/* Selector de grosor */}
                 <div className="relative pen-dropdown">
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      setCurrentTool('pen')
+                      if (currentTool !== 'pen') setCurrentTool('pen')
                       setShowPenSizes(!showPenSizes)
                       setShowEraserSizes(false)
                     }}
-                    className={`p-2 rounded flex items-center gap-1 ${currentTool === 'pen' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
-                    title={`Lápiz - ${penMode === 'free' ? 'Libre' : penMode === 'line' ? 'Línea' : penMode === 'arrow' ? 'Flecha' : 'Curva'}`}
+                    className={`p-1.5 sm:p-2 rounded flex items-center gap-0.5 ${showPenSizes ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                    title="Grosor del trazo"
                   >
-                    {penMode === 'free' ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                    ) : penMode === 'line' ? (
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
-                      </svg>
-                    ) : penMode === 'arrow' ? (
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
-                        <polyline points="12,5 19,5 19,12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M5 19 Q 12 5, 19 5" strokeWidth={2} strokeLinecap="round" fill="none"/>
-                        <polyline points="15,3 19,5 17,9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
+                    <span 
+                      className="rounded-full"
+                      style={{ 
+                        width: Math.min(currentSize/2, 12), 
+                        height: Math.min(currentSize/2, 12),
+                        backgroundColor: currentColor 
+                      }}
+                    />
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
-                  {showPenSizes && currentTool === 'pen' && (
-                    <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border p-3 z-20 w-56">
-                      {/* Modos de trazo */}
-                      <div className="mb-3">
-                        <div className="text-xs text-gray-500 mb-2 font-medium">Tipo de trazo</div>
-                        <div className="grid grid-cols-4 gap-1">
+                  {showPenSizes && (
+                    <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border p-2 z-20 w-44">
+                      <div className="text-xs text-gray-500 mb-2 font-medium">Grosor</div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {SIZES.map(size => (
                           <button
-                            onClick={() => { setPenMode('free'); }}
-                            className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
-                              penMode === 'free' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
+                            key={size.value}
+                            onClick={() => {
+                              setCurrentSize(size.value)
+                              setShowPenSizes(false)
+                            }}
+                            className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
+                              currentSize === size.value ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
                             }`}
-                            title="Libre"
+                            title={size.name}
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                            <span className="text-[10px] mt-1">Libre</span>
-                          </button>
-                          <button
-                            onClick={() => { setPenMode('line'); }}
-                            className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
-                              penMode === 'line' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
-                            }`}
-                            title="Línea recta"
-                          >
-                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                              <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
-                            </svg>
-                            <span className="text-[10px] mt-1">Línea</span>
-                          </button>
-                          <button
-                            onClick={() => { setPenMode('arrow'); }}
-                            className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
-                              penMode === 'arrow' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
-                            }`}
-                            title="Flecha recta"
-                          >
-                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                              <line x1="5" y1="19" x2="19" y2="5" strokeWidth={2} strokeLinecap="round"/>
-                              <polyline points="12,5 19,5 19,12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                            <span className="text-[10px] mt-1">Flecha</span>
-                          </button>
-                          <button
-                            onClick={() => { setPenMode('curveArrow'); }}
-                            className={`flex flex-col items-center justify-center p-2 rounded transition-all ${
-                              penMode === 'curveArrow' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
-                            }`}
-                            title="Flecha curva"
-                          >
-                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                              <path d="M5 19 Q 12 5, 19 5" strokeWidth={2} strokeLinecap="round" fill="none"/>
-                              <polyline points="15,3 19,5 17,9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                            <span className="text-[10px] mt-1">Curva</span>
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {/* Grosor */}
-                      <div className="border-t border-gray-100 pt-3">
-                        <div className="text-xs text-gray-500 mb-2 font-medium">Grosor</div>
-                        <div className="flex flex-wrap items-center gap-1">
-                          {SIZES.map(size => (
-                            <button
-                              key={size.value}
-                              onClick={() => {
-                                setCurrentSize(size.value)
-                                setShowPenSizes(false)
+                            <span 
+                              className="rounded-full"
+                              style={{ 
+                                width: Math.min(size.value/1.5, 18), 
+                                height: Math.min(size.value/1.5, 18),
+                                backgroundColor: currentColor 
                               }}
-                              className={`flex items-center justify-center w-7 h-7 rounded transition-all ${
-                                currentSize === size.value ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'
-                              }`}
-                              title={size.name}
-                            >
-                              <span 
-                                className="rounded-full"
-                                style={{ 
-                                  width: Math.min(size.value/1.5, 18), 
-                                  height: Math.min(size.value/1.5, 18),
-                                  backgroundColor: currentColor 
-                                }}
-                              />
-                            </button>
-                          ))}
-                        </div>
+                            />
+                          </button>
+                        ))}
                       </div>
                     </div>
                   )}
                 </div>
 
                 {/* Borrador */}
+              </div>
+
+              {/* Borrador - grupo separado */}
+              <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1 flex-shrink-0">
                 <div className="relative eraser-dropdown">
                   <button
                     onClick={(e) => {
@@ -1859,14 +2014,14 @@ export default function WhiteboardMultiPage() {
                       setShowEraserSizes(!showEraserSizes)
                       setShowPenSizes(false)
                     }}
-                    className={`p-2 rounded flex items-center gap-1 ${currentTool === 'eraser' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                    className={`p-1.5 sm:p-2 rounded flex items-center gap-0.5 sm:gap-1 ${currentTool === 'eraser' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
                     title="Borrador"
                   >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 20H7L3 16c-.6-.6-.6-1.5 0-2.1l10-10c.6-.6 1.5-.6 2.1 0l6 6c.6.6.6 1.5 0 2.1L13 20" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 11l7 7" />
                     </svg>
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
@@ -1898,129 +2053,262 @@ export default function WhiteboardMultiPage() {
                 </div>
               </div>
 
-              <div className="w-px h-8 bg-gray-300" />
+              <div className="w-px h-6 sm:h-8 bg-gray-300 hidden sm:block" />
 
               {/* Texto y Fórmulas */}
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1 flex-shrink-0">
                 <button
                   onClick={() => setCurrentTool('text')}
-                  className={`p-2 rounded ${currentTool === 'text' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                  className={`p-1.5 sm:p-2 rounded ${currentTool === 'text' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
                   title="Agregar texto"
                 >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor">
                     <text x="7" y="18" fontSize="18" fontWeight="bold">T</text>
                   </svg>
                 </button>
                 <button
                   onClick={handleAddFormula}
-                  className={`p-2 rounded ${currentTool === 'formula' && !formulaModoLibre ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                  className={`p-1.5 sm:p-2 rounded ${currentTool === 'formula' && !formulaModoLibre ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
                   title="Fórmula (tiempo real)"
                 >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor">
                     <text x="4" y="17" fontSize="14" fontWeight="bold" fontStyle="italic">fx</text>
                   </svg>
                 </button>
                 <button
                   onClick={handleAddFormulaLibre}
-                  className={`p-2 rounded ${currentTool === 'formula' && formulaModoLibre ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                  className={`p-1.5 sm:p-2 rounded ${currentTool === 'formula' && formulaModoLibre ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
                   title="Fórmula (posición libre - clic para colocar)"
                 >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor">
                     <text x="0" y="14" fontSize="9" fontWeight="bold" fontStyle="italic">fx</text>
                     <text x="10" y="20" fontSize="7" fill="#6b7280">+</text>
                   </svg>
                 </button>
               </div>
 
-              <div className="w-px h-8 bg-gray-300 mx-2" />
+              <div className="w-px h-6 sm:h-8 bg-gray-300 hidden sm:block" />
 
-              {/* Selector de modo de vista (Multi-pizarra) */}
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              {/* Selector de modo de vista (Multi-pizarra) - Desplegable en mobile */}
+              <div className="relative view-mode-dropdown flex-shrink-0">
+                {/* Botón compacto en mobile */}
                 <button
-                  onClick={() => setViewMode('1')}
-                  className={`p-2 rounded ${viewMode === '1' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
-                  title="1 pizarra"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowViewModes(!showViewModes)
+                    setShowColorPicker(false)
+                  }}
+                  className="sm:hidden p-1.5 rounded bg-gray-100 flex items-center gap-1"
+                  title="Modo de vista"
                 >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                  {/* Icono del modo actual */}
+                  {viewMode === '1' && (
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                    </svg>
+                  )}
+                  {viewMode === '2h' && (
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect x="3" y="3" width="8" height="18" rx="1" />
+                      <rect x="13" y="3" width="8" height="18" rx="1" />
+                    </svg>
+                  )}
+                  {viewMode === '2v' && (
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect x="3" y="3" width="18" height="8" rx="1" />
+                      <rect x="3" y="13" width="18" height="8" rx="1" />
+                    </svg>
+                  )}
+                  {viewMode === '4' && (
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect x="3" y="3" width="8" height="8" rx="1" />
+                      <rect x="13" y="3" width="8" height="8" rx="1" />
+                      <rect x="3" y="13" width="8" height="8" rx="1" />
+                      <rect x="13" y="13" width="8" height="8" rx="1" />
+                    </svg>
+                  )}
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-                <button
-                  onClick={() => setViewMode('2h')}
-                  className={`p-2 rounded ${viewMode === '2h' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
-                  title="2 pizarras horizontales"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <rect x="3" y="3" width="8" height="18" rx="1" />
-                    <rect x="13" y="3" width="8" height="18" rx="1" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setViewMode('2v')}
-                  className={`p-2 rounded ${viewMode === '2v' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
-                  title="2 pizarras verticales"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <rect x="3" y="3" width="18" height="8" rx="1" />
-                    <rect x="3" y="13" width="18" height="8" rx="1" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setViewMode('4')}
-                  className={`p-2 rounded ${viewMode === '4' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
-                  title="4 pizarras"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <rect x="3" y="3" width="8" height="8" rx="1" />
-                    <rect x="13" y="3" width="8" height="8" rx="1" />
-                    <rect x="3" y="13" width="8" height="8" rx="1" />
-                    <rect x="13" y="13" width="8" height="8" rx="1" />
-                  </svg>
-                </button>
+                
+                {/* Dropdown en mobile */}
+                {showViewModes && (
+                  <div className="sm:hidden absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border p-2 z-20 flex items-center gap-1">
+                    <button
+                      onClick={() => { setViewMode('1'); setShowViewModes(false); }}
+                      className={`p-2 rounded ${viewMode === '1' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'}`}
+                      title="1 pizarra"
+                    >
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => { setViewMode('2h'); setShowViewModes(false); }}
+                      className={`p-2 rounded ${viewMode === '2h' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'}`}
+                      title="2 pizarras horizontales"
+                    >
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <rect x="3" y="3" width="8" height="18" rx="1" />
+                        <rect x="13" y="3" width="8" height="18" rx="1" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => { setViewMode('2v'); setShowViewModes(false); }}
+                      className={`p-2 rounded ${viewMode === '2v' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'}`}
+                      title="2 pizarras verticales"
+                    >
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <rect x="3" y="3" width="18" height="8" rx="1" />
+                        <rect x="3" y="13" width="18" height="8" rx="1" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => { setViewMode('4'); setShowViewModes(false); }}
+                      className={`p-2 rounded ${viewMode === '4' ? 'bg-primary-100 ring-2 ring-primary-300' : 'hover:bg-gray-100'}`}
+                      title="4 pizarras"
+                    >
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <rect x="3" y="3" width="8" height="8" rx="1" />
+                        <rect x="13" y="3" width="8" height="8" rx="1" />
+                        <rect x="3" y="13" width="8" height="8" rx="1" />
+                        <rect x="13" y="13" width="8" height="8" rx="1" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {/* Versión desktop - todos los botones visibles */}
+                <div className="hidden sm:flex items-center gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5 sm:p-1">
+                  <button
+                    onClick={() => setViewMode('1')}
+                    className={`p-1.5 sm:p-2 rounded ${viewMode === '1' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                    title="1 pizarra"
+                  >
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('2h')}
+                    className={`p-1.5 sm:p-2 rounded ${viewMode === '2h' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                    title="2 pizarras horizontales"
+                  >
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect x="3" y="3" width="8" height="18" rx="1" />
+                      <rect x="13" y="3" width="8" height="18" rx="1" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('2v')}
+                    className={`p-1.5 sm:p-2 rounded ${viewMode === '2v' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                    title="2 pizarras verticales"
+                  >
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect x="3" y="3" width="18" height="8" rx="1" />
+                      <rect x="3" y="13" width="18" height="8" rx="1" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('4')}
+                    className={`p-1.5 sm:p-2 rounded ${viewMode === '4' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'}`}
+                    title="4 pizarras"
+                  >
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect x="3" y="3" width="8" height="8" rx="1" />
+                      <rect x="13" y="3" width="8" height="8" rx="1" />
+                      <rect x="3" y="13" width="8" height="8" rx="1" />
+                      <rect x="13" y="13" width="8" height="8" rx="1" />
+                    </svg>
+                  </button>
+                </div>
               </div>
 
-              <div className="w-px h-8 bg-gray-300" />
+              <div className="w-px h-6 sm:h-8 bg-gray-300 hidden sm:block" />
 
-              {/* Colores */}
-              {currentTool === 'pen' && (
-                <div className="flex items-center gap-2">
-                  {COLORS.map(color => (
-                    <button
-                      key={color.value}
-                      onClick={() => setCurrentColor(color.value)}
-                      className={`w-7 h-7 rounded-full transition-all border-2 ${
-                        currentColor === color.value 
-                          ? 'border-primary-500 scale-110 shadow-md' 
-                          : 'border-gray-200 hover:scale-105'
-                      }`}
-                      style={{ backgroundColor: color.value }}
-                      title={color.name}
+              {/* Colores - Desplegable en mobile, siempre visibles */}
+              <div className="relative color-picker-dropdown flex-shrink-0">
+                  {/* Botón compacto en mobile - muestra color actual */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowColorPicker(!showColorPicker)
+                      setShowViewModes(false)
+                    }}
+                    className="sm:hidden p-1.5 rounded bg-gray-100 flex items-center gap-1"
+                    title="Color"
+                  >
+                    <span 
+                      className="w-4 h-4 rounded-full border-2 border-white shadow-sm"
+                      style={{ backgroundColor: currentColor }}
                     />
-                  ))}
-                </div>
-              )}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
 
-              <div className="w-px h-8 bg-gray-300" />
+                  {/* Dropdown de colores en mobile */}
+                  {showColorPicker && (
+                    <div className="sm:hidden absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border p-2 z-20 flex flex-wrap items-center gap-2 w-36">
+                      {COLORS.map(color => (
+                        <button
+                          key={color.value}
+                          onClick={() => {
+                            setCurrentColor(color.value)
+                            setShowColorPicker(false)
+                          }}
+                          className={`w-7 h-7 rounded-full transition-all border-2 ${
+                            currentColor === color.value 
+                              ? 'border-primary-500 scale-110 shadow-md' 
+                              : 'border-gray-200 hover:scale-105'
+                          }`}
+                          style={{ backgroundColor: color.value }}
+                          title={color.name}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Versión desktop - todos los colores visibles */}
+                  <div className="hidden sm:flex items-center gap-1 sm:gap-2">
+                    {COLORS.map(color => (
+                      <button
+                        key={color.value}
+                        onClick={() => setCurrentColor(color.value)}
+                        className={`w-5 h-5 sm:w-7 sm:h-7 rounded-full transition-all border-2 ${
+                          currentColor === color.value 
+                            ? 'border-primary-500 scale-110 shadow-md' 
+                            : 'border-gray-200 hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: color.value }}
+                        title={color.name}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+              <div className="w-px h-6 sm:h-8 bg-gray-300 hidden sm:block" />
 
               {/* Acciones Deshacer/Rehacer */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
                 <button
                   onClick={() => canvasRefs.current[activeQuadrant]?.undo()}
                   disabled={!canUndoQuadrants[activeQuadrant]}
-                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-all"
+                  className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-all"
                   title="Deshacer (Ctrl+Z)"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                   </svg>
                 </button>
                 <button
                   onClick={() => canvasRefs.current[activeQuadrant]?.redo()}
                   disabled={!canRedoQuadrants[activeQuadrant]}
-                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-all"
+                  className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-all"
                   title="Rehacer (Ctrl+Y)"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
                   </svg>
                 </button>
@@ -2030,11 +2318,21 @@ export default function WhiteboardMultiPage() {
                       canvasRefs.current[activeQuadrant]?.clear()
                     }
                   }}
-                  className="p-2 rounded-lg hover:bg-red-100 text-red-500 transition-all"
+                  className="p-1.5 sm:p-2 rounded-lg hover:bg-red-100 text-red-500 transition-all"
                   title="Limpiar cuadrante activo"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+                {/* Fullscreen - después del tachito */}
+                <button
+                  onClick={handleFullscreen}
+                  className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 transition-all"
+                  title="Pantalla completa"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                   </svg>
                 </button>
                 {/* Centrar vista (resetear pan) */}
@@ -2047,83 +2345,18 @@ export default function WhiteboardMultiPage() {
                         return newOffsets
                       })
                     }}
-                    className="p-2 rounded-lg hover:bg-blue-100 text-blue-500 transition-all"
+                    className="p-1.5 sm:p-2 rounded-lg hover:bg-blue-100 text-blue-500 transition-all"
                     title="Centrar vista (resetear desplazamiento)"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
                     </svg>
                   </button>
                 )}
               </div>
 
-              <div className="flex-1 min-w-0" />
-
-              {/* Indicador de guardado + Fullscreen (agrupados para no hacer wrap) */}
-              <div className="flex items-center gap-3 flex-shrink-0">
-                {/* Estado del guardado */}
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="flex items-center gap-2 min-w-[100px] justify-end">
-                    {saveStatus === 'saving' && (
-                      <span className="flex items-center gap-1.5 text-gray-500">
-                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span className="hidden sm:inline">Guardando...</span>
-                      </span>
-                    )}
-                    {saveStatus === 'saved' && (
-                      <span className="flex items-center gap-1 text-green-600">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span className="hidden sm:inline">Guardado</span>
-                      </span>
-                    )}
-                    {saveStatus === 'error' && (
-                      <span className="flex items-center gap-1 text-red-500">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="hidden sm:inline">Error</span>
-                      </span>
-                    )}
-                    {saveStatus === 'idle' && quadrants.some(q => q.isDirty) && (
-                      <span className="flex items-center gap-1 text-amber-600">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                        <span className="hidden sm:inline">Sin guardar</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Botón de guardar manual */}
-                  {quadrants.some(q => q.isDirty && q.id) && (
-                    <button
-                      onClick={saveAllDirty}
-                      disabled={saveStatus === 'saving'}
-                      className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-primary-500 text-white rounded-lg text-sm hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                      title="Guardar cambios"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                      </svg>
-                      <span className="hidden sm:inline">Guardar</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Fullscreen */}
-                <button
-                  onClick={handleFullscreen}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-all flex-shrink-0"
-                  title="Pantalla completa"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                  </svg>
-                </button>
-              </div>
+              {/* Espaciador flexible - solo en desktop */}
+              <div className="hidden sm:block flex-1 min-w-0" />
             </div>
           </div>
 
@@ -2301,7 +2534,15 @@ export default function WhiteboardMultiPage() {
                   <div
                     ref={el => { canvasContainerRefs.current[quadrantIndex] = el }}
                     className="absolute inset-0 overflow-auto"
-                    style={{ backgroundColor: quadrants[quadrantIndex].bgColor }}
+                    style={{ 
+                      backgroundColor: quadrants[quadrantIndex].bgColor,
+                      cursor: activeQuadrant === quadrantIndex && currentTool === 'pen' 
+                        ? getPenCursor(currentColor, penMode, currentSize)
+                        : currentTool === 'eraser' ? 'cell' 
+                        : currentTool === 'pan' ? 'grab'
+                        : currentTool === 'text' ? 'text'
+                        : 'default'
+                    }}
                     onMouseDown={(e) => {
                       // Si este cuadrante no está activo, activarlo primero
                       if (activeQuadrant !== quadrantIndex) {
@@ -2621,6 +2862,53 @@ export default function WhiteboardMultiPage() {
                     </div>
                   ))}
 
+                  {/* Imágenes pegadas */}
+                  {(quadrants[quadrantIndex].content.images || []).map(image => (
+                    <div
+                      key={image.id}
+                      data-selectable="image"
+                      className={`absolute select-none transition-all ${
+                        currentTool === 'select'
+                          ? isElementSelected('image', image.id)
+                            ? 'ring-2 ring-primary-500 cursor-move'
+                            : 'cursor-pointer hover:ring-2 hover:ring-primary-300'
+                          : ''
+                      }`}
+                      style={{
+                        left: image.x,
+                        top: image.y,
+                        width: image.width,
+                        height: image.height,
+                        transform: image.rotation ? `rotate(${image.rotation}deg)` : undefined,
+                        transformOrigin: 'top left',
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (currentTool === 'select') {
+                          toggleSelection('image', image.id, e.shiftKey)
+                        }
+                      }}
+                      onMouseDown={(e) => handleDragStart(e, 'image', image.id)}
+                    >
+                      <img 
+                        src={image.src} 
+                        alt="" 
+                        className="w-full h-full object-contain pointer-events-none"
+                        draggable={false}
+                      />
+                      {/* Handle de redimensionar */}
+                      {currentTool === 'select' && isElementSelected('image', image.id) && selectedElements.length === 1 && (
+                        <div
+                          className="absolute -right-2 -bottom-2 w-4 h-4 bg-primary-500 rounded-full cursor-se-resize border-2 border-white shadow-md"
+                          onMouseDown={(e) => {
+                            e.stopPropagation()
+                            handleImageResizeStart(e, image)
+                          }}
+                        />
+                      )}
+                    </div>
+                  ))}
+
                   {/* Preview del elemento pendiente siguiendo el cursor */}
                   {pendingPlacement && activeQuadrant === quadrantIndex && cursorPosition && (
                     <div
@@ -2806,230 +3094,318 @@ export default function WhiteboardMultiPage() {
             ))}
           </div>
 
-          {/* Barra inferior de fórmulas - Diseño con 2 columnas */}
+          {/* Panel flotante de fórmulas - Arrastrable y Redimensionable */}
           {showFormulaBar && (
-            <div className="bg-white border-t border-gray-200 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-20">
-              <div className="flex flex-col md:flex-row h-auto md:h-40">
-                {/* Columna izquierda - Editor LaTeX */}
-                <div className="w-full md:w-1/4 lg:w-1/5 p-2 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col gap-1.5">
-                  <div className="flex items-center gap-2 text-primary-600 font-medium text-xs">
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                      <text x="4" y="17" fontSize="14" fontWeight="bold" fontStyle="italic">fx</text>
-                    </svg>
-                    <span>Editor LaTeX</span>
-                    {formulaModoLibre && (
-                      <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Modo Libre</span>
-                    )}
-                  </div>
-                  <div className="relative flex-grow">
-                    <div className="absolute left-2 top-2 text-gray-400 pointer-events-none font-mono text-xs">$$</div>
-                    <textarea
-                      ref={formulaInputRef}
-                      value={formulaInput}
-                      onChange={(e) => handleFormulaChange(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && e.ctrlKey && !formulaError && formulaInput.trim()) {
-                          handleSaveFormula()
-                        } else if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
-                          e.preventDefault()
-                          const textarea = e.currentTarget
-                          const start = textarea.selectionStart
-                          const end = textarea.selectionEnd
-                          // Insertar \\ seguido de salto de línea real para visualización
-                          const newValue = formulaInput.substring(0, start) + ' \\\\\n' + formulaInput.substring(end)
-                          handleFormulaChange(newValue)
-                          setTimeout(() => {
-                            textarea.selectionStart = textarea.selectionEnd = start + 4
-                          }, 0)
-                        }
-                      }}
-                      placeholder="\frac{-b \pm \sqrt{b^2-4ac}}{2a}"
-                      className={`block w-full h-full min-h-[60px] rounded-md border bg-white text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 text-xs font-mono p-2 pl-7 shadow-sm transition-all resize-none ${
-                        formulaError ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                      }`}
-                    />
-                  </div>
-                  {/* Vista previa - solo modo libre */}
-                  {formulaModoLibre && (
-                    <div 
-                      className="min-h-[32px] flex items-center bg-white rounded px-2 py-1 border border-gray-200"
-                    >
-                      {formulaPreview ? (
-                        <div 
-                          className="transform scale-75 origin-left" 
-                          dangerouslySetInnerHTML={{ __html: formulaPreview }} 
-                        />
-                      ) : (
-                        <span className="text-gray-400 text-xs italic">Vista previa...</span>
-                      )}
-                    </div>
-                  )}
+            <div 
+              className="fixed z-[100] bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden select-none flex flex-col"
+              style={{ 
+                width: `${formulaPanelSize.width}px`,
+                height: `${formulaPanelSize.height}px`,
+                minWidth: '220px',
+                maxWidth: '550px',
+                minHeight: '180px',
+                maxHeight: '450px',
+                ...(formulaPanelPos.x === 0 && formulaPanelPos.y === 0 
+                  ? { bottom: '16px', right: '16px' } 
+                  : { left: `${formulaPanelPos.x}px`, top: `${formulaPanelPos.y}px` }
+                )
+              }}
+            >
+              {/* Header arrastrable */}
+              <div 
+                className="flex items-center justify-between px-2 py-1.5 border-b border-gray-200 bg-primary-50 cursor-move flex-shrink-0"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  const panel = e.currentTarget.parentElement!
+                  const rect = panel.getBoundingClientRect()
+                  setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+                  setIsDraggingPanel(true)
                   
-                  {/* Selectores de color - aplicar a selección */}
-                  <div className="flex items-center gap-2 py-1">
-                    <span className="text-[10px] text-gray-500">Resaltar:</span>
-                    <div className="flex gap-0.5">
-                      {HIGHLIGHT_COLORS.map(color => (
-                        <button
-                          key={color.value}
-                          onClick={() => applyHighlightToSelection(color.value)}
-                          className="w-4 h-4 rounded transition-all border border-gray-200 hover:border-gray-400 hover:scale-110"
-                          style={{ backgroundColor: color.value }}
-                          title={`${color.name} - Selecciona texto y haz clic`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-[10px] text-gray-500 ml-1">Color:</span>
-                    <div className="flex gap-0.5">
-                      {TEXT_COLORS.map(color => (
-                        <button
-                          key={color.value}
-                          onClick={() => applyTextColorToSelection(color.value)}
-                          className="w-4 h-4 rounded-full transition-all border border-gray-200 hover:border-gray-400 hover:scale-110"
-                          style={{ backgroundColor: color.value }}
-                          title={color.name}
-                        />
-                      ))}
-                    </div>
-                    <button
-                      onClick={removeColorFromSelection}
-                      className="ml-1 p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all"
-                      title="Quitar formato"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      onClick={handleCancelFormula}
-                      className="px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleSaveFormula}
-                      disabled={!formulaInput.trim() || !!formulaError}
-                      className="px-2 py-1 text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded shadow-sm transition-all flex items-center gap-1 disabled:opacity-50"
-                    >
-                      <span>{formulaModoLibre ? 'Insertar' : 'OK'}</span>
-                    </button>
-                  </div>
+                  const handleMouseMove = (ev: MouseEvent) => {
+                    setFormulaPanelPos({ x: ev.clientX - dragOffset.x, y: ev.clientY - dragOffset.y })
+                  }
+                  const handleMouseUp = () => {
+                    setIsDraggingPanel(false)
+                    document.removeEventListener('mousemove', handleMouseMove)
+                    document.removeEventListener('mouseup', handleMouseUp)
+                  }
+                  document.addEventListener('mousemove', handleMouseMove)
+                  document.addEventListener('mouseup', handleMouseUp)
+                }}
+              >
+                <div className="flex items-center gap-1 min-w-0">
+                  <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                  </svg>
+                  <svg className="w-4 h-4 text-primary-600 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <text x="4" y="17" fontSize="14" fontWeight="bold" fontStyle="italic">fx</text>
+                  </svg>
+                  {formulaPanelSize.width >= 280 && (
+                    <span className="font-medium text-sm text-gray-800 truncate">Fórmulas</span>
+                  )}
+                  {formulaModoLibre && formulaPanelSize.width >= 320 && (
+                    <span className="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full font-medium flex-shrink-0">Libre</span>
+                  )}
                 </div>
+                <button
+                  onClick={handleCancelFormula}
+                  className="p-1 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-all flex-shrink-0"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
 
-                {/* Columna derecha - Grid de símbolos */}
-                <div className="flex-1 flex flex-col bg-gray-50">
-                  {/* Pestañas de categorías */}
-                  <div className="flex items-center px-1 pt-1 border-b border-gray-200 bg-white overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-                    {[
-                      { key: 'basic', label: 'Basic' },
-                      { key: 'greek-lower', label: 'αβγ', className: 'font-serif italic' },
-                      { key: 'greek-upper', label: 'ABΓ', className: 'font-serif' },
-                      { key: 'trig', label: 'sin cos' },
-                      { key: 'operators', label: '≥ ÷ →', className: 'font-mono tracking-tighter' },
-                      { key: 'chemistry', label: 'H₂O', className: 'font-serif' },
-                    ].map(tab => (
+              {/* Editor LaTeX - área de texto redimensionable */}
+              <div className="p-2 border-b border-gray-100 flex-shrink-0">
+                <textarea
+                  ref={formulaInputRef}
+                  value={formulaInput}
+                  onChange={(e) => handleFormulaChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.ctrlKey && !formulaError && formulaInput.trim()) {
+                      handleSaveFormula()
+                    } else if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                      e.preventDefault()
+                      const textarea = e.currentTarget
+                      const start = textarea.selectionStart
+                      const end = textarea.selectionEnd
+                      const newValue = formulaInput.substring(0, start) + ' \\\\\n' + formulaInput.substring(end)
+                      handleFormulaChange(newValue)
+                      setTimeout(() => {
+                        textarea.selectionStart = textarea.selectionEnd = start + 4
+                      }, 0)
+                    }
+                  }}
+                  placeholder="\frac{a}{b}"
+                  className={`block w-full rounded border bg-white text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-200 font-mono p-2 resize-y ${
+                    formulaError ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  }`}
+                  style={{ 
+                    minHeight: '70px',
+                    maxHeight: '150px',
+                    fontSize: formulaPanelSize.width >= 300 ? '14px' : '12px'
+                  }}
+                />
+                
+                {/* Vista previa inline - SOLO para modo libre (fxlibre) */}
+                {formulaModoLibre && formulaPreview && formulaPanelSize.height >= 280 && (
+                  <div className="mt-1.5 min-h-[28px] flex items-center bg-gray-50 rounded px-2 py-1 border border-gray-200 overflow-x-auto">
+                    <div className="transform scale-90 origin-left" dangerouslySetInnerHTML={{ __html: formulaPreview }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Pestañas de categorías - responsive con scroll */}
+              <div className="flex items-center px-1 py-1 gap-0.5 overflow-x-auto bg-gray-50 border-b border-gray-100 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
+                {[
+                  { key: 'basic', label: '∑', shortLabel: '∑' },
+                  { key: 'greek-lower', label: 'αβ', shortLabel: 'α' },
+                  { key: 'greek-upper', label: 'ΓΔ', shortLabel: 'Γ' },
+                  { key: 'trig', label: 'sin', shortLabel: 'fn' },
+                  { key: 'operators', label: '≥', shortLabel: '≥' },
+                  { key: 'chemistry', label: 'H₂', shortLabel: 'H' },
+                  { key: 'shapes-2d', label: '△', shortLabel: '△', isShape: true },
+                  { key: 'shapes-3d', label: '3D', shortLabel: '3D', isShape: true },
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setFormulaCategory(tab.key as typeof formulaCategory)}
+                    className={`px-1.5 py-0.5 font-medium rounded transition-colors whitespace-nowrap flex-shrink-0 ${
+                      formulaCategory === tab.key
+                        ? tab.isShape 
+                          ? 'bg-emerald-600 text-white' 
+                          : 'bg-primary-600 text-white'
+                        : 'text-gray-600 hover:bg-white'
+                    }`}
+                    style={{ fontSize: formulaPanelSize.width >= 300 ? '11px' : '10px' }}
+                  >
+                    {formulaPanelSize.width >= 320 ? tab.label : tab.shortLabel}
+                  </button>
+                ))}
+              </div>
+
+              {/* Grid de símbolos - responsive con columnas adaptables */}
+              <div className="p-1.5 overflow-y-auto bg-gray-50 flex-1 min-h-0">
+                {formulaCategory !== 'shapes-2d' && formulaCategory !== 'shapes-3d' && (
+                  <div 
+                    className="grid gap-0.5"
+                    style={{ 
+                      gridTemplateColumns: `repeat(${Math.max(4, Math.min(10, Math.floor((formulaPanelSize.width - 16) / 38)))}, 1fr)`
+                    }}
+                  >
+                    {FORMULA_CATEGORIES[formulaCategory].map((item, idx) => (
                       <button
-                        key={tab.key}
-                        onClick={() => setFormulaCategory(tab.key as typeof formulaCategory)}
-                        className={`px-2.5 py-1 text-xs font-medium rounded-t-md border-x border-t transition-colors whitespace-nowrap ${tab.className || ''} ${
-                          formulaCategory === tab.key
-                            ? 'bg-primary-600 text-white border-primary-600 relative top-[1px] z-10'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
-                        }`}
+                        key={`${item.label}-${idx}`}
+                        onClick={() => insertFormulaSnippet(item.latex)}
+                        title={item.latex}
+                        className="flex items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-primary-500 hover:bg-primary-50 transition-all font-serif"
+                        style={{ 
+                          height: formulaPanelSize.width >= 300 ? '24px' : '20px',
+                          fontSize: formulaPanelSize.width >= 300 ? '12px' : '10px'
+                        }}
                       >
-                        {tab.label}
+                        {item.label}
                       </button>
                     ))}
-                    <div className="w-px h-5 bg-gray-300 mx-1" />
-                    {[
-                      { key: 'shapes-2d', label: '2D' },
-                      { key: 'shapes-3d', label: '3D' },
-                    ].map(tab => (
+                  </div>
+                )}
+
+                {formulaCategory === 'shapes-2d' && (
+                  <div 
+                    className="grid gap-0.5"
+                    style={{ 
+                      gridTemplateColumns: `repeat(${Math.max(4, Math.min(8, Math.floor((formulaPanelSize.width - 16) / 42)))}, 1fr)`
+                    }}
+                  >
+                    {Object.entries(SHAPES_2D).map(([key, shape]) => (
                       <button
-                        key={tab.key}
-                        onClick={() => setFormulaCategory(tab.key as typeof formulaCategory)}
-                        className={`px-2.5 py-1 text-xs font-medium rounded-t-md border-x border-t transition-colors whitespace-nowrap ${
-                          formulaCategory === tab.key
-                            ? 'bg-emerald-600 text-white border-emerald-600 relative top-[1px] z-10'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-transparent'
-                        }`}
+                        key={key}
+                        onClick={() => insertShape(key)}
+                        title={shape.label}
+                        className="flex items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all"
+                        style={{ height: formulaPanelSize.width >= 300 ? '28px' : '24px' }}
                       >
-                        {tab.label}
+                        <svg 
+                          width={formulaPanelSize.width >= 300 ? 16 : 14} 
+                          height={formulaPanelSize.width >= 300 ? 16 : 14} 
+                          viewBox={shape.viewBox} 
+                          fill="none" 
+                          stroke={currentColor} 
+                          strokeWidth="4" 
+                          strokeLinejoin="round"
+                        >
+                          <path d={shape.path} />
+                        </svg>
                       </button>
                     ))}
                   </div>
+                )}
 
-                  {/* Grid de símbolos */}
-                  <div className="flex-1 p-1.5 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-                  {/* Fórmulas LaTeX */}
-                  {formulaCategory !== 'shapes-2d' && formulaCategory !== 'shapes-3d' && (
-                    <div className="grid grid-cols-10 sm:grid-cols-14 lg:grid-cols-18 gap-1">
-                      {FORMULA_CATEGORIES[formulaCategory].map((item, idx) => (
-                        <button
-                          key={`${item.label}-${idx}`}
-                          onClick={() => insertFormulaSnippet(item.latex)}
-                          title={item.latex}
-                          className="h-7 flex items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-primary-500 hover:text-primary-600 transition-all font-serif text-xs"
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Figuras 2D */}
-                  {formulaCategory === 'shapes-2d' && (
-                    <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-10 gap-1">
-                      {Object.entries(SHAPES_2D).map(([key, shape]) => (
-                        <button
-                          key={key}
-                          onClick={() => insertShape(key)}
-                          title={shape.label}
-                          className="h-12 flex flex-col items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all"
-                        >
-                          <svg 
-                            width="24" 
-                            height="24" 
-                            viewBox={shape.viewBox}
-                            fill="none" 
-                            stroke={currentColor} 
-                            strokeWidth="4"
-                            strokeLinejoin="round"
-                          >
-                            <path d={shape.path} />
-                          </svg>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Figuras 3D */}
-                  {formulaCategory === 'shapes-3d' && (
-                    <div className="grid grid-cols-6 sm:grid-cols-8 lg:grid-cols-10 gap-1">
-                      {Object.entries(SHAPES_3D).map(([key, shape]) => (
-                        <button
-                          key={key}
-                          onClick={() => insertShape(key)}
-                          title={shape.label}
-                          className="h-12 flex flex-col items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all"
-                        >
-                          <img 
-                            src={shape.src}
-                            alt={shape.label}
-                            width="24" 
-                            height="24"
-                            className="pointer-events-none"
-                            draggable={false}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                {formulaCategory === 'shapes-3d' && (
+                  <div 
+                    className="grid gap-0.5"
+                    style={{ 
+                      gridTemplateColumns: `repeat(${Math.max(4, Math.min(8, Math.floor((formulaPanelSize.width - 16) / 42)))}, 1fr)`
+                    }}
+                  >
+                    {Object.entries(SHAPES_3D).map(([key, shape]) => (
+                      <button
+                        key={key}
+                        onClick={() => insertShape(key)}
+                        title={shape.label}
+                        className="flex items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all"
+                        style={{ height: formulaPanelSize.width >= 300 ? '28px' : '24px' }}
+                      >
+                        <img 
+                          src={shape.src} 
+                          alt={shape.label} 
+                          width={formulaPanelSize.width >= 300 ? 16 : 14} 
+                          height={formulaPanelSize.width >= 300 ? 16 : 14} 
+                          className="pointer-events-none" 
+                          draggable={false} 
+                        />
+                      </button>
+                    ))}
                   </div>
-                </div>
+                )}
+              </div>
+
+              {/* Footer con acciones - responsive */}
+              <div className="flex items-center justify-end gap-1 px-2 py-1 border-t border-gray-200 bg-white flex-shrink-0">
+                {formulaPanelSize.width >= 280 && (
+                  <button
+                    onClick={handleCancelFormula}
+                    className="px-2 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                )}
+                <button
+                  onClick={handleSaveFormula}
+                  disabled={!formulaInput.trim() || !!formulaError}
+                  className="px-2 py-0.5 text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded shadow-sm transition-all disabled:opacity-50"
+                >
+                  {formulaModoLibre ? (formulaPanelSize.width >= 280 ? 'Insertar' : '✓') : 'OK'}
+                </button>
+              </div>
+
+              {/* Handle de resize - borde derecho */}
+              <div
+                className="absolute top-8 right-0 w-2 cursor-ew-resize hover:bg-primary-200 transition-colors"
+                style={{ bottom: '24px', touchAction: 'none' }}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const startX = e.clientX
+                  const startWidth = formulaPanelSize.width
+                  const handleMouseMove = (ev: MouseEvent) => {
+                    const deltaX = ev.clientX - startX
+                    const newWidth = Math.max(220, Math.min(550, startWidth + deltaX))
+                    setFormulaPanelSize(prev => ({ ...prev, width: newWidth }))
+                  }
+                  const handleMouseUp = () => {
+                    document.removeEventListener('mousemove', handleMouseMove)
+                    document.removeEventListener('mouseup', handleMouseUp)
+                  }
+                  document.addEventListener('mousemove', handleMouseMove)
+                  document.addEventListener('mouseup', handleMouseUp)
+                }}
+              />
+
+              {/* Handle de resize - borde inferior */}
+              <div
+                className="absolute bottom-0 left-4 right-4 h-2 cursor-ns-resize hover:bg-primary-200 transition-colors"
+                style={{ touchAction: 'none' }}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const startY = e.clientY
+                  const startHeight = formulaPanelSize.height
+                  const handleMouseMove = (ev: MouseEvent) => {
+                    const deltaY = ev.clientY - startY
+                    const newHeight = Math.max(180, Math.min(450, startHeight + deltaY))
+                    setFormulaPanelSize(prev => ({ ...prev, height: newHeight }))
+                  }
+                  const handleMouseUp = () => {
+                    document.removeEventListener('mousemove', handleMouseMove)
+                    document.removeEventListener('mouseup', handleMouseUp)
+                  }
+                  document.addEventListener('mousemove', handleMouseMove)
+                  document.addEventListener('mouseup', handleMouseUp)
+                }}
+              />
+
+              {/* Handle de resize - esquina inferior derecha (diagonal) */}
+              <div
+                className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize flex items-center justify-center hover:bg-primary-100 transition-colors rounded-tl"
+                style={{ touchAction: 'none' }}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const startX = e.clientX
+                  const startY = e.clientY
+                  const startWidth = formulaPanelSize.width
+                  const startHeight = formulaPanelSize.height
+                  const handleMouseMove = (ev: MouseEvent) => {
+                    const deltaX = ev.clientX - startX
+                    const deltaY = ev.clientY - startY
+                    const newWidth = Math.max(220, Math.min(550, startWidth + deltaX))
+                    const newHeight = Math.max(180, Math.min(450, startHeight + deltaY))
+                    setFormulaPanelSize({ width: newWidth, height: newHeight })
+                  }
+                  const handleMouseUp = () => {
+                    document.removeEventListener('mousemove', handleMouseMove)
+                    document.removeEventListener('mouseup', handleMouseUp)
+                  }
+                  document.addEventListener('mousemove', handleMouseMove)
+                  document.addEventListener('mouseup', handleMouseUp)
+                }}
+              >
+                <svg className="w-3 h-3 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M22 22H20V20H22V22ZM22 18H20V16H22V18ZM18 22H16V20H18V22ZM22 14H20V12H22V14ZM18 18H16V16H18V18ZM14 22H12V20H14V22Z" />
+                </svg>
               </div>
             </div>
           )}
