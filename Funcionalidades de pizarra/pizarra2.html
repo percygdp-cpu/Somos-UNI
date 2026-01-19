@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>UNAC PRO - Sistema Maestro de Álgebra</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        :root { --unac-gold: #f1c40f; --dark: #1e272e; --red: #e74c3c; }
+        body { margin: 0; background: #2c3e50; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        
+        #top-bar { background: #fff; height: 60px; display: flex; align-items: center; padding: 0 20px; border-bottom: 3px solid var(--unac-gold); justify-content: space-between; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .group { display: flex; align-items: center; gap: 8px; }
+        .btn { border: 2px solid #333; background: #fff; padding: 6px 12px; cursor: pointer; font-weight: bold; border-radius: 6px; transition: 0.2s; font-size: 13px; }
+        .active-t { background: var(--unac-gold) !important; box-shadow: 0 4px 0 #c7a40c; transform: translateY(-2px); }
+        
+        #workspace { display: grid; height: calc(100vh - 63px); gap: 10px; padding: 10px; box-sizing: border-box; }
+        .pizarra-cont { position: relative; background: #fff; border-radius: 8px; border: 4px solid #444; overflow: hidden; }
+        .active-p { border-color: var(--unac-gold) !important; }
+
+        .bg-controls { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; z-index: 2000; background: rgba(0,0,0,0.15); padding: 5px; border-radius: 20px; }
+        .bg-dot { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(0,0,0,0.2); }
+
+        .math-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; padding: 40px; box-sizing: border-box; pointer-events: none; z-index: 10; transform-origin: top left; }
+        .draw-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; cursor: crosshair; touch-action: none; }
+        .temp-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 30; }
+
+        .img-drag-wrap { position: absolute; top: 50px; left: 50px; z-index: 500; cursor: move; border: 2px dashed var(--red); padding: 5px; background: rgba(255,255,255,0.4); touch-action: none; pointer-events: auto; }
+        .img-drag-wrap img { max-width: 400px; display: block; pointer-events: none; }
+        .btn-del-img { position: absolute; top: -15px; right: -15px; background: var(--red); color: white; border: 2px solid white; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; z-index: 600; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+
+        #ghost-cursor { position: absolute; width: 3px; background: var(--red); z-index: 100; pointer-events: none; display: none; animation: blink 0.8s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+        .math-line { font-size: 4.5rem; color: inherit; white-space: pre; display: block; min-height: 1.2em; line-height: 1.2; width: fit-content; }
+
+        #flotante { position: fixed; bottom: 20px; right: 20px; width: 650px; background: var(--dark); border-radius: 12px; z-index: 10000; box-shadow: 0 10px 40px rgba(0,0,0,0.6); border: 1px solid #555; overflow: hidden; }
+        .ed-h { background: #000; color: #fff; padding: 12px; cursor: move; display: flex; justify-content: space-between; align-items: center; }
+        #latex-input { width: 100%; height: 240px; background: #111; color: #2ecc71; font-family: 'Consolas', monospace; font-size: 1.6rem; border: none; padding: 15px; box-sizing: border-box; outline: none; resize: none; display: block; }
+        .m-tools { background: #34495e; padding: 10px; display: flex; gap: 5px; flex-wrap: wrap; }
+        .ink-dot { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid #333; }
+        .ink-active { outline: 3px solid var(--unac-gold); outline-offset: 2px; }
+        
+        .btn-min { background: none; border: 1px solid #fff; color: #fff; cursor: pointer; border-radius: 4px; padding: 0 8px; font-weight: bold; }
+        .minimized #latex-input, .minimized .m-tools { display: none !important; }
+        .minimized { width: 300px !important; }
+    </style>
+</head>
+<body onkeydown="handleGlobalKeys(event)">
+
+<div id="top-bar">
+    <div class="group">
+        <button class="btn" onclick="setLayout(1)">1</button>
+        <button class="btn active-t" onclick="setLayout(2)">2</button>
+        <button class="btn" onclick="setLayout(4)">4</button>
+    </div>
+    <div class="group">
+        <button id="t-pencil" class="btn active-t" onclick="setT('pencil')">✏️ LÁPIZ</button>
+        <button id="t-curva" class="btn" onclick="setT('curva')">⤴️ CURVA</button>
+        <button id="t-recta" class="btn" onclick="setT('recta')">↗️ FLECHA</button>
+        <button id="t-eraser" class="btn" onclick="setT('eraser')">🧽 BORRADOR</button>
+        <button id="t-edit" class="btn" onclick="setT('edit')">🎯 SELECCIÓN</button>
+        <div class="group" style="margin-left:10px; border-left: 1px solid #ccc; padding-left: 10px;">
+            <div id="ink-1" class="ink-dot ink-active" style="background: #e74c3c;" onclick="setInk('#e74c3c', 0)"></div>
+            <div id="ink-2" class="ink-dot" style="background: #3498db;" onclick="setInk('#3498db', 1)"></div>
+            <div id="ink-3" class="ink-dot" style="background: #f1c40f;" onclick="setInk('#f1c40f', 2)"></div>
+            <div id="ink-4" class="ink-dot" style="background: #000;" onclick="setInk('#000', 3)"></div>
+            <div id="ink-5" class="ink-dot" style="background: #fff;" onclick="setInk('#ffffff', 4)"></div>
+        </div>
+    </div>
+    <div class="group"><button class="btn" onclick="undo()">↶</button><button class="btn" onclick="clearD()" style="color:var(--red);">🗑️</button></div>
+</div>
+
+<div id="workspace"></div>
+<div id="ghost-cursor"></div>
+
+<div id="flotante">
+    <div class="ed-h" id="handle">
+        <span>⌨️ EDITOR MATEMÁTICO - UNAC</span>
+        <button class="btn-min" onclick="toggleMin()">-</button>
+    </div>
+    <textarea id="latex-input" spellcheck="false" onkeyup="updateCursor()" onclick="updateCursor()" oninput="render()"></textarea>
+    <div class="m-tools">
+        <button class="btn" onclick="ins('x^{n}')">xⁿ</button>
+        <button class="btn" onclick="ins('\\sqrt[n]{x}')">ⁿ√x</button>
+        <button class="btn" onclick="ins('\\frac{a}{b}')">a/b</button>
+        <button class="btn" onclick="ins('\\times')">×</button>
+        <button class="btn" onclick="ins('x^{2}')">x²</button>
+        <button class="btn" onclick="ins('\\sqrt{x}')">√x</button>
+        <button class="btn" onclick="ins('\\pi')">π</button>
+    </div>
+</div>
+
+<script>
+    let active = 0, tool = 'pencil', drawingState = 'idle';
+    let data = {0:"", 1:"", 2:"", 3:""}, drawings = {0:[], 1:[], 2:[], 3:[]}, ctxs = {}, tCtxs = {};
+    let currentInk = '#e74c3c', startX, startY, endX, endY, currentPath = [];
+    const backgrounds = ['#ffffff', '#fdf6e3', '#1B4D3E', '#1A2A3A'], textColors = ['#000', '#000', '#fff', '#fff'];
+
+    function init() {
+        const ws = document.getElementById('workspace'); ws.innerHTML = '';
+        for (let i = 0; i < 4; i++) {
+            const div = document.createElement('div');
+            div.className = `pizarra-cont ${i===active?'active-p':''}`; div.id = `pc-${i}`;
+            div.addEventListener('pointerdown', (e) => { 
+                if (e.target.closest('.img-drag-wrap')) return;
+                select(i); 
+                if(tool === 'edit') { e.preventDefault(); reubicarCursorPreciso(e); }
+            });
+            const bgBox = document.createElement('div'); bgBox.className = 'bg-controls';
+            backgrounds.forEach((bg, idx) => {
+                const dot = document.createElement('div'); dot.className = 'bg-dot'; dot.style.backgroundColor = bg;
+                dot.onclick = (e) => { e.stopPropagation(); setBoardBg(i, idx); }; bgBox.appendChild(dot);
+            });
+            div.append(bgBox, createLayer('math-layer', `ml-${i}`), createLayer('canvas', `cv-${i}`, true), createLayer('canvas', `tmp-${i}`));
+            ws.append(div); setupCanvas(i);
+        }
+        setLayout(2);
+    }
+
+    function toggleMin() { document.getElementById('flotante').classList.toggle('minimized'); }
+
+    function createLayer(type, id, draw = false) {
+        const el = document.createElement(type === 'canvas' ? 'canvas' : 'div');
+        el.id = id; el.className = draw ? 'draw-layer' : (type === 'canvas' ? 'temp-layer' : 'math-layer');
+        return el;
+    }
+
+    window.addEventListener('paste', (e) => {
+        const item = Array.from(e.clipboardData.items).find(x => x.type.indexOf('image') !== -1);
+        if (item) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'img-drag-wrap';
+                wrap.innerHTML = `<button class="btn-del-img" onclick="this.parentElement.remove()">✕</button><img src="${event.target.result}">`;
+                let isDrag = false, ox, oy;
+                wrap.addEventListener('pointerdown', (e) => {
+                    if(e.target.tagName==='BUTTON') return;
+                    e.stopPropagation();
+                    isDrag = true;
+                    ox = e.clientX - wrap.offsetLeft;
+                    oy = e.clientY - wrap.offsetTop;
+                    wrap.style.zIndex = 3000;
+                });
+                document.addEventListener('pointermove', (e) => {
+                    if(isDrag) {
+                        wrap.style.left = (e.clientX - ox) + 'px';
+                        wrap.style.top = (e.clientY - oy) + 'px';
+                    }
+                });
+                document.addEventListener('pointerup', () => { isDrag = false; wrap.style.zIndex = 500; });
+                document.getElementById(`pc-${active}`).appendChild(wrap);
+            };
+            reader.readAsDataURL(item.getAsFile());
+        }
+    });
+
+    function setBoardBg(b, i) { 
+        const pc = document.getElementById(`pc-${b}`); 
+        pc.style.backgroundColor = backgrounds[i]; pc.style.color = textColors[i]; 
+    }
+
+    function reubicarCursorPreciso(e) {
+        const input = document.getElementById('latex-input');
+        const mathLines = document.getElementById(`ml-${active}`).getElementsByClassName('math-line');
+        if(!mathLines.length) { input.focus(); return; }
+        let row = 0, minDist = Infinity;
+        for(let i=0; i<mathLines.length; i++) {
+            const r = mathLines[i].getBoundingClientRect();
+            const d = Math.abs(e.clientY - (r.top + r.height/2));
+            if(d < minDist) { minDist = d; row = i; }
+        }
+        const rect = mathLines[row].getBoundingClientRect();
+        const textInRow = input.value.split('\n')[row] || "";
+        const clickX = e.clientX - rect.left;
+        const col = Math.max(0, Math.min(textInRow.length, Math.round((clickX / rect.width) * textInRow.length)));
+        let pos = 0; const allLines = input.value.split('\n');
+        for(let i=0; i < row; i++) pos += (allLines[i].length + 1);
+        input.focus();
+        setTimeout(() => { input.setSelectionRange(pos + col, pos + col); updateCursor(); }, 0);
+    }
+
+    function updateCursor() {
+        const input = document.getElementById('latex-input');
+        const lines = input.value.substring(0, input.selectionStart).split('\n');
+        const row = lines.length - 1, col = lines[row].length;
+        const cursor = document.getElementById('ghost-cursor');
+        const mathLines = document.getElementById(`ml-${active}`).getElementsByClassName('math-line');
+        if (mathLines[row]) {
+            const rect = mathLines[row].getBoundingClientRect();
+            const fullTextLen = input.value.split('\n')[row].length || 1;
+            const charPos = (rect.width * (col / fullTextLen));
+            cursor.style.display = 'block';
+            cursor.style.left = (rect.left + charPos) + 'px';
+            cursor.style.top = rect.top + 'px';
+            cursor.style.height = rect.height + 'px';
+        } else { cursor.style.display = 'none'; }
+    }
+
+    function setupCanvas(id) {
+        const cv = document.getElementById(`cv-${id}`), tmp = document.getElementById(`tmp-${id}`);
+        const ctx = cv.getContext('2d'), tCtx = tmp.getContext('2d');
+        ctxs[id] = ctx; tCtxs[id] = tCtx;
+        const res = () => { cv.width = cv.offsetWidth; cv.height = cv.offsetHeight; tmp.width = tmp.offsetWidth; tmp.height = tmp.offsetHeight; redrawBoard(id); };
+        window.addEventListener('resize', res); res();
+
+        cv.onpointerdown = (e) => {
+            if(tool === 'edit' || e.target.closest('.img-drag-wrap')) return;
+            cv.setPointerCapture(e.pointerId);
+            const x = e.offsetX, y = e.offsetY;
+            if(tool==='eraser') { eraseAt(x, y, id); return; }
+            if(tool==='pencil') { drawingState = 'drawing'; currentPath = [[x,y]]; }
+            if(tool==='recta') { drawingState = 'dragging'; startX = x; startY = y; }
+            if(tool==='curva') {
+                if(drawingState==='idle') { drawingState='dragging_base'; startX=x; startY=y; }
+                else if(drawingState==='bending') {
+                    drawings[id].push({type:'curva', x1:startX, y1:startY, x2:endX, y2:endY, cx:x, cy:y, color:currentInk});
+                    drawingState='idle'; redrawBoard(id);
+                }
+            }
+        };
+        cv.onpointermove = (e) => {
+            if(drawingState==='idle' || tool==='edit') return;
+            tCtx.clearRect(0,0,tmp.width,tmp.height);
+            if(tool==='pencil' && drawingState==='drawing') { currentPath.push([e.offsetX,e.offsetY]); drawPencil(tCtx, currentPath, currentInk); }
+            if(tool==='recta' && drawingState==='dragging') drawArrow(tCtx, startX, startY, e.offsetX, e.offsetY, currentInk);
+            if(drawingState==='dragging_base') { tCtx.beginPath(); tCtx.moveTo(startX,startY); tCtx.lineTo(e.offsetX,e.offsetY); tCtx.strokeStyle=currentInk+'44'; tCtx.stroke(); }
+            if(drawingState==='bending') { drawBezier(tCtx, startX, startY, endX, endY, e.offsetX, e.offsetY, currentInk); drawArrowHead(tCtx, startX, startY, endX, endY, currentInk, e.offsetX, e.offsetY); }
+        };
+        cv.onpointerup = (e) => {
+            if(tool==='pencil' && drawingState==='drawing') { drawings[id].push({type:'pencil', path:[...currentPath], color:currentInk}); drawingState='idle'; }
+            if(tool==='recta' && drawingState==='dragging') { drawings[id].push({type:'recta', x1:startX, y1:startY, x2:e.offsetX, y2:e.offsetY, color:currentInk}); drawingState='idle'; }
+            if(drawingState==='dragging_base') { endX=e.offsetX; endY=e.offsetY; drawingState='bending'; return; }
+            tCtx.clearRect(0,0,tmp.width,tmp.height); redrawBoard(id);
+        };
+    }
+
+    function drawArrowHead(ctx, x1, y1, x2, y2, color, cx, cy) {
+        let angle = cx !== undefined ? Math.atan2(y2 - cy, x2 - cx) : Math.atan2(y2 - y1, x2 - x1);
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        ctx.moveTo(x2, y2); ctx.lineTo(x2 - 15 * Math.cos(angle - 0.5), y2 - 15 * Math.sin(angle - 0.5));
+        ctx.moveTo(x2, y2); ctx.lineTo(x2 - 15 * Math.cos(angle + 0.5), y2 - 15 * Math.sin(angle + 0.5)); ctx.stroke();
+    }
+    function drawPencil(ctx, p, col) { ctx.strokeStyle=col; ctx.lineWidth=3; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(p[0][0],p[0][1]); p.forEach(v=>ctx.lineTo(v[0],v[1])); ctx.stroke(); }
+    function drawArrow(ctx, x1, y1, x2, y2, col) { ctx.strokeStyle=col; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); drawArrowHead(ctx, x1, y1, x2, y2, col); }
+    function drawBezier(ctx, x1, y1, x2, y2, cx, cy, col) { ctx.strokeStyle=col; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.quadraticCurveTo(cx,cy,x2,y2); ctx.stroke(); }
+    
+    function redrawBoard(id) {
+        const ctx = ctxs[id]; if(!ctx) return; ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
+        drawings[id].forEach(d => {
+            if(d.type==='pencil') drawPencil(ctx, d.path, d.color);
+            if(d.type==='recta') drawArrow(ctx, d.x1, d.y1, d.x2, d.y2, d.color);
+            if(d.type==='curva') { drawBezier(ctx, d.x1, d.y1, d.x2, d.y2, d.cx, d.cy, d.color); drawArrowHead(ctx, d.x1, d.y1, d.x2, d.y2, d.color, d.cx, d.cy); }
+        });
+    }
+
+    function select(i) { active=i; document.querySelectorAll('.pizarra-cont').forEach((p,idx)=>p.classList.toggle('active-p', idx===i)); document.getElementById('latex-input').value=data[i]||""; render(); }
+    function setInk(c, i) { currentInk=c; document.querySelectorAll('.ink-dot').forEach((d,idx)=>d.classList.toggle('ink-active', idx===i)); }
+    function setT(t) { tool=t; document.querySelectorAll('.btn').forEach(b=>b.classList.remove('active-t')); document.getElementById(`t-${t}`).classList.add('active-t'); }
+    function ins(s) { const el = document.getElementById('latex-input'); el.setRangeText(s, el.selectionStart, el.selectionEnd, 'end'); el.focus(); render(); }
+    
+    function render() { 
+        data[active]=document.getElementById('latex-input').value; 
+        const target=document.getElementById(`ml-${active}`); 
+        target.innerHTML = data[active].split('\n').map(l => l.trim() ? `<div class="math-line">\\( ${l.replace(/ /g, '\\; ')} \\)</div>` : '<div class="math-line" style="visibility:hidden">.</div>').join(''); 
+        if(window.MathJax) MathJax.typesetPromise([target]).then(()=>{ fit(active); updateCursor(); }); 
+    }
+    function fit(id) { const ml=document.getElementById(`ml-${id}`), pc=document.getElementById(`pc-${id}`); ml.style.transform='scale(1)'; const s=Math.min((pc.offsetWidth-80)/ml.scrollWidth, (pc.offsetHeight-80)/ml.scrollHeight); ml.style.transform=`scale(${s>1?1:s})`; }
+    function setLayout(n) { const ws = document.getElementById('workspace'); ws.style.gridTemplateColumns=n===1?"1fr":"1fr 1fr"; ws.style.gridTemplateRows=n===4?"1fr 1fr":"1fr"; setTimeout(()=>window.dispatchEvent(new Event('resize')), 100); }
+    
+    function undo() { 
+        drawings[active].pop(); 
+        redrawBoard(active); 
+    }
+
+    function clearD() { drawings[active]=[]; document.querySelectorAll(`#pc-${active} .img-drag-wrap`).forEach(e=>e.remove()); redrawBoard(active); }
+    
+    // CORRECCIÓN CLAVE: Control + Z bloquea el textarea y borra solo dibujo
+    function handleGlobalKeys(e) { 
+        if(e.ctrlKey && e.key.toLowerCase()==='z') { 
+            e.preventDefault(); // Bloquea el deshacer de texto del navegador
+            undo(); 
+        } 
+    }
+
+    function eraseAt(x,y,id) { const SENS=30; drawings[id]=drawings[id].filter(d=>{ if(d.type==='pencil') return !d.path.some(p=>Math.hypot(p[0]-x,p[1]-y)<SENS); return !(Math.hypot(d.x1-x,d.y1-y)<SENS || Math.hypot(d.x2-x,d.y2-y)<SENS); }); redrawBoard(id); }
+
+    const f=document.getElementById('flotante'), h=document.getElementById('handle'); let mf=false, oxf, oyf;
+    h.onmousedown=(e)=>{ if(e.target.tagName==='BUTTON') return; mf=true; oxf=e.clientX-f.offsetLeft; oyf=e.clientY-f.offsetTop; };
+    document.addEventListener('mousemove',(e)=>{ if(mf){ f.style.left=(e.clientX-oxf)+'px'; f.style.top=(e.clientY-oyf)+'px'; f.style.bottom='auto'; }});
+    document.addEventListener('mouseup',()=>mf=false);
+    init();
+</script>
+</body>
+</html>

@@ -94,6 +94,16 @@
   }
 }
 
+/* Animación de parpadeo para cursor fantasma del editor LaTeX */
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
 .animate-neon {
   animation: flicker 1.5s infinite alternate;
 }

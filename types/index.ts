@@ -200,6 +200,139 @@ export interface WhiteboardContent {
   images?: WhiteboardImage[]  // Imágenes pegadas
   latexContent?: string       // Contenido LaTeX en tiempo real (posición fija)
   latexFontSize?: number      // Tamaño de fuente del LaTeX
+  // Geometría 2D interactiva
+  geometry2D?: Geometry2DContent
+  // Geometría 3D interactiva
+  geometry3D?: Geometry3DObject[]
+}
+
+// ============================================
+// Tipos para Geometría 2D Interactiva
+// ============================================
+
+export interface GeometryVertex {
+  id: string
+  x: number
+  y: number
+  label?: string              // Etiqueta opcional (A, B, C, etc.)
+  color?: string
+}
+
+export interface GeometryEdge {
+  id: string
+  startVertexId: string       // ID del vértice inicial
+  endVertexId: string         // ID del vértice final
+  color?: string
+  strokeWidth?: number
+}
+
+export interface GeometryAngle {
+  id: string
+  vertexAId: string           // Primer punto del ángulo
+  vertexVId: string           // Vértice del ángulo (centro)
+  vertexBId: string           // Segundo punto del ángulo
+  value?: string              // Valor del ángulo (ej: "45°")
+  color?: string
+  arcRadius?: number
+}
+
+export type GeometryMarkType = 'lines' | 'circle' | 'thick' | 'zigzag'
+
+export interface GeometryMark {
+  id: string
+  edgeId: string              // ID del segmento al que pertenece
+  type: GeometryMarkType      // Tipo de marca: || ● ━ 〰
+  color?: string
+}
+
+export interface GeometryArea {
+  id: string
+  vertexIds: string[]         // IDs de los vértices que forman el área
+  fillColor: string           // Color de relleno con transparencia
+}
+
+export interface Geometry2DFigure {
+  id: string
+  figureType: 'triangle' | 'square' | 'rectangle' | 'rhombus' | 'parallelogram' | 'trapezoid' | 'circle'
+  vertexIds: string[]         // IDs de los vértices que forman la figura
+  edgeIds: string[]           // IDs de las aristas
+  centerX?: number            // Para círculos
+  centerY?: number
+  radius?: number
+  fillColor?: string
+}
+
+export interface Geometry2DContent {
+  vertices: GeometryVertex[]
+  edges: GeometryEdge[]
+  angles: GeometryAngle[]
+  marks: GeometryMark[]
+  areas: GeometryArea[]
+  figures: Geometry2DFigure[]
+  circles: GeometryCircle[]
+}
+
+export interface GeometryCircle {
+  id: string
+  centerX: number
+  centerY: number
+  radius: number
+  fillColor?: string
+  strokeColor?: string
+}
+
+// ============================================
+// Tipos para Geometría 3D Interactiva
+// ============================================
+
+export interface Geometry3DVertex {
+  id: string
+  x: number
+  y: number
+  z: number
+  isUserAdded?: boolean       // Si fue agregado por el usuario sobre una arista
+}
+
+export interface Geometry3DEdge {
+  id: string
+  startVertexId: string
+  endVertexId: string
+  color?: string
+  isUserAdded?: boolean
+}
+
+export interface Geometry3DFace {
+  id: string
+  vertexIds: string[]         // IDs de los vértices que forman la cara
+  fillColor: string
+  opacity?: number
+}
+
+export interface Geometry3DAngle {
+  id: string
+  vertexAId: string
+  vertexVId: string
+  vertexBId: string
+  value?: string
+}
+
+export type Geometry3DFigureType = 'cube' | 'tetrahedron' | 'cone' | 'sphere' | 'pyramid' | 'cylinder' | 'prism'
+
+export interface Geometry3DObject {
+  id: string
+  figureType: Geometry3DFigureType
+  x: number                   // Posición en el canvas 2D
+  y: number
+  width: number               // Tamaño del visor 3D
+  height: number
+  rotationX: number           // Rotación actual
+  rotationY: number
+  scale: number
+  vertices: Geometry3DVertex[]
+  edges: Geometry3DEdge[]
+  faces: Geometry3DFace[]
+  angles: Geometry3DAngle[]
+  cameraPosition?: { x: number; y: number; z: number }
 }
 
 export interface Whiteboard {

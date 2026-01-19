@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Pizarra Geométrica Master - Versión Final</title>
+    <style>
+        html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; width: 100%; display: flex; flex-direction: column; font-family: sans-serif; }
+        #toolbar { background: #2c3e50; padding: 10px; display: flex; gap: 8px; flex-wrap: wrap; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 10; color: white; align-items: center; }
+        .group { border-right: 1px solid #555; padding-right: 8px; font-size: 10px; text-transform: uppercase; }
+        button { padding: 5px 8px; cursor: pointer; border: 1px solid #444; background: #ecf0f1; border-radius: 4px; font-weight: bold; font-size: 11px; }
+        button.active { background: #3498db; color: white; }
+        select { padding: 4px; border-radius: 4px; font-size: 11px; }
+        .swatch { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; display: inline-block; vertical-align: middle; margin: 0 1px; }
+        .swatch.selected { border-color: white; box-shadow: 0 0 4px white; }
+        #canvas-container { flex-grow: 1; background: #bdc3c7; position: relative; cursor: crosshair; }
+        canvas { background: white; display: block; }
+        .input-angulo { position: absolute; background: white; border: 2px solid #333; padding: 2px; border-radius: 3px; z-index: 20; }
+        .input-angulo input { border: none; outline: none; width: 40px; text-align: center; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="toolbar">
+    <div class="group">Edición<br>
+        <button id="btn-mover" class="active">MOVER</button>
+        <button id="btn-escalar">ESCALAR</button>
+    </div>
+    <div class="group">Dibujo<br>
+        <button id="btn-segmento">SEGMENTO</button>
+        <button id="btn-angulo">ÁNGULO</button>
+        <button id="btn-marcar">MARCAR</button>
+        <select id="tipo-marca"><option value="rayas">||</option><option value="circulo">●</option><option value="gruesa">━</option><option value="zigzag">〰</option></select>
+    </div>
+    <div class="group">Pintar<br>
+        <button id="btn-area">ÁREA</button>
+        <div id="swatch-box">
+            <div class="swatch selected" style="background: #FFD1DC;" data-color="rgba(255, 209, 220, 0.5)"></div>
+            <div class="swatch" style="background: #E0FBE2;" data-color="rgba(224, 251, 226, 0.5)"></div>
+            <div class="swatch" style="background: #E6E6FA;" data-color="rgba(230, 230, 250, 0.5)"></div>
+            <div class="swatch" style="background: #B2EBF2;" data-color="rgba(178, 235, 242, 0.5)"></div>
+            <div class="swatch" style="background: #FFF9E3;" data-color="rgba(255, 249, 227, 0.5)"></div>
+            <div class="swatch" style="background: #FFDAB9;" data-color="rgba(255, 218, 185, 0.5)"></div>
+        </div>
+    </div>
+    <div class="group">Figuras<br>
+        <button onclick="crearFigura('triangulo')">△</button>
+        <button onclick="crearFigura('cuadrado')">□</button>
+        <button onclick="crearFigura('rectangulo')">▭</button>
+        <button onclick="crearFigura('rombo')">♢</button>
+        <button onclick="crearFigura('romboide')">▱</button>
+        <button onclick="crearFigura('trapecio')">⏢</button>
+        <button onclick="crearFigura('circulo')">◯</button>
+    </div>
+    <button id="btn-borrar" style="background: #e74c3c; color: white; margin-left: auto;">Limpiar</button>
+</div>
+
+<div id="canvas-container">
+    <canvas id="pizarra"></canvas>
+    <div id="input-container"></div>
+</div>
+
+<script>
+    const canvas = document.getElementById('pizarra');
+    const ctx = canvas.getContext('2d');
+    const inputContainer = document.getElementById('input-container');
+
+    let modo = 'mover', puntos = [], lineas = [], arcos = [], areas = [], circulos = [], marcas = [];
+    let seleccionArea = [], seleccionAngulo = [], seleccionMarca = [];
+    let puntoSeleccionado = null, figuraSeleccionada = [], circuloSeleccionado = null;
+    let colorPastelActual = 'rgba(255, 209, 220, 0.5)', ultimaPos = {x:0, y:0}, centroEscala = {x:0, y:0}, distRef = 0;
+
+    // --- CONTROLES ---
+    document.querySelectorAll('button[id^="btn-"]').forEach(btn => {
+        btn.onclick = () => {
+            if (btn.id === 'btn-borrar') return;
+            document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            modo = btn.id.replace('btn-', '');
+            seleccionArea = []; seleccionAngulo = []; seleccionMarca = [];
+        };
+    });
+
+    document.querySelectorAll('.swatch').forEach(sw => {
+        sw.onclick = () => {
+            document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+            sw.classList.add('selected');
+            colorPastelActual = sw.dataset.color;
+            document.getElementById('btn-area').click();
+        };
+    });
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight - document.getElementById('toolbar').offsetHeight;
+        dibujar();
+    }
+    window.onresize = resize; resize();
+
+    function getMouse(e) {
+        const rect = canvas.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    // --- INTERACCION ---
+    canvas.ondblclick = (e) => {
+        if (modo === 'area') {
+            const m = getMouse(e);
+            areas = areas.filter(a => !puntoEnPoligono(m.x, m.y, a.pts));
+            dibujar();
+        }
+    };
+
+    canvas.onmousedown = (e) => {
+        const m = getMouse(e);
+        const p = puntos.find(p => Math.hypot(p.x - m.x, p.y - m.y) < 15);
+        const c = circulos.find(c => Math.hypot(m.x - c.x, m.y - c.y) < c.r + 10);
+
+        if (modo === 'segmento') {
+            puntoSeleccionado = p || {x: m.x, y: m.y};
+            if (!p) puntos.push(puntoSeleccionado);
+        } else if (modo === 'marcar' && p) {
+            seleccionMarca.push(p);
+            if (seleccionMarca.length === 2) {
+                marcas.push({ p1: seleccionMarca[0], p2: seleccionMarca[1], tipo: document.getElementById('tipo-marca').value });
+                seleccionMarca = [];
+            }
+        } else if (modo === 'angulo' && p) {
+            seleccionAngulo.push(p);
+            if (seleccionAngulo.length === 3) {
+                const nuevo = { p1: seleccionAngulo[0], pV: seleccionAngulo[1], p2: seleccionAngulo[2], valor: "" };
+                arcos.push(nuevo);
+                mostrarInput(m.x, m.y, nuevo);
+                seleccionAngulo = [];
+            }
+        } else if (modo === 'area' && p) {
+            if (seleccionArea.length > 2 && p === seleccionArea[0]) {
+                areas.push({ pts: [...seleccionArea], color: colorPastelActual });
+                seleccionArea = [];
+            } else if (!seleccionArea.includes(p)) seleccionArea.push(p);
+        } else if (modo === 'mover') {
+            puntoSeleccionado = p;
+            circuloSeleccionado = c;
+            if (!p && !c) {
+                const l = lineas.find(l => distPuntoALinea(m.x, m.y, l.p1.x, l.p1.y, l.p2.x, l.p2.y) < 10);
+                if (l) figuraSeleccionada = obtenerPuntosConectados(l.p1);
+            }
+        } else if (modo === 'escalar') {
+            circuloSeleccionado = c;
+            if (p) {
+                puntoSeleccionado = p;
+                figuraSeleccionada = obtenerPuntosConectados(p);
+                centroEscala = { x: figuraSeleccionada.reduce((a,b)=>a+b.x,0)/figuraSeleccionada.length, y: figuraSeleccionada.reduce((a,b)=>a+b.y,0)/figuraSeleccionada.length };
+                figuraSeleccionada.forEach(pt => { pt.origX = pt.x; pt.origY = pt.y; });
+                distRef = Math.hypot(m.x - centroEscala.x, m.y - centroEscala.y) || 1;
+            }
+        }
+        ultimaPos = m;
+        dibujar();
+    };
+
+    canvas.onmousemove = (e) => {
+        const m = getMouse(e);
+        if (modo === 'mover') {
+            if (puntoSeleccionado) { puntoSeleccionado.x = m.x; puntoSeleccionado.y = m.y; }
+            else if (circuloSeleccionado) { circuloSeleccionado.x += m.x - ultimaPos.x; circuloSeleccionado.y += m.y - ultimaPos.y; }
+            else if (figuraSeleccionada.length) { figuraSeleccionada.forEach(p => { p.x += m.x - ultimaPos.x; p.y += m.y - ultimaPos.y; }); }
+        } else if (modo === 'escalar') {
+            if (circuloSeleccionado) { circuloSeleccionado.r = Math.hypot(m.x - circuloSeleccionado.x, m.y - circuloSeleccionado.y); }
+            else if (puntoSeleccionado) {
+                const f = Math.hypot(m.x - centroEscala.x, m.y - centroEscala.y) / distRef;
+                figuraSeleccionada.forEach(p => { p.x = centroEscala.x + (p.origX - centroEscala.x)*f; p.y = centroEscala.y + (p.origY - centroEscala.y)*f; });
+            }
+        }
+        ultimaPos = m;
+        dibujar();
+    };
+
+    canvas.onmouseup = (e) => {
+        const m = getMouse(e);
+        if (modo === 'segmento' && puntoSeleccionado) {
+            let pFin = puntos.find(p => p !== puntoSeleccionado && Math.hypot(p.x - m.x, p.y - m.y) < 15) || {x: m.x, y: m.y};
+            if (!puntos.includes(pFin)) puntos.push(pFin);
+            lineas.push({p1: puntoSeleccionado, p2: pFin});
+        }
+        puntoSeleccionado = null; figuraSeleccionada = []; circuloSeleccionado = null;
+        dibujar();
+    };
+
+    // --- DIBUJO ---
+    function dibujar() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        areas.forEach(a => { ctx.fillStyle = a.color; ctx.beginPath(); ctx.moveTo(a.pts[0].x, a.pts[0].y); a.pts.forEach(p => ctx.lineTo(p.x, p.y)); ctx.fill(); });
+        circulos.forEach(c => { ctx.fillStyle = c.color; ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, 7); ctx.fill(); ctx.strokeStyle = '#333'; ctx.stroke(); ctx.fillStyle = '#3498db'; ctx.beginPath(); ctx.arc(c.x, c.y, 4, 0, 7); ctx.fill(); });
+        arcos.forEach(arc => {
+            let a1 = Math.atan2(arc.p1.y-arc.pV.y, arc.p1.x-arc.pV.x), a2 = Math.atan2(arc.p2.y-arc.pV.y, arc.p2.x-arc.pV.x);
+            let d = a2 - a1; while (d < -Math.PI) d += 2*Math.PI; while (d > Math.PI) d -= 2*Math.PI;
+            ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(arc.pV.x, arc.pV.y, 30, a1, a1+d, d<0); ctx.stroke();
+            if(arc.valor) { ctx.fillStyle = '#27ae60'; ctx.font = "bold 13px Arial"; ctx.fillText(arc.valor + "°", arc.pV.x + 40*Math.cos(a1+d/2)-8, arc.pV.y + 40*Math.sin(a1+d/2)+5); }
+        });
+        marcas.forEach(mar => {
+            const mx = (mar.p1.x + mar.p2.x)/2, my = (mar.p1.y + mar.p2.y)/2, ang = Math.atan2(mar.p2.y-mar.p1.y, mar.p2.x-mar.p1.x);
+            ctx.save(); ctx.translate(mx, my); ctx.rotate(ang); ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+            if(mar.tipo === 'rayas') { ctx.beginPath(); ctx.moveTo(-3,-8); ctx.lineTo(-3,8); ctx.moveTo(3,-8); ctx.lineTo(3,8); ctx.stroke(); }
+            else if(mar.tipo === 'circulo') { ctx.fillStyle = '#e74c3c'; ctx.beginPath(); ctx.arc(0,0,4,0,7); ctx.fill(); }
+            else if(mar.tipo === 'gruesa') { ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(8,0); ctx.stroke(); }
+            else if(mar.tipo === 'zigzag') { ctx.beginPath(); ctx.moveTo(-10,4); ctx.lineTo(-5,-4); ctx.lineTo(0,4); ctx.lineTo(5,-4); ctx.lineTo(10,4); ctx.stroke(); }
+            ctx.restore();
+        });
+        lineas.forEach(l => { ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(l.p1.x, l.p1.y); ctx.lineTo(l.p2.x, l.p2.y); ctx.stroke(); });
+        puntos.forEach(p => { ctx.fillStyle = (seleccionArea.includes(p) || seleccionAngulo.includes(p) || seleccionMarca.includes(p)) ? '#e67e22' : '#3498db'; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, 7); ctx.fill(); });
+    }
+
+    function crearFigura(tipo) {
+        let x = canvas.width/2, y = canvas.height/2, pts = [], s = 60;
+        if (tipo === 'circulo') circulos.push({x, y, r: s, color: colorPastelActual});
+        else {
+            if (tipo === 'triangulo') pts = [{x, y:y-s}, {x:x-s, y:y+s}, {x:x+s, y:y+s}];
+            else if (tipo === 'cuadrado') pts = [{x:x-s, y:y-s}, {x:x+s, y:y-s}, {x:x+s, y:y+s}, {x:x-s, y:y+s}];
+            else if (tipo === 'rectangulo') pts = [{x:x-s*1.5, y:y-s}, {x:x+s*1.5, y:y-s}, {x:x+s*1.5, y:y+s}, {x:x-s*1.5, y:y+s}];
+            else if (tipo === 'rombo') pts = [{x, y:y-s}, {x:x+s*1.2, y}, {x, y:y+s}, {x:x-s*1.2, y}];
+            else if (tipo === 'romboide') pts = [{x:x-s+20, y:y-s}, {x:x+s+20, y:y-s}, {x:x+s-20, y:y+s}, {x:x-s-20, y:y+s}];
+            else if (tipo === 'trapecio') pts = [{x:x-s/1.5, y:y-s}, {x:x+s/1.5, y:y-s}, {x:x+s, y:y+s}, {x:x-s, y:y+s}];
+            const ns = pts.map(p => { let n = {x: p.x, y: p.y}; puntos.push(n); return n; });
+            for(let i=0; i<ns.length; i++) lineas.push({p1: ns[i], p2: ns[(i+1)%ns.length]});
+        }
+        dibujar();
+    }
+
+    function mostrarInput(x, y, arco) {
+        inputContainer.innerHTML = "";
+        const div = document.createElement('div'); div.className = 'input-angulo';
+        div.style.left = x + "px"; div.style.top = y + "px";
+        div.innerHTML = `<input type="text" id="t-v" placeholder="?">°`;
+        inputContainer.appendChild(div);
+        const inp = document.getElementById('t-v'); inp.focus();
+        inp.onkeydown = (e) => { if(e.key === 'Enter') { arco.valor = inp.value; inputContainer.innerHTML = ""; dibujar(); } };
+    }
+
+    function distPuntoALinea(px, py, x1, y1, x2, y2) {
+        const L2 = (x2-x1)**2 + (y2-y1)**2; if (L2 === 0) return Math.hypot(px-x1, py-y1);
+        let t = Math.max(0, Math.min(1, ((px-x1)*(x2-x1) + (py-y1)*(y2-y1)) / L2));
+        return Math.hypot(px-(x1+t*(x2-x1)), py-(y1+t*(y2-y1)));
+    }
+    function obtenerPuntosConectados(p) {
+        let c = new Set([p]), cambio = true;
+        while(cambio) { cambio = false; lineas.forEach(l => { if(c.has(l.p1) && !c.has(l.p2)) { c.add(l.p2); cambio = true; } if(c.has(l.p2) && !c.has(l.p1)) { c.add(l.p1); cambio = true; } }); }
+        return Array.from(c);
+    }
+    function puntoEnPoligono(x, y, pts) {
+        let ins = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            if (((pts[i].y > y) != (pts[j].y > y)) && (x < (pts[j].x - pts[i].x) * (y - pts[i].y) / (pts[j].y - pts[i].y) + pts[i].x)) ins = !ins;
+        }
+        return ins;
+    }
+    document.getElementById('btn-borrar').onclick = () => { puntos=[]; lineas=[]; arcos=[]; areas=[]; circulos=[]; marcas=[]; dibujar(); };
+</script>
+</body>
+</html>

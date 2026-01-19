@@ -4,11 +4,23 @@ import AdminHeader from '@/components/AdminHeader'
 import { useAuth } from '@/components/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import WhiteboardCanvas, { WhiteboardCanvasRef } from '@/components/whiteboard/WhiteboardCanvas'
-import { WhiteboardContent, WhiteboardFormula, WhiteboardImage, WhiteboardShape } from '@/types'
+import { Geometry3DObject, WhiteboardContent, WhiteboardFormula, WhiteboardImage, WhiteboardShape } from '@/types'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+
+// Cargar componentes 3D dinámicamente para evitar SSR con Three.js
+const Inline3DViewer = dynamic(
+  () => import('@/components/whiteboard/Inline3DViewer'),
+  { ssr: false, loading: () => <div className="animate-pulse bg-gray-200 rounded" /> }
+)
+
+const Geometry2DCanvas = dynamic(
+  () => import('@/components/whiteboard/Geometry2DCanvas'),
+  { ssr: false, loading: () => <div className="animate-pulse bg-gray-200 rounded" /> }
+)
 
 // Colores disponibles
 const COLORS = [
@@ -185,6 +197,17 @@ export default function WhiteboardMultiPage() {
   const [formulaPosition, setFormulaPosition] = useState<{ x: number; y: number }>({ x: 100, y: 200 })
   const [formulaCategory, setFormulaCategory] = useState<'basic' | 'greek-lower' | 'greek-upper' | 'trig' | 'operators' | 'chemistry' | 'shapes-2d' | 'shapes-3d'>('basic')
   const formulaInputRef = useRef<HTMLTextAreaElement>(null)
+  
+  // Edición inline de fórmulas (directamente en la pizarra)
+  const [inlineEditingFormulaId, setInlineEditingFormulaId] = useState<string | null>(null)
+  const [inlineFormulaValue, setInlineFormulaValue] = useState('')
+  const [inlineFormulaScale, setInlineFormulaScale] = useState(1.5)
+  const inlineFormulaRef = useRef<HTMLTextAreaElement>(null)
+  
+  // Cursor fantasma para LaTeX en tiempo real
+  const [ghostCursorPos, setGhostCursorPos] = useState<{ top: number; left: number; height: number } | null>(null)
+  const latexLayerRef = useRef<HTMLDivElement>(null)
+  
   const [formulaPanelPos, setFormulaPanelPos] = useState({ x: 0, y: 0 }) // 0,0 = posición por defecto (bottom-right)
   const [formulaPanelSize, setFormulaPanelSize] = useState({ width: 340, height: 300 }) // Tamaño del panel (responsive)
   const [isDraggingPanel, setIsDraggingPanel] = useState(false)
@@ -498,6 +521,14 @@ export default function WhiteboardMultiPage() {
 
   // Fullscreen
   const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Visor 3D Inline (en lugar de modal)
+  const [active3DShape, setActive3DShape] = useState<{ id: string; shapeType: string; x: number; y: number; scale: number } | null>(null)
+  
+  // Canvas Geometría 2D - ahora inline en la pizarra
+  const [showGeometry2D, setShowGeometry2D] = useState(false)
+  const [editing2DElementId, setEditing2DElementId] = useState<string | null>(null) // ID del elemento 2D que se está editando
+  const [editing3DElementId, setEditing3DElementId] = useState<string | null>(null) // ID del elemento 3D que se está editando
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Dropdowns
@@ -507,8 +538,8 @@ export default function WhiteboardMultiPage() {
   const [showViewModes, setShowViewModes] = useState(false)
 
   // Selección de elementos
-  const [selectedElements, setSelectedElements] = useState<Array<{ type: 'stroke' | 'text' | 'formula' | 'shape' | 'image'; id: string }>>([])
-  const selectedElementsRef = useRef<Array<{ type: 'stroke' | 'text' | 'formula' | 'shape' | 'image'; id: string }>>([])
+  const [selectedElements, setSelectedElements] = useState<Array<{ type: 'stroke' | 'text' | 'formula' | 'shape' | 'image' | 'geometry2d' | 'geometry3d'; id: string }>>([])
+  const selectedElementsRef = useRef<Array<{ type: 'stroke' | 'text' | 'formula' | 'shape' | 'image' | 'geometry2d' | 'geometry3d'; id: string }>>([])
   
   // Drag para mover elementos
   const [dragging, setDragging] = useState(false)
@@ -548,13 +579,16 @@ export default function WhiteboardMultiPage() {
     selectedElementsRef.current = selectedElements
   }, [selectedElements])
 
+  // Tipo para elementos seleccionables
+  type SelectableType = 'stroke' | 'text' | 'formula' | 'shape' | 'image' | 'geometry2d' | 'geometry3d'
+  
   // Funciones de selección
-  const isElementSelected = (type: 'stroke' | 'text' | 'formula' | 'shape' | 'image', id: string, useRef = false) => {
+  const isElementSelected = (type: SelectableType, id: string, useRef = false) => {
     const elements = useRef ? selectedElementsRef.current : selectedElements
     return elements.some(el => el.type === type && el.id === id)
   }
 
-  const toggleSelection = (type: 'stroke' | 'text' | 'formula' | 'shape' | 'image', id: string, addToSelection: boolean) => {
+  const toggleSelection = (type: SelectableType, id: string, addToSelection: boolean) => {
     if (addToSelection) {
       if (isElementSelected(type, id)) {
         setSelectedElements(prev => prev.filter(el => !(el.type === type && el.id === id)))
@@ -568,12 +602,13 @@ export default function WhiteboardMultiPage() {
 
   const selectAll = () => {
     const quadrantContent = quadrants[activeQuadrant].content
-    const all: Array<{ type: 'stroke' | 'text' | 'formula' | 'shape' | 'image'; id: string }> = []
+    const all: Array<{ type: SelectableType; id: string }> = []
     quadrantContent.strokes.forEach(s => all.push({ type: 'stroke', id: s.id }))
     ;(quadrantContent.textBoxes || []).forEach(t => all.push({ type: 'text', id: t.id }))
     ;(quadrantContent.formulas || []).forEach(f => all.push({ type: 'formula', id: f.id }))
     ;(quadrantContent.shapes || []).forEach(sh => all.push({ type: 'shape', id: sh.id }))
     ;(quadrantContent.images || []).forEach(img => all.push({ type: 'image', id: img.id }))
+    ;(quadrantContent.geometry3D || []).forEach(g => all.push({ type: 'geometry3d', id: g.id }))
     setSelectedElements(all)
   }
 
@@ -588,6 +623,7 @@ export default function WhiteboardMultiPage() {
       formulas: (quadrantContent.formulas || []).filter(f => !isElementSelected('formula', f.id, true)),
       shapes: (quadrantContent.shapes || []).filter(sh => !isElementSelected('shape', sh.id, true)),
       images: (quadrantContent.images || []).filter(img => !isElementSelected('image', img.id, true)),
+      geometry3D: (quadrantContent.geometry3D || []).filter(g => !isElementSelected('geometry3d', g.id, true)),
     }
     updateQuadrantContent(activeQuadrant, newContent)
     setSelectedElements([])
@@ -629,6 +665,12 @@ export default function WhiteboardMultiPage() {
           return { ...img, x: img.x + deltaX, y: img.y + deltaY }
         }
         return img
+      }),
+      geometry3D: (quadrantContent.geometry3D || []).map(g => {
+        if (isElementSelected('geometry3d', g.id)) {
+          return { ...g, x: g.x + deltaX, y: g.y + deltaY }
+        }
+        return g
       }),
     }
     updateQuadrantContent(activeQuadrant, newContent)
@@ -673,12 +715,12 @@ export default function WhiteboardMultiPage() {
   }
 
   // Handlers de drag
-  const handleDragStart = (e: React.MouseEvent, type: 'stroke' | 'text' | 'formula' | 'shape' | 'image', id: string) => {
+  const handleDragStart = (e: React.MouseEvent, type: SelectableType, id: string) => {
     if (currentTool !== 'select') return
     e.stopPropagation()
     
     // Lógica profesional de selección
-    let newSelection: Array<{ type: 'stroke' | 'text' | 'formula' | 'shape' | 'image'; id: string }>
+    let newSelection: Array<{ type: SelectableType; id: string }>
     
     if (isElementSelected(type, id)) {
       // Ya seleccionado, mantener selección actual
@@ -1504,14 +1546,69 @@ export default function WhiteboardMultiPage() {
 
   // Editar fórmula existente
   const startEditingFormula = (formula: WhiteboardFormula) => {
+    // Cargar datos de la fórmula
     setFormulaInput(formula.latex)
     setFormulaScale(formula.scale)
     setEditingFormulaId(formula.id)
     setFormulaPosition({ x: formula.x, y: formula.y })
     handleFormulaChange(formula.latex)
+    
+    // Asegurar que el panel esté abierto
     setShowFormulaBar(true)
     setCurrentTool('formula')
-    setTimeout(() => formulaInputRef.current?.focus(), 100)
+    
+    // Dar foco al textarea y posicionar cursor al final
+    setTimeout(() => {
+      const input = formulaInputRef.current
+      if (input) {
+        input.focus()
+        // Posicionar cursor al final del texto
+        const len = formula.latex.length
+        input.setSelectionRange(len, len)
+      }
+    }, 50)
+  }
+
+  // Iniciar edición inline de fórmula (directamente en la pizarra)
+  const startInlineFormulaEdit = (formula: WhiteboardFormula) => {
+    setInlineEditingFormulaId(formula.id)
+    setInlineFormulaValue(formula.latex)
+    setInlineFormulaScale(formula.scale)
+    setTimeout(() => {
+      const input = inlineFormulaRef.current
+      if (input) {
+        input.focus()
+        input.setSelectionRange(formula.latex.length, formula.latex.length)
+      }
+    }, 0)
+  }
+
+  // Guardar edición inline de fórmula
+  const saveInlineFormula = () => {
+    if (!inlineEditingFormulaId) return
+    
+    const quadrantContent = quadrants[activeQuadrant].content
+    
+    if (!inlineFormulaValue.trim()) {
+      // Si está vacío, eliminar la fórmula
+      updateQuadrantContent(activeQuadrant, {
+        ...quadrantContent,
+        formulas: (quadrantContent.formulas || []).filter(f => f.id !== inlineEditingFormulaId)
+      })
+    } else {
+      // Actualizar la fórmula
+      updateQuadrantContent(activeQuadrant, {
+        ...quadrantContent,
+        formulas: (quadrantContent.formulas || []).map(f =>
+          f.id === inlineEditingFormulaId
+            ? { ...f, latex: inlineFormulaValue, scale: inlineFormulaScale }
+            : f
+        )
+      })
+    }
+    
+    setInlineEditingFormulaId(null)
+    setInlineFormulaValue('')
   }
 
   // Funciones de fórmulas
@@ -1631,6 +1728,7 @@ export default function WhiteboardMultiPage() {
       setFormulaInput('')
       setEditingFormulaId(null)
       setCurrentTool('pen')
+      setGhostCursorPos(null)
     } else {
       // Nueva fórmula: activar placement mode
       setPendingPlacement({
@@ -1643,6 +1741,7 @@ export default function WhiteboardMultiPage() {
       setShowFormulaBar(false)
       setFormulaInput('')
       setCurrentTool('formula')
+      setGhostCursorPos(null)
     }
   }
 
@@ -1651,6 +1750,7 @@ export default function WhiteboardMultiPage() {
     setFormulaInput('')
     setEditingFormulaId(null)
     setCurrentTool('pen')
+    setGhostCursorPos(null)
   }
 
   // ========== EDITOR LATEX EN TIEMPO REAL ==========
@@ -1678,7 +1778,7 @@ export default function WhiteboardMultiPage() {
     handleLatexContentChange(currentLatex + snippet)
   }
 
-  // Renderizar LaTeX a HTML con KaTeX
+  // Renderizar LaTeX a HTML con KaTeX - cada línea en un div con data-line
   const renderLatexToHtml = (latex: string): string => {
     if (!latex.trim()) return ''
     try {
@@ -1694,20 +1794,217 @@ export default function WhiteboardMultiPage() {
         return temp
       })
       
-      // Renderizar cada línea
-      return lines.map(line => {
+      // Renderizar cada línea en un div con data-line para poder calcular posición
+      return lines.map((line, idx) => {
         try {
           // Extraer contenido entre $ y renderizar
           const mathContent = line.replace(/^\$/, '').replace(/\$$/, '')
           // Procesar espacios para que se rendericen correctamente
-          return katex.renderToString(processLatexSpaces(mathContent), { throwOnError: false, displayMode: false })
+          const rendered = katex.renderToString(processLatexSpaces(mathContent), { throwOnError: false, displayMode: false })
+          return `<div class="math-line" data-line="${idx}" style="min-height: 1.2em; line-height: 1.4;">${rendered}</div>`
         } catch {
-          return line
+          return `<div class="math-line" data-line="${idx}" style="min-height: 1.2em; line-height: 1.4;">${line}</div>`
         }
-      }).join('<br/>')
+      }).join('')
     } catch {
       return latex
     }
+  }
+  
+  // Función para reubicar el cursor en el textarea cuando se hace click en el LaTeX renderizado
+  const handleLatexLayerClick = (
+    e: React.MouseEvent<HTMLDivElement> | React.PointerEvent<HTMLDivElement>,
+    quadrantIndex: number
+  ) => {
+    if (!showFormulaBar || formulaModoLibre || !formulaInputRef.current) return
+
+    // Detener propagación para evitar que otros handlers interfieran
+    e.stopPropagation()
+    e.preventDefault()
+
+    // Asegurar cuadrante activo y sincronizar input si es necesario
+    if (activeQuadrant !== quadrantIndex) {
+      setActiveQuadrant(quadrantIndex)
+      const currentLatex = quadrants[quadrantIndex].latexContent || ''
+      if (formulaInput !== currentLatex) {
+        handleFormulaChange(currentLatex)
+      }
+    }
+
+    const container = e.currentTarget
+    const rect = container.getBoundingClientRect()
+    const clickY = e.clientY - rect.top
+    const clickX = e.clientX - rect.left
+    
+    // Encontrar todas las líneas renderizadas
+    const mathLines = container.querySelectorAll('.math-line')
+    if (mathLines.length === 0) {
+      // Si no hay líneas, posicionar al inicio
+      formulaInputRef.current.focus()
+      formulaInputRef.current.setSelectionRange(0, 0)
+      updateGhostCursor(container)
+      return
+    }
+    
+    // Encontrar la línea más cercana al click
+    let closestLine = 0
+    let minDistance = Infinity
+    
+    mathLines.forEach((line, idx) => {
+      const lineRect = line.getBoundingClientRect()
+      const lineTop = lineRect.top - rect.top
+      const lineBottom = lineRect.bottom - rect.top
+      const lineMid = (lineTop + lineBottom) / 2
+      const distance = Math.abs(clickY - lineMid)
+      
+      if (distance < minDistance) {
+        minDistance = distance
+        closestLine = idx
+      }
+    })
+    
+    // Obtener el texto original del textarea
+    const text = formulaInputRef.current.value
+    const lines = text.split('\n')
+    
+    // Calcular posición en el texto para llegar al inicio de la línea
+    let charPos = 0
+    for (let i = 0; i < closestLine && i < lines.length; i++) {
+      charPos += lines[i].length + 1 // +1 por el \n
+    }
+    
+    // Estimar columna de forma más precisa usando los elementos internos de KaTeX
+    const lineText = lines[closestLine] || ''
+    const lineElement = mathLines[closestLine] as HTMLElement
+    
+    if (lineElement && lineText.length > 0) {
+      const lineRect = lineElement.getBoundingClientRect()
+      const relativeX = e.clientX - lineRect.left
+      
+      // Buscar todos los elementos de texto/símbolo dentro del KaTeX renderizado
+      const katexElements = lineElement.querySelectorAll('.mord, .mbin, .mrel, .mopen, .mclose, .mpunct, .mop, .minner, .mspace')
+      
+      if (katexElements.length > 0) {
+        // Encontrar el elemento más cercano al click X
+        let closestElementRect: DOMRect | null = null
+        let closestElementDist = Infinity
+        let closestElementIndex = 0
+        
+        katexElements.forEach((el, idx) => {
+          const elRect = el.getBoundingClientRect()
+          const elCenter = elRect.left + elRect.width / 2
+          const dist = Math.abs(e.clientX - elCenter)
+          
+          if (dist < closestElementDist) {
+            closestElementDist = dist
+            closestElementRect = elRect
+            closestElementIndex = idx
+          }
+        })
+        
+        if (closestElementRect) {
+          const elRect = closestElementRect as DOMRect
+          // Determinar si el click está antes o después del centro del elemento
+          const isAfter = e.clientX > elRect.left + elRect.width / 2
+          
+          // Estimar la posición del carácter basándose en el índice del elemento
+          // Usar una proporción entre elementos KaTeX y caracteres del texto
+          const elementRatio = katexElements.length > 1 
+            ? closestElementIndex / (katexElements.length - 1)
+            : 0.5
+          
+          let col = Math.round(elementRatio * lineText.length)
+          if (isAfter && col < lineText.length) col++
+          
+          charPos += Math.min(col, lineText.length)
+        } else {
+          // Fallback: usar ratio lineal
+          const lineWidth = lineRect.width || 1
+          const charRatio = Math.max(0, Math.min(1, relativeX / lineWidth))
+          charPos += Math.round(charRatio * lineText.length)
+        }
+      } else {
+        // Fallback si no hay elementos KaTeX: usar ratio lineal
+        const lineWidth = lineRect.width || 1
+        const charRatio = Math.max(0, Math.min(1, relativeX / lineWidth))
+        charPos += Math.round(charRatio * lineText.length)
+      }
+    }
+    
+    // Asegurar que charPos no excede la longitud del texto
+    charPos = Math.max(0, Math.min(charPos, text.length))
+    
+    // Posicionar cursor en el textarea
+    formulaInputRef.current.focus()
+    formulaInputRef.current.setSelectionRange(charPos, charPos)
+    
+    // Actualizar cursor fantasma inmediatamente
+    setTimeout(() => updateGhostCursor(container), 0)
+  }
+  
+  // Actualizar posición del cursor fantasma
+  const updateGhostCursor = (containerOverride?: HTMLDivElement) => {
+    const container = containerOverride || latexLayerRef.current
+    if (!formulaInputRef.current || !container || !showFormulaBar || formulaModoLibre) {
+      setGhostCursorPos(null)
+      return
+    }
+    
+    const textarea = formulaInputRef.current
+    const cursorPos = textarea.selectionStart
+    const text = textarea.value
+    
+    // Encontrar línea y columna del cursor
+    const beforeCursor = text.substring(0, cursorPos)
+    const lines = beforeCursor.split('\n')
+    const cursorLine = lines.length - 1
+    const cursorCol = lines[lines.length - 1].length
+    
+    // Encontrar la línea correspondiente en el render
+    const mathLines = container.querySelectorAll('.math-line')
+    const lineElement = mathLines[cursorLine] as HTMLElement
+    
+    if (!lineElement) {
+      setGhostCursorPos(null)
+      return
+    }
+    
+    const containerRect = container.getBoundingClientRect()
+    const lineRect = lineElement.getBoundingClientRect()
+    
+    // Estimar posición X del cursor usando elementos KaTeX si están disponibles
+    const lineText = text.split('\n')[cursorLine] || ''
+    let cursorX = lineRect.left - containerRect.left
+    
+    if (lineText.length > 0) {
+      const katexElements = lineElement.querySelectorAll('.mord, .mbin, .mrel, .mopen, .mclose, .mpunct, .mop, .minner, .mspace')
+      
+      if (katexElements.length > 0) {
+        // Calcular qué elemento corresponde a la posición del cursor
+        const charRatio = cursorCol / lineText.length
+        const elementIndex = Math.min(
+          Math.round(charRatio * (katexElements.length - 1)),
+          katexElements.length - 1
+        )
+        
+        if (elementIndex >= 0 && katexElements[elementIndex]) {
+          const elRect = katexElements[elementIndex].getBoundingClientRect()
+          // Posicionar el cursor al inicio o final del elemento según la posición
+          const withinElement = (cursorCol / lineText.length) * katexElements.length - elementIndex
+          cursorX = elRect.left - containerRect.left + (withinElement > 0.5 ? elRect.width : 0)
+        }
+      } else {
+        // Fallback: ratio lineal
+        const charRatio = cursorCol / lineText.length
+        cursorX = lineRect.left - containerRect.left + charRatio * lineRect.width
+      }
+    }
+    
+    setGhostCursorPos({
+      top: lineRect.top - containerRect.top,
+      left: cursorX,
+      height: lineRect.height
+    })
   }
   // ========== FIN EDITOR LATEX EN TIEMPO REAL ==========
 
@@ -2632,7 +2929,8 @@ export default function WhiteboardMultiPage() {
                   {/* Contenido LaTeX renderizado en tiempo real - se mueve con el canvas */}
                   {quadrants[quadrantIndex].latexContent && (
                     <div
-                      className="absolute pointer-events-none z-[1]"
+                      ref={activeQuadrant === quadrantIndex ? latexLayerRef : undefined}
+                      className={`absolute ${showFormulaBar && !formulaModoLibre ? 'pointer-events-auto cursor-text z-[50]' : 'pointer-events-none z-[1]'}`}
                       style={{
                         top: 45,
                         left: 25,
@@ -2640,8 +2938,29 @@ export default function WhiteboardMultiPage() {
                         fontFamily: "'KaTeX_Main', serif",
                         lineHeight: 1.6,
                         whiteSpace: 'pre-wrap',
+                        // Hacer el área clickeable más grande cuando fx está activo
+                        minWidth: showFormulaBar && !formulaModoLibre ? '80%' : undefined,
+                        minHeight: showFormulaBar && !formulaModoLibre ? '60%' : undefined,
                       }}
+                      onClick={showFormulaBar && !formulaModoLibre ? (e) => handleLatexLayerClick(e, quadrantIndex) : undefined}
+                      onMouseDown={showFormulaBar && !formulaModoLibre ? (e) => handleLatexLayerClick(e, quadrantIndex) : undefined}
+                      onPointerDown={showFormulaBar && !formulaModoLibre ? (e) => handleLatexLayerClick(e, quadrantIndex) : undefined}
                       dangerouslySetInnerHTML={{ __html: renderLatexToHtml(quadrants[quadrantIndex].latexContent) }}
+                    />
+                  )}
+                  
+                  {/* Cursor fantasma sincronizado con el textarea */}
+                  {showFormulaBar && !formulaModoLibre && activeQuadrant === quadrantIndex && ghostCursorPos && (
+                    <div
+                      className="absolute pointer-events-none z-[51]"
+                      style={{
+                        top: 45 + ghostCursorPos.top,
+                        left: 25 + ghostCursorPos.left,
+                        width: 2,
+                        height: ghostCursorPos.height || 20,
+                        backgroundColor: '#3b82f6',
+                        animation: 'blink 1s step-end infinite',
+                      }}
                     />
                   )}
 
@@ -2752,51 +3071,122 @@ export default function WhiteboardMultiPage() {
 
                   {/* Fórmulas */}
                   {(quadrants[quadrantIndex].content.formulas || []).map(formula => (
-                    <div
-                      key={formula.id}
-                      data-selectable="formula"
-                      className={`absolute select-none rounded p-1 transition-all ${
-                        currentTool === 'select'
-                          ? isElementSelected('formula', formula.id)
-                            ? 'ring-2 ring-primary-500 cursor-move'
-                            : 'cursor-pointer hover:ring-2 hover:ring-primary-300'
-                          : 'cursor-pointer hover:ring-2 hover:ring-primary-300'
-                      }`}
-                      style={{
-                        left: formula.x,
-                        top: formula.y,
-                        transform: `scale(${formula.scale})`,
-                        transformOrigin: 'top left',
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (currentTool === 'select') {
-                          toggleSelection('formula', formula.id, e.shiftKey)
-                        }
-                      }}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation()
-                        startEditingFormula(formula)
-                      }}
-                      onMouseDown={(e) => handleDragStart(e, 'formula', formula.id)}
-                    >
-                      <div 
-                        dangerouslySetInnerHTML={{
-                          __html: katex.renderToString(processLatexSpaces(formula.latex), { throwOnError: false, displayMode: true })
-                        }} 
-                      />
-                      {/* Handle de redimensionar */}
-                      {currentTool === 'select' && isElementSelected('formula', formula.id) && selectedElements.length === 1 && (
-                        <div
-                          className="absolute -right-2 -bottom-2 w-4 h-4 bg-primary-500 rounded-full cursor-se-resize border-2 border-white shadow-md"
-                          style={{ transform: `scale(${1/formula.scale})` }}
-                          onMouseDown={(e) => {
-                            e.stopPropagation()
-                            handleResizeStart(e, formula.scale)
-                          }}
+                    inlineEditingFormulaId === formula.id ? (
+                      // Modo edición inline
+                      <div
+                        key={formula.id}
+                        className="absolute"
+                        style={{
+                          left: formula.x,
+                          top: formula.y,
+                          zIndex: 30,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex flex-col gap-1 bg-white rounded-lg shadow-lg border-2 border-blue-400 p-2">
+                          <textarea
+                            ref={inlineFormulaRef}
+                            value={inlineFormulaValue}
+                            onChange={(e) => setInlineFormulaValue(e.target.value)}
+                            onBlur={saveInlineFormula}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                saveInlineFormula()
+                              } else if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                saveInlineFormula()
+                              }
+                            }}
+                            placeholder="Escribe LaTeX aquí..."
+                            className="font-mono text-sm bg-gray-50 border border-gray-300 rounded p-2 outline-none focus:border-blue-500 resize-none"
+                            style={{
+                              minWidth: '200px',
+                              minHeight: '40px',
+                              width: Math.max(200, inlineFormulaValue.length * 8),
+                            }}
+                            autoFocus
+                          />
+                          {/* Vista previa en tiempo real */}
+                          <div 
+                            className="p-2 bg-gray-100 rounded min-h-[30px] border border-gray-200"
+                            style={{ transform: `scale(${inlineFormulaScale})`, transformOrigin: 'top left' }}
+                          >
+                            {inlineFormulaValue ? (
+                              <div 
+                                dangerouslySetInnerHTML={{
+                                  __html: (() => {
+                                    try {
+                                      return katex.renderToString(processLatexSpaces(inlineFormulaValue), { throwOnError: false, displayMode: true })
+                                    } catch {
+                                      return '<span style="color:red">Error de sintaxis</span>'
+                                    }
+                                  })()
+                                }} 
+                              />
+                            ) : (
+                              <span className="text-gray-400 text-xs">Vista previa...</span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">Enter: guardar | Esc: cancelar</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      // Modo visualización normal
+                      <div
+                        key={formula.id}
+                        data-selectable="formula"
+                        className={`absolute select-none rounded p-1 transition-all ${
+                          currentTool === 'select'
+                            ? isElementSelected('formula', formula.id)
+                              ? 'ring-2 ring-primary-500 cursor-move'
+                              : 'cursor-pointer hover:ring-2 hover:ring-primary-300'
+                            : showFormulaBar
+                              ? 'cursor-text hover:ring-2 hover:ring-blue-400 hover:bg-blue-50/50'
+                              : 'cursor-pointer hover:ring-2 hover:ring-primary-300'
+                        }`}
+                        style={{
+                          left: formula.x,
+                          top: formula.y,
+                          transform: `scale(${formula.scale})`,
+                          transformOrigin: 'top left',
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          // Si el panel de fórmulas está abierto, clic inicia edición inline
+                          if (showFormulaBar) {
+                            startInlineFormulaEdit(formula)
+                          } else if (currentTool === 'select') {
+                            toggleSelection('formula', formula.id, e.shiftKey)
+                          }
+                        }}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation()
+                          // Doble clic siempre inicia edición inline
+                          startInlineFormulaEdit(formula)
+                        }}
+                        onMouseDown={(e) => handleDragStart(e, 'formula', formula.id)}
+                      >
+                        <div 
+                          dangerouslySetInnerHTML={{
+                            __html: katex.renderToString(processLatexSpaces(formula.latex), { throwOnError: false, displayMode: true })
+                          }} 
                         />
-                      )}
-                    </div>
+                        {/* Handle de redimensionar */}
+                        {currentTool === 'select' && isElementSelected('formula', formula.id) && selectedElements.length === 1 && (
+                          <div
+                            className="absolute -right-2 -bottom-2 w-4 h-4 bg-primary-500 rounded-full cursor-se-resize border-2 border-white shadow-md"
+                            style={{ transform: `scale(${1/formula.scale})` }}
+                            onMouseDown={(e) => {
+                              e.stopPropagation()
+                              handleResizeStart(e, formula.scale)
+                            }}
+                          />
+                        )}
+                      </div>
+                    )
                   ))}
 
                   {/* Figuras geométricas */}
@@ -2821,6 +3211,19 @@ export default function WhiteboardMultiPage() {
                         e.stopPropagation()
                         if (currentTool === 'select') {
                           toggleSelection('shape', shape.id, e.shiftKey)
+                        }
+                      }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation()
+                        // Si es figura 3D, activar visor inline
+                        if (SHAPES_3D[shape.shapeType]) {
+                          setActive3DShape({
+                            id: shape.id,
+                            shapeType: shape.shapeType,
+                            x: shape.x,
+                            y: shape.y,
+                            scale: shape.scale
+                          })
                         }
                       }}
                       onMouseDown={(e) => handleDragStart(e, 'shape', shape.id)}
@@ -2903,6 +3306,124 @@ export default function WhiteboardMultiPage() {
                           onMouseDown={(e) => {
                             e.stopPropagation()
                             handleImageResizeStart(e, image)
+                          }}
+                        />
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Elementos de Geometría 3D inline */}
+                  {(quadrants[quadrantIndex].content.geometry3D || []).map(obj3d => (
+                    <div
+                      key={obj3d.id}
+                      data-selectable="geometry3d"
+                      className={`absolute select-none transition-all ${
+                        currentTool === 'select'
+                          ? isElementSelected('geometry3d', obj3d.id)
+                            ? 'ring-2 ring-purple-500 cursor-move'
+                            : 'cursor-pointer hover:ring-2 hover:ring-purple-300'
+                          : 'cursor-pointer hover:ring-2 hover:ring-purple-300'
+                      } ${editing3DElementId === obj3d.id ? 'ring-2 ring-purple-500' : ''}`}
+                      style={{
+                        left: obj3d.x,
+                        top: obj3d.y,
+                        width: obj3d.width,
+                        height: obj3d.height,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (currentTool === 'select') {
+                          toggleSelection('geometry3d', obj3d.id, e.shiftKey)
+                        }
+                      }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation()
+                        // Activar edición 3D inline
+                        setEditing3DElementId(obj3d.id)
+                        setActive3DShape({
+                          id: obj3d.id,
+                          shapeType: obj3d.figureType,
+                          x: obj3d.x,
+                          y: obj3d.y,
+                          scale: obj3d.scale
+                        })
+                      }}
+                      onMouseDown={(e) => {
+                        if (editing3DElementId !== obj3d.id) {
+                          handleDragStart(e, 'geometry3d', obj3d.id)
+                        }
+                      }}
+                    >
+                      {/* Visor 3D inline con Three.js */}
+                      {editing3DElementId === obj3d.id && active3DShape ? (
+                        <Inline3DViewer
+                          shapeType={obj3d.figureType}
+                          width={obj3d.width}
+                          height={obj3d.height}
+                          onRotationChange={(rx, ry) => {
+                            // Actualizar rotación del objeto 3D
+                            const quadrantContent = quadrants[quadrantIndex].content
+                            updateQuadrantContent(quadrantIndex, {
+                              ...quadrantContent,
+                              geometry3D: (quadrantContent.geometry3D || []).map(o =>
+                                o.id === obj3d.id ? { ...o, rotationX: rx, rotationY: ry } : o
+                              )
+                            })
+                          }}
+                          onClose={() => {
+                            setEditing3DElementId(null)
+                            setActive3DShape(null)
+                          }}
+                          onCapture={(dataUrl) => {
+                            // Convertir a imagen estática si el usuario lo desea
+                            const quadrantContent = quadrants[quadrantIndex].content
+                            const newImage: WhiteboardImage = {
+                              id: `img-${Date.now()}`,
+                              src: dataUrl,
+                              x: obj3d.x,
+                              y: obj3d.y,
+                              width: obj3d.width,
+                              height: obj3d.height,
+                            }
+                            // Remover el 3D y agregar imagen
+                            updateQuadrantContent(quadrantIndex, {
+                              ...quadrantContent,
+                              geometry3D: (quadrantContent.geometry3D || []).filter(o => o.id !== obj3d.id),
+                              images: [...(quadrantContent.images || []), newImage],
+                            })
+                            setEditing3DElementId(null)
+                            setActive3DShape(null)
+                          }}
+                          initialRotationX={obj3d.rotationX}
+                          initialRotationY={obj3d.rotationY}
+                        />
+                      ) : (
+                        // Vista previa estática del 3D
+                        <div 
+                          className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg border border-gray-300 flex items-center justify-center overflow-hidden"
+                        >
+                          <div className="text-center">
+                            <div className="text-3xl mb-1">
+                              {obj3d.figureType === 'cube' && '🧊'}
+                              {obj3d.figureType === 'tetrahedron' && '🔺'}
+                              {obj3d.figureType === 'sphere' && '🌐'}
+                              {obj3d.figureType === 'cylinder' && '🛢️'}
+                              {obj3d.figureType === 'cone' && '📐'}
+                              {obj3d.figureType === 'pyramid' && '🔻'}
+                              {obj3d.figureType === 'prism' && '📦'}
+                            </div>
+                            <div className="text-xs text-gray-500 font-medium capitalize">{obj3d.figureType}</div>
+                            <div className="text-[10px] text-gray-400 mt-1">Doble clic para editar</div>
+                          </div>
+                        </div>
+                      )}
+                      {/* Handle de redimensionar */}
+                      {currentTool === 'select' && isElementSelected('geometry3d', obj3d.id) && selectedElements.length === 1 && !editing3DElementId && (
+                        <div
+                          className="absolute -right-2 -bottom-2 w-4 h-4 bg-purple-500 rounded-full cursor-se-resize border-2 border-white shadow-md"
+                          onMouseDown={(e) => {
+                            e.stopPropagation()
+                            handleImageResizeStart(e, { ...obj3d, src: '', rotation: 0 })
                           }}
                         />
                       )}
@@ -3162,7 +3683,13 @@ export default function WhiteboardMultiPage() {
                 <textarea
                   ref={formulaInputRef}
                   value={formulaInput}
-                  onChange={(e) => handleFormulaChange(e.target.value)}
+                  onChange={(e) => {
+                    handleFormulaChange(e.target.value)
+                    setTimeout(updateGhostCursor, 10)
+                  }}
+                  onKeyUp={() => updateGhostCursor()}
+                  onClick={() => updateGhostCursor()}
+                  onSelect={() => updateGhostCursor()}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && e.ctrlKey && !formulaError && formulaInput.trim()) {
                       handleSaveFormula()
@@ -3175,7 +3702,10 @@ export default function WhiteboardMultiPage() {
                       handleFormulaChange(newValue)
                       setTimeout(() => {
                         textarea.selectionStart = textarea.selectionEnd = start + 4
+                        updateGhostCursor()
                       }, 0)
+                    } else {
+                      setTimeout(updateGhostCursor, 10)
                     }
                   }}
                   placeholder="\frac{a}{b}"
@@ -3253,61 +3783,135 @@ export default function WhiteboardMultiPage() {
                 )}
 
                 {formulaCategory === 'shapes-2d' && (
-                  <div 
-                    className="grid gap-0.5"
-                    style={{ 
-                      gridTemplateColumns: `repeat(${Math.max(4, Math.min(8, Math.floor((formulaPanelSize.width - 16) / 42)))}, 1fr)`
-                    }}
-                  >
-                    {Object.entries(SHAPES_2D).map(([key, shape]) => (
-                      <button
-                        key={key}
-                        onClick={() => insertShape(key)}
-                        title={shape.label}
-                        className="flex items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all"
-                        style={{ height: formulaPanelSize.width >= 300 ? '28px' : '24px' }}
-                      >
-                        <svg 
-                          width={formulaPanelSize.width >= 300 ? 16 : 14} 
-                          height={formulaPanelSize.width >= 300 ? 16 : 14} 
-                          viewBox={shape.viewBox} 
-                          fill="none" 
-                          stroke={currentColor} 
-                          strokeWidth="4" 
-                          strokeLinejoin="round"
+                  <div className="space-y-2">
+                    {/* Botón para abrir canvas de geometría 2D */}
+                    <button
+                      onClick={() => setShowGeometry2D(true)}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg shadow hover:from-emerald-700 hover:to-teal-700 transition-all text-xs font-medium"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <polygon points="12,2 22,20 2,20" />
+                      </svg>
+                      Geometría 2D Interactiva
+                    </button>
+                    
+                    {/* Grid de figuras 2D estáticas */}
+                    <div 
+                      className="grid gap-0.5"
+                      style={{ 
+                        gridTemplateColumns: `repeat(${Math.max(4, Math.min(8, Math.floor((formulaPanelSize.width - 16) / 42)))}, 1fr)`
+                      }}
+                    >
+                      {Object.entries(SHAPES_2D).map(([key, shape]) => (
+                        <button
+                          key={key}
+                          onClick={() => insertShape(key)}
+                          title={shape.label}
+                          className="flex items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all"
+                          style={{ height: formulaPanelSize.width >= 300 ? '28px' : '24px' }}
                         >
-                          <path d={shape.path} />
-                        </svg>
-                      </button>
-                    ))}
+                          <svg 
+                            width={formulaPanelSize.width >= 300 ? 16 : 14} 
+                            height={formulaPanelSize.width >= 300 ? 16 : 14} 
+                            viewBox={shape.viewBox} 
+                            fill="none" 
+                            stroke={currentColor} 
+                            strokeWidth="4" 
+                            strokeLinejoin="round"
+                          >
+                            <path d={shape.path} />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 
                 {formulaCategory === 'shapes-3d' && (
-                  <div 
-                    className="grid gap-0.5"
-                    style={{ 
-                      gridTemplateColumns: `repeat(${Math.max(4, Math.min(8, Math.floor((formulaPanelSize.width - 16) / 42)))}, 1fr)`
-                    }}
-                  >
-                    {Object.entries(SHAPES_3D).map(([key, shape]) => (
-                      <button
-                        key={key}
-                        onClick={() => insertShape(key)}
-                        title={shape.label}
-                        className="flex items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all"
-                        style={{ height: formulaPanelSize.width >= 300 ? '28px' : '24px' }}
-                      >
-                        <img 
-                          src={shape.src} 
-                          alt={shape.label} 
-                          width={formulaPanelSize.width >= 300 ? 16 : 14} 
-                          height={formulaPanelSize.width >= 300 ? 16 : 14} 
-                          className="pointer-events-none" 
-                          draggable={false} 
-                        />
-                      </button>
-                    ))}
+                  <div className="space-y-2">
+                    {/* Botones para insertar figuras 3D interactivas */}
+                    <div className="grid grid-cols-2 gap-1">
+                      {(['cube', 'tetrahedron', 'sphere', 'cylinder', 'cone', 'pyramid'] as const).map((figureType) => (
+                        <button
+                          key={figureType}
+                          onClick={() => {
+                            // Insertar un elemento 3D directamente en la pizarra
+                            if (activeQuadrant !== null) {
+                              const quadrantContent = quadrants[activeQuadrant].content
+                              const new3DObject: Geometry3DObject = {
+                                id: `3d-${Date.now()}`,
+                                figureType: figureType,
+                                x: 100 + Math.random() * 100,
+                                y: 100 + Math.random() * 100,
+                                width: 200,
+                                height: 200,
+                                rotationX: 0.5,
+                                rotationY: 0.5,
+                                scale: 1,
+                                vertices: [],
+                                edges: [],
+                                faces: [],
+                                angles: [],
+                              }
+                              updateQuadrantContent(activeQuadrant, {
+                                ...quadrantContent,
+                                geometry3D: [...(quadrantContent.geometry3D || []), new3DObject],
+                              })
+                              // Activar edición inmediatamente
+                              setEditing3DElementId(new3DObject.id)
+                              setActive3DShape({
+                                id: new3DObject.id,
+                                shapeType: figureType,
+                                x: new3DObject.x,
+                                y: new3DObject.y,
+                                scale: 1
+                              })
+                            }
+                          }}
+                          className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded shadow hover:from-blue-600 hover:to-purple-600 transition-all text-xs font-medium"
+                        >
+                          <span className="text-sm">
+                            {figureType === 'cube' && '🧊'}
+                            {figureType === 'tetrahedron' && '🔺'}
+                            {figureType === 'sphere' && '🌐'}
+                            {figureType === 'cylinder' && '🛢️'}
+                            {figureType === 'cone' && '📐'}
+                            {figureType === 'pyramid' && '🔻'}
+                          </span>
+                          <span className="capitalize">{figureType}</span>
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {/* Grid de figuras estáticas */}
+                    <div className="text-[10px] text-gray-500 text-center pt-1 border-t border-gray-200">
+                      Figuras estáticas (imagen)
+                    </div>
+                    <div 
+                      className="grid gap-0.5"
+                      style={{ 
+                        gridTemplateColumns: `repeat(${Math.max(4, Math.min(8, Math.floor((formulaPanelSize.width - 16) / 42)))}, 1fr)`
+                      }}
+                    >
+                      {Object.entries(SHAPES_3D).map(([key, shape]) => (
+                        <button
+                          key={key}
+                          onClick={() => insertShape(key)}
+                          title={shape.label}
+                          className="flex items-center justify-center bg-white border border-gray-200 rounded shadow-sm hover:border-emerald-500 hover:bg-emerald-50 transition-all"
+                          style={{ height: formulaPanelSize.width >= 300 ? '28px' : '24px' }}
+                        >
+                          <img 
+                            src={shape.src} 
+                            alt={shape.label} 
+                            width={formulaPanelSize.width >= 300 ? 16 : 14} 
+                            height={formulaPanelSize.width >= 300 ? 16 : 14} 
+                            className="pointer-events-none" 
+                            draggable={false} 
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -3458,6 +4062,74 @@ export default function WhiteboardMultiPage() {
                     Crear Pizarra
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Visor 3D Inline - se renderiza en el cuadrante activo */}
+          {active3DShape && !editing3DElementId && (
+            <Inline3DViewer
+              shapeId={active3DShape.id}
+              shapeType={active3DShape.shapeType}
+              x={active3DShape.x}
+              y={active3DShape.y}
+              scale={active3DShape.scale}
+              width={350}
+              height={350}
+              onClose={() => setActive3DShape(null)}
+              onCapture={(dataUrl, w, h) => {
+                if (activeQuadrant !== null) {
+                  const quadrantContent = quadrants[activeQuadrant].content
+                  const newImage: WhiteboardImage = {
+                    id: `img-${Date.now()}`,
+                    src: dataUrl,
+                    x: active3DShape.x,
+                    y: active3DShape.y,
+                    width: w || 200,
+                    height: h || 200,
+                    rotation: 0,
+                  }
+                  updateQuadrantContent(activeQuadrant, {
+                    ...quadrantContent,
+                    images: [...(quadrantContent.images || []), newImage],
+                  })
+                }
+                setActive3DShape(null)
+              }}
+            />
+          )}
+
+          {/* Canvas Geometría 2D - se renderiza sobre el cuadrante activo */}
+          {showGeometry2D && (
+            <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]">
+              <div 
+                className="relative"
+                style={{ width: Math.min(800, window.innerWidth - 40), height: Math.min(600, window.innerHeight - 100) }}
+              >
+                <Geometry2DCanvas
+                  width={Math.min(800, window.innerWidth - 40)}
+                  height={Math.min(600, window.innerHeight - 100)}
+                  onClose={() => setShowGeometry2D(false)}
+                  onCapture={(dataUrl) => {
+                    if (activeQuadrant !== null) {
+                      const quadrantContent = quadrants[activeQuadrant].content
+                      const newImage: WhiteboardImage = {
+                        id: `img-${Date.now()}`,
+                        src: dataUrl,
+                        x: 50,
+                        y: 50,
+                        width: 400,
+                        height: 300,
+                        rotation: 0,
+                      }
+                      updateQuadrantContent(activeQuadrant, {
+                        ...quadrantContent,
+                        images: [...(quadrantContent.images || []), newImage],
+                      })
+                    }
+                    setShowGeometry2D(false)
+                  }}
+                />
               </div>
             </div>
           )}
